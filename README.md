@@ -13,6 +13,7 @@ multi-server_stat/
 │   ├── models.py
 │   ├── utils.py
 │   └── visualization.py
+├── config.ini.example       # Configuration template (rename to config.ini)
 ├── requirements.txt         # Python dependencies
 ├── run_analytics.py         # Main script to run
 └── README.md               # This file
