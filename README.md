@@ -7,7 +7,7 @@
 
 ```
 multi-server_stat/
-├── my_package/              # Analytics package (don't modify)
+├── multiplex_stats/         # Analytics package (don't modify)
 │   ├── api_client.py
 │   ├── data_processing.py
 │   ├── models.py
@@ -176,7 +176,7 @@ python3 run_analytics.py
 
 It will overwrite the old files with fresh data.
 
-## 📚 What's in my_package/
+## 📚 What's in multiplex_stats/
 
 This folder contains the analytics engine. You don't need to modify it, but here's what's inside:
 

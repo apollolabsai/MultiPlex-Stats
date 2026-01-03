@@ -9,9 +9,9 @@ This script:
 5. Generates a unified dashboard.html
 """
 
-from my_package import TautulliClient
-from my_package.config_loader import load_config
-from my_package.data_processing import (
+from multiplex_stats import TautulliClient
+from multiplex_stats.config_loader import load_config
+from multiplex_stats.data_processing import (
     process_daily_data,
     process_monthly_data,
     process_history_data,
@@ -19,7 +19,7 @@ from my_package.data_processing import (
     aggregate_movie_stats,
     aggregate_tv_stats,
 )
-from my_package.visualization import (
+from multiplex_stats.visualization import (
     create_daily_bar_chart,
     create_monthly_bar_chart,
     create_user_bar_chart,
