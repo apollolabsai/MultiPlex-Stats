@@ -1,6 +1,7 @@
 # MultiPlex Stats
 
-**All-in-one analytics dashboard for your Tautulli/Plex servers.**
+**Combine multiple Tautulli Server statistics into one dashboard for monitoring multiple Plex servers**
+![Example](graph.png)
 
 ## 📁 What's In This Folder
 
