@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - MultiPlex Stats{% endblock %}
+
+{% block content %}
+<header>
+    <h1>⚙️ Settings</h1>
+    <div class="subtitle">Configure Your Tautulli Servers & Analytics Preferences</div>
+</header>
+
+<div class="settings-container">
+    <div class="settings-section">
+        <h2 class="section-title">🖥️ Server Configuration</h2>
+
+        {% if servers %}
+            <div class="server-list">
+                {% for server in servers %}
+                <div class="server-item">
+                    <div class="server-info">
+                        <h3>{{ server.name }}</h3>
+                        <p>{{ server.ip_address }}</p>
+                        <p class="server-meta">Order: {{ "ServerA" if server.server_order == 0 else "ServerB" }}</p>
+                    </div>
+                    <div class="server-actions">
+                        <form method="POST" action="{{ url_for('settings.delete_server', server_id=server.id) }}" style="display: inline;">
+                            <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this server?');">Delete</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="info-message">No servers configured. Add your first server below.</p>
+        {% endif %}
+
+        <div class="form-card">
+            <h3>Add/Update Server</h3>
+            <form method="POST" action="{{ url_for('settings.add_server') }}">
+                <div class="form-group">
+                    <label for="name">Server Name</label>
+                    <input type="text" id="name" name="name" required placeholder="e.g., Server1">
+                </div>
+
+                <div class="form-group">
+                    <label for="ip_address">IP Address:Port</label>
+                    <input type="text" id="ip_address" name="ip_address" required placeholder="e.g., 192.168.1.101:8181">
+                    <small>Include the port number</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="api_key">API Key</label>
+                    <input type="text" id="api_key" name="api_key" required placeholder="Your Tautulli API key">
+                    <small>Find in Tautulli: Settings → Web Interface → API</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="server_order">Server Order</label>
+                    <select id="server_order" name="server_order">
+                        <option value="0">Server A (Primary)</option>
+                        <option value="1">Server B (Secondary)</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save Server</button>
+            </form>
+        </div>
+
+        <div class="import-section">
+            <h3>Import from config.ini</h3>
+            <p>Already have a config.ini file? Import your existing configuration.</p>
+            <form method="POST" action="{{ url_for('settings.import_from_ini') }}">
+                <button type="submit" class="btn btn-secondary">Import from config.ini</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="settings-section">
+        <h2 class="section-title">📊 Analytics Settings</h2>
+
+        <div class="form-card">
+            <form method="POST" action="{{ url_for('settings.update_analytics_settings') }}">
+                <div class="form-group">
+                    <label for="daily_trend_days">Daily Trend Days</label>
+                    <input type="number" id="daily_trend_days" name="daily_trend_days"
+                           value="{{ settings.daily_trend_days if settings else 60 }}" min="1" max="365">
+                    <small>Number of days to show in daily chart</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="monthly_trend_months">Monthly Trend Months</label>
+                    <input type="number" id="monthly_trend_months" name="monthly_trend_months"
+                           value="{{ settings.monthly_trend_months if settings else 60 }}" min="1" max="120">
+                    <small>Number of months to show in monthly chart</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="history_days">History Days</label>
+                    <input type="number" id="history_days" name="history_days"
+                           value="{{ settings.history_days if settings else 60 }}" min="1" max="365">
+                    <small>Days of history for user/content analysis</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="top_movies">Top Movies Count</label>
+                    <input type="number" id="top_movies" name="top_movies"
+                           value="{{ settings.top_movies if settings else 30 }}" min="1" max="100">
+                </div>
+
+                <div class="form-group">
+                    <label for="top_tv_shows">Top TV Shows Count</label>
+                    <input type="number" id="top_tv_shows" name="top_tv_shows"
+                           value="{{ settings.top_tv_shows if settings else 30 }}" min="1" max="100">
+                </div>
+
+                <div class="form-group">
+                    <label for="top_users">Top Users Count</label>
+                    <input type="number" id="top_users" name="top_users"
+                           value="{{ settings.top_users if settings else 20 }}" min="1" max="100">
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save Analytics Settings</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

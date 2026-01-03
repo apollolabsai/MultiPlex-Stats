@@ -13,6 +13,9 @@ __pycache__/
 dashboard.html
 *.csv
 
+# Flask instance (database and cache)
+instance/
+
 # IDE
 .vscode/
 .idea/
