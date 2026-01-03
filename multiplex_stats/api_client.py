@@ -6,7 +6,7 @@ import requests
 from typing import Any, Optional
 from datetime import datetime, timedelta
 
-from my_package.models import ServerConfig
+from multiplex_stats.models import ServerConfig
 
 
 class TautulliClient:

@@ -7,7 +7,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from typing import Optional
 
-from my_package.models import PlotTheme, MediaColors
+from multiplex_stats.models import PlotTheme, MediaColors
 
 
 def create_daily_bar_chart(

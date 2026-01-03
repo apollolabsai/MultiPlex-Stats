@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 from dataclasses import dataclass
 
-from my_package.models import ServerConfig
+from multiplex_stats.models import ServerConfig
 
 
 @dataclass
