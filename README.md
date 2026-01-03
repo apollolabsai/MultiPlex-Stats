@@ -6,17 +6,29 @@
 ## 📁 What's In This Folder
 
 ```
-multi-server_stat/
+MultiPlex_Stats/
+├── flask_app/               # Web interface application
+│   ├── routes/              # Web routes (dashboard, settings)
+│   ├── services/            # Analytics & config services
+│   ├── templates/           # HTML templates
+│   ├── static/              # CSS and assets
+│   ├── utils/               # Form validators
+│   ├── models.py            # Database models
+│   └── config.py            # Flask configuration
 ├── multiplex_stats/         # Analytics package (don't modify)
 │   ├── api_client.py
 │   ├── data_processing.py
 │   ├── models.py
 │   ├── utils.py
 │   └── visualization.py
-├── config.ini.example       # Configuration template (rename to config.ini)
+├── instance/                # Database and cache (auto-created)
+│   ├── multiplex_stats.db   # SQLite database
+│   └── cache/               # Cached analytics results
+├── config.ini.example       # Configuration template
 ├── requirements.txt         # Python dependencies
-├── run_analytics.py         # Main script to run
-└── README.md               # This file
+├── run_analytics.py         # CLI script
+├── run_flask.py             # Web interface entry point
+└── README.md                # This file
 ```
 
 ## 🚀 Quick Start (3 Steps)
@@ -88,9 +100,57 @@ python3 run_analytics.py
 - Export CSV files with raw data
 - **Automatically create `dashboard.html`** with all charts combined in one beautiful page
 
+---
+
+## 🌐 NEW: Web Interface
+
+MultiPlex Stats now includes a web interface! Configure your servers, run analytics, and view dashboards directly in your browser.
+
+### Starting the Web Interface
+
+```bash
+python3 run_flask.py
+```
+
+Then open your browser to: **http://127.0.0.1:8983**
+
+### Web Interface Features
+
+- **Settings Page**: Configure servers and analytics settings via web forms (no manual config.ini editing!)
+- **One-Click Analytics**: Run analytics with the click of a button
+- **Interactive Dashboard**: View all charts and statistics in your browser
+- **Refresh Button**: Rerun analytics anytime to get updated data
+- **Import Config**: Automatically import your existing config.ini settings
+
+### Web Interface Usage
+
+1. **First Time Setup**:
+   - Run `python3 run_flask.py`
+   - Navigate to Settings (or you'll be redirected automatically)
+   - Add your Tautulli server(s) via the web form
+   - Configure analytics settings
+
+2. **Running Analytics**:
+   - Click "Run Analytics" button on the home page
+   - Wait 30-60 seconds for analytics to complete
+   - View the dashboard with all charts and statistics
+
+3. **Viewing Results**:
+   - Dashboard displays all 7 interactive Plotly charts
+   - Summary statistics show total plays, active users, and more
+   - Click "Refresh Analytics" to rerun with current settings
+
+### Web vs CLI
+
+Both interfaces work side-by-side:
+- **Web Interface**: Best for interactive use, easier configuration, browser-based viewing
+- **CLI (`run_analytics.py`)**: Best for automation, cron jobs, scripting
+
+---
+
 ## 📊 What You Get
 
-After running, you'll have:
+After running (CLI or Web), you'll have:
 
 ### Main Dashboard
 - **dashboard.html** - Single page with ALL charts and statistics combined
