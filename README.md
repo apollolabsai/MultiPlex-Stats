@@ -36,17 +36,17 @@ pip3 install -r requirements.txt
 
 **Option A: Using Config File (Recommended)**
 
-1. Edit `config.ini` with your server information:
+1. Edit `config.ini` with your server information (be sure to rename the file to config.ini): 
    ```ini
    [ServerA]
    name = Server1
-   ip_address = 192.168.1.101:8181
+   ip_address = 192.168.1.101:8181 #Enter your Tautulli Server IP Address Here
    api_key = your_actual_api_key_here
 
    [ServerB]
    # OPTIONAL - Leave blank or remove this section if you only have one server
    name = Server2
-   ip_address = 192.168.1.102:8181
+   ip_address = 192.168.1.102:8181 #Enter your Tautulli Server IP Address Here
    api_key = your_actual_api_key_here
 
    [Settings]
@@ -68,22 +68,12 @@ pip3 install -r requirements.txt
    top_tv_shows = 30
    ```
 
-**Option B: Using Environment Variables**
-
-Set these before running:
-```bash
-export TAUTULLI_SERVER_A_NAME="Server1"
-export TAUTULLI_SERVER_A_IP="192.168.1.101:8181"
-export TAUTULLI_SERVER_A_KEY="your_api_key"
-# ... (see CONFIGURATION_GUIDE.md for full list)
-```
 
 **How to find your API key:**
 1. Open Tautulli in browser
 2. Settings → Web Interface → API
 3. Copy the API key
 
-📖 **See [CONFIGURATION_GUIDE.md](CONFIGURATION_GUIDE.md) for detailed configuration options**
 
 ### Step 3: Run the Script
 
