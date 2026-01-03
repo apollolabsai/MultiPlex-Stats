@@ -1,0 +1,25 @@
+# Configuration files with API keys
+config.ini
+CONFIGURATION_GUIDE.md
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Output files
+dashboard.html
+*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

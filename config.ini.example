@@ -1,0 +1,33 @@
+# MultiPlex Stats - Configuration File
+#
+# Instructions:
+# 1. Copy this file and rename it to: config.ini
+# 2. Fill in your actual server information below
+# 3. DO NOT commit config.ini to git (it contains your API keys!)
+
+[ServerA]
+# Your first Tautulli server (REQUIRED)
+name = Server1
+ip_address = 192.168.1.101:8581
+api_key = YOUR_API_KEY_HERE
+
+[ServerB]
+# Your second Tautulli server (OPTIONAL - leave blank or remove if you only have one server)
+name = Server2
+ip_address = 192.168.1.102:8581
+api_key = YOUR_API_KEY_HERE
+
+[Settings]
+# Time ranges for trend charts
+# daily_trend_days: Number of DAYS to show in the daily trends chart
+daily_trend_days = 60
+# monthly_trend_months: Number of MONTHS to show in the monthly trends chart
+monthly_trend_months = 60
+
+# History analysis (used for user stats, top movies, top TV shows)
+history_days = 60
+
+# Number of top items to show in charts
+top_movies = 30
+top_tv_shows = 30
+top_users = 20
