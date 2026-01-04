@@ -1,6 +1,6 @@
 services:
   multiplex-stats:
-    image: apollolabsai/MultiPlex_Stats:latest
+    image: powertowerpro/multiplex_stats:latest
     container_name: multiplex-stats
     ports:
       - "8487:8487"
