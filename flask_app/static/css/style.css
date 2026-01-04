@@ -506,6 +506,13 @@ table.dataTable tbody td {
     color: #ccc !important;
 }
 
+/* Date column - prevent wrapping */
+table.dataTable tbody td:first-child,
+table.dataTable thead th:first-child {
+    min-width: 110px !important;
+    white-space: nowrap !important;
+}
+
 table.dataTable tbody tr {
     background: rgba(255, 255, 255, 0.02) !important;
 }
