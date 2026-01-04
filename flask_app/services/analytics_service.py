@@ -119,7 +119,7 @@ class AnalyticsService:
 
         # 7. Calculate summary statistics
         total_plays = len(df_history)
-        total_users = len(df_users)
+        total_users = df_history['user'].nunique()  # Count distinct users from all history
         total_movies = len(df_movies)
         total_tv = len(df_tv)
         server_a_plays = len(df_history[df_history['Server'] == server_a_config.name])

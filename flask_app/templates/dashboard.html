@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - MultiPlex Stats{% endblock %}
+
+{% block content %}
+<header>
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="MultiPlex Stats" style="max-width: 400px; height: auto; margin-bottom: 10px;">
+    <div class="subtitle">Plex Server Analytics & Insights</div>
+    <div class="timestamp">
+        Last {{ summary.history_days }} Days | Generated: {{ last_run.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}
+    </div>
+
+    <form method="POST" action="{{ url_for('main.run_analytics') }}" style="margin-top: 20px;">
+        <button type="submit" class="btn btn-primary btn-large">🔄 Refresh Analytics</button>
+    </form>
+</header>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-number">{{ "{:,}".format(summary.total_plays) }}</div>
+        <div class="stat-label">Total Plays</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ summary.total_users }}</div>
+        <div class="stat-label">Active Users</div>
+    </div>
+
+    {% if summary.server_a_name %}
+    <div class="stat-card">
+        <div class="stat-number">{{ "{:,}".format(summary.server_a_plays) }}</div>
+        <div class="stat-label">{{ summary.server_a_name }} Plays</div>
+    </div>
+    {% endif %}
+
+    {% if summary.server_b_name %}
+    <div class="stat-card">
+        <div class="stat-number">{{ "{:,}".format(summary.server_b_plays) }}</div>
+        <div class="stat-label">{{ summary.server_b_name }} Plays</div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="section">
+    <h2 class="section-title">📈 Activity Trends</h2>
+    <div class="chart-container">
+        {{ charts.daily | safe }}
+    </div>
+    <div class="chart-container">
+        {{ charts.monthly | safe }}
+    </div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">🍕 Distribution</h2>
+    <div class="grid-2">
+        <div class="chart-container">
+            {{ charts.category | safe }}
+        </div>
+        <div class="chart-container">
+            {{ charts.server | safe }}
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">👥 User Activity</h2>
+    <div class="chart-container">
+        {{ charts.users | safe }}
+    </div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">🎬 Top Content</h2>
+    <div class="chart-container">
+        {{ charts.movies | safe }}
+    </div>
+    <div class="chart-container">
+        {{ charts.tv | safe }}
+    </div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">📋 Viewing History</h2>
+    <div class="table-container">
+        {% if table_data and table_data|length > 0 %}
+        <table id="viewingHistoryTable" class="display" style="width:100%">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Server</th>
+                    <th>User</th>
+                    <th>IP Address</th>
+                    <th>Media Type</th>
+                    <th>Title</th>
+                    <th>Show</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in table_data %}
+                <tr>
+                    <td>{{ row.date_pt }}</td>
+                    <td>{{ row.Server }}</td>
+                    <td>{{ row.user }}</td>
+                    <td>{{ row.ip_address }}</td>
+                    <td>{{ row.media_type }}</td>
+                    <td>{{ row.title }}</td>
+                    <td>{{ row.show }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="info-message">No viewing history data available for the selected time period.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- DataTables CSS and JS -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    $('#viewingHistoryTable').DataTable({
+        pageLength: 25,
+        order: [[0, 'desc']], // Sort by date descending by default
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+        language: {
+            search: "Filter records:",
+            lengthMenu: "Show _MENU_ entries",
+            info: "Showing _START_ to _END_ of _TOTAL_ viewing records",
+            infoEmpty: "No records available",
+            infoFiltered: "(filtered from _MAX_ total records)"
+        }
+    });
+});
+</script>
+{% endblock %}
