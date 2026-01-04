@@ -58,7 +58,7 @@ jobs:
             # Tag with 'latest' on main branch
             type=raw,value=latest,enable={{is_default_branch}}
             # Tag with git short SHA
-            type=sha,prefix={{branch}}-
+            type=sha
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
