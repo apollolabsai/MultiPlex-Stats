@@ -40,7 +40,7 @@ body {
 .nav-brand {
     font-size: 1.5em;
     font-weight: bold;
-    color: #667eea;
+    color: #ed542b;
     text-decoration: none;
 }
 
@@ -118,7 +118,7 @@ header {
 h1 {
     font-size: 3em;
     margin-bottom: 10px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #ed542b 0%, #764ba2 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -161,7 +161,7 @@ h1 {
 .stat-number {
     font-size: 2.5em;
     font-weight: bold;
-    color: #667eea;
+    color: #ed542b;
     margin-bottom: 5px;
 }
 
@@ -182,7 +182,7 @@ h1 {
     margin-bottom: 20px;
     padding-bottom: 10px;
     border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-    color: #667eea;
+    color: #ed542b;
 }
 
 /* Chart Container */
@@ -220,13 +220,13 @@ h1 {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #ed542b 0%, #764ba2 100%);
     color: white;
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 5px 15px rgba(237, 84, 43, 0.4);
 }
 
 .btn-success {
@@ -269,7 +269,7 @@ h1 {
 }
 
 .welcome-card h2, .action-card h2, .status-card h2, .info-section h2 {
-    color: #667eea;
+    color: #ed542b;
     margin-bottom: 15px;
 }
 
@@ -292,7 +292,7 @@ h1 {
 }
 
 .server-status h3 {
-    color: #667eea;
+    color: #ed542b;
     margin-bottom: 10px;
 }
 
@@ -375,7 +375,7 @@ h1 {
 }
 
 .form-card h3 {
-    color: #667eea;
+    color: #ed542b;
     margin-bottom: 20px;
 }
 
@@ -404,8 +404,8 @@ h1 {
 .form-group input:focus,
 .form-group select:focus {
     outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: #ed542b;
+    box-shadow: 0 0 0 3px rgba(237, 84, 43, 0.1);
 }
 
 .form-group small {
@@ -431,7 +431,7 @@ h1 {
 }
 
 .server-info h3 {
-    color: #667eea;
+    color: #ed542b;
     margin-bottom: 5px;
 }
 
@@ -454,7 +454,7 @@ h1 {
 }
 
 .import-section h3 {
-    color: #667eea;
+    color: #ed542b;
     margin-bottom: 10px;
 }
 
@@ -490,9 +490,9 @@ table.dataTable {
 }
 
 table.dataTable thead th {
-    background: rgba(102, 126, 234, 0.2) !important;
-    color: #667eea !important;
-    border-bottom: 2px solid #667eea !important;
+    background: rgba(237, 84, 43, 0.2) !important;
+    color: #ed542b !important;
+    border-bottom: 2px solid #ed542b !important;
     padding: 12px !important;
     font-weight: 600 !important;
     text-transform: uppercase;
@@ -518,7 +518,7 @@ table.dataTable tbody tr {
 }
 
 table.dataTable tbody tr:hover {
-    background: rgba(102, 126, 234, 0.1) !important;
+    background: rgba(237, 84, 43, 0.1) !important;
 }
 
 table.dataTable tbody tr.odd {
@@ -526,7 +526,7 @@ table.dataTable tbody tr.odd {
 }
 
 table.dataTable tbody tr.odd:hover {
-    background: rgba(102, 126, 234, 0.1) !important;
+    background: rgba(237, 84, 43, 0.1) !important;
 }
 
 /* DataTables Controls */
@@ -550,8 +550,8 @@ table.dataTable tbody tr.odd:hover {
 
 .dataTables_wrapper .dataTables_filter input:focus {
     outline: none;
-    border-color: #667eea !important;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: #ed542b !important;
+    box-shadow: 0 0 0 3px rgba(237, 84, 43, 0.1);
 }
 
 .dataTables_wrapper .dataTables_paginate .paginate_button {
@@ -564,14 +564,14 @@ table.dataTable tbody tr.odd:hover {
 }
 
 .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
-    background: rgba(102, 126, 234, 0.2) !important;
-    border-color: #667eea !important;
+    background: rgba(237, 84, 43, 0.2) !important;
+    border-color: #ed542b !important;
     color: #fff !important;
 }
 
 .dataTables_wrapper .dataTables_paginate .paginate_button.current {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-    border-color: #667eea !important;
+    background: linear-gradient(135deg, #ed542b 0%, #764ba2 100%) !important;
+    border-color: #ed542b !important;
     color: #fff !important;
 }
 
