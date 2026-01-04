@@ -36,10 +36,10 @@ pip3 install -r requirements.txt
 
 ### 2. Launch the Web Interface
 
-Start the Flask web server:
+Start the web server:
 
 ```bash
-python3 run_flask.py
+python3 run_multiplex_stats.py
 ```
 
 Open your browser to: **http://127.0.0.1:8983**
@@ -230,7 +230,7 @@ MultiPlex_Stats/
 │   ├── multiplex_stats.db       # SQLite database
 │   └── cache/                   # Cached chart HTML
 │
-├── run_flask.py                 # Web interface entry point
+├── run_multiplex_stats.py       # Web interface entry point
 ├── run_analytics.py             # CLI script entry point
 ├── requirements.txt             # Python dependencies
 ├── config.ini.example           # CLI config template
@@ -275,7 +275,7 @@ pip3 install -r requirements.txt
 
 **Error: "Address already in use"**
 ```bash
-# Port 8983 is busy, kill the process or change port in run_flask.py
+# Port 8983 is busy, kill the process or change port in run_multiplex_stats.py
 lsof -ti:8983 | xargs kill -9
 ```
 
