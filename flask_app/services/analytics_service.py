@@ -167,8 +167,9 @@ class AnalyticsService:
 
         for _, row in df_filtered.iterrows():
             # Build each row with proper column mapping
+            # Note: process_history_data creates 'date_pt' column (not 'date')
             table_row = {
-                'date_pt': str(row.get('date', '')) if pd.notna(row.get('date')) else '',
+                'date_pt': str(row.get('date_pt', '')) if pd.notna(row.get('date_pt')) else '',
                 'Server': str(row.get('Server', '')) if pd.notna(row.get('Server')) else '',
                 'user': str(row.get('user', '')) if pd.notna(row.get('user')) else '',
                 'ip_address': str(row.get('ip_address', '')) if pd.notna(row.get('ip_address')) else '',
