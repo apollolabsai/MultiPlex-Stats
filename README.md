@@ -1,270 +1,443 @@
-# MultiPlex Stats
+# MultiPlex Stats 📊
 
-**Combine multiple Tautulli Server statistics into one dashboard for monitoring multiple Plex servers**
-![Example](graph.png)
+**A modern web application for combining and visualizing statistics from multiple Tautulli/Plex servers in one unified dashboard.**
 
-## 📁 What's In This Folder
+![MultiPlex Stats Dashboard](graph.png)
 
-```
-MultiPlex_Stats/
-├── flask_app/               # Web interface application
-│   ├── routes/              # Web routes (dashboard, settings)
-│   ├── services/            # Analytics & config services
-│   ├── templates/           # HTML templates
-│   ├── static/              # CSS and assets
-│   ├── utils/               # Form validators
-│   ├── models.py            # Database models
-│   └── config.py            # Flask configuration
-├── multiplex_stats/         # Analytics package (don't modify)
-│   ├── api_client.py
-│   ├── data_processing.py
-│   ├── models.py
-│   ├── utils.py
-│   └── visualization.py
-├── instance/                # Database and cache (auto-created)
-│   ├── multiplex_stats.db   # SQLite database
-│   └── cache/               # Cached analytics results
-├── config.ini.example       # Configuration template
-├── requirements.txt         # Python dependencies
-├── run_analytics.py         # CLI script
-├── run_flask.py             # Web interface entry point
-└── README.md                # This file
-```
-
-## 🚀 Quick Start (3 Steps)
-
-### Step 1: Install Dependencies
-
-Open Terminal and navigate to this folder:
-```bash
-cd /path/to/multi-server_stat
-```
-
-Install required packages:
-```bash
-pip3 install -r requirements.txt
-```
-
-### Step 2: Configure Your Servers
-
-**Option A: Using Config File (Recommended)**
-
-1. Edit `config.ini` with your server information (be sure to rename the file to config.ini): 
-   ```ini
-   [ServerA]
-   name = Server1
-   ip_address = 192.168.1.101:8181 #Enter your Tautulli Server IP Address Here
-   api_key = your_actual_api_key_here
-
-   [ServerB]
-   # OPTIONAL - Leave blank or remove this section if you only have one server
-   name = Server2
-   ip_address = 192.168.1.102:8181 #Enter your Tautulli Server IP Address Here
-   api_key = your_actual_api_key_here
-
-   [Settings]
-   history_days = 60
-   top_movies = 30
-   top_tv_shows = 30
-   ```
-
-**For single server setup**, you can leave ServerB blank or remove it entirely:
-   ```ini
-   [ServerA]
-   name = MyServer
-   ip_address = 192.168.1.101:8181
-   api_key = your_actual_api_key_here
-
-   [Settings]
-   history_days = 60
-   top_movies = 30
-   top_tv_shows = 30
-   ```
-
-
-**How to find your API key:**
-1. Open Tautulli in browser
-2. Settings → Web Interface → API
-3. Copy the API key
-
-
-### Step 3: Run the Script
-
-```bash
-python3 run_analytics.py
-```
-
-**That's it!** The script will:
-- Fetch data from both servers
-- Process and analyze all viewing data
-- Export CSV files with raw data
-- **Automatically create `dashboard.html`** with all charts combined in one beautiful page
+Monitor your Plex Media Server ecosystem with beautiful interactive charts, user analytics, and content insights - all accessible through an easy-to-use web interface.
 
 ---
 
-## 🌐 NEW: Web Interface
+## ✨ Features
 
-MultiPlex Stats now includes a web interface! Configure your servers, run analytics, and view dashboards directly in your browser.
+- 🌐 **Web Interface** - Configure servers and view analytics directly in your browser
+- 📈 **Interactive Charts** - 7 beautiful Plotly visualizations with hover details
+- 🖥️ **Multi-Server Support** - Combine statistics from up to 2 Tautulli servers
+- 👥 **User Analytics** - Track your most active users and viewing patterns
+- 🎬 **Content Insights** - Discover your most popular movies and TV shows
+- 📊 **Trend Analysis** - Daily and monthly viewing trends over time
+- ⚙️ **Easy Configuration** - Web-based settings management (no config file editing!)
+- 🔄 **One-Click Refresh** - Update your analytics with a single button click
+- 💾 **Data Export** - CSV exports for further analysis in Excel or other tools
 
-### Starting the Web Interface
+---
+
+## 🚀 Quick Start
+
+### 1. Installation
+
+Clone the repository and install dependencies:
+
+```bash
+git clone https://github.com/apollolabsai/MultiPlex-Stats.git
+cd MultiPlex-Stats
+pip3 install -r requirements.txt
+```
+
+### 2. Launch the Web Interface
+
+Start the Flask web server:
 
 ```bash
 python3 run_flask.py
 ```
 
-Then open your browser to: **http://127.0.0.1:8983**
+Open your browser to: **http://127.0.0.1:8983**
 
-### Web Interface Features
+### 3. Configure Your Servers
 
-- **Settings Page**: Configure servers and analytics settings via web forms (no manual config.ini editing!)
-- **One-Click Analytics**: Run analytics with the click of a button
-- **Interactive Dashboard**: View all charts and statistics in your browser
-- **Refresh Button**: Rerun analytics anytime to get updated data
-- **Import Config**: Automatically import your existing config.ini settings
+On first launch, you'll be redirected to the Settings page:
 
-### Web Interface Usage
+1. **Add Server A** (required):
+   - Enter a server name (e.g., "Main Server")
+   - Enter IP:Port (e.g., `192.168.1.101:8181`)
+   - Paste your Tautulli API key
 
-1. **First Time Setup**:
-   - Run `python3 run_flask.py`
-   - Navigate to Settings (or you'll be redirected automatically)
-   - Add your Tautulli server(s) via the web form
-   - Configure analytics settings
+2. **Add Server B** (optional):
+   - Same process for your second server
+   - Leave blank if you only have one server
 
-2. **Running Analytics**:
-   - Click "Run Analytics" button on the home page
-   - Wait 30-60 seconds for analytics to complete
-   - View the dashboard with all charts and statistics
+3. **Configure Analytics Settings**:
+   - Set time ranges (days/months to analyze)
+   - Set number of top items to display
 
-3. **Viewing Results**:
-   - Dashboard displays all 7 interactive Plotly charts
-   - Summary statistics show total plays, active users, and more
-   - Click "Refresh Analytics" to rerun with current settings
+**Finding Your Tautulli API Key:**
+1. Open Tautulli in your browser
+2. Navigate to: Settings → Web Interface → API
+3. Copy the API key
 
-### Web vs CLI
+### 4. Run Analytics
 
-Both interfaces work side-by-side:
-- **Web Interface**: Best for interactive use, easier configuration, browser-based viewing
-- **CLI (`run_analytics.py`)**: Best for automation, cron jobs, scripting
+1. Click the **"Run Analytics"** button on the home page
+2. Wait 30-60 seconds while data is fetched and processed
+3. View your dashboard with all charts and statistics
 
 ---
 
-## 📊 What You Get
+## 📊 What You'll See
 
-After running (CLI or Web), you'll have:
+### Dashboard Overview
 
-### Main Dashboard
-- **dashboard.html** - Single page with ALL charts and statistics combined
+The web dashboard displays comprehensive analytics across 7 interactive visualizations:
 
-### Data Files (CSV - open in Excel)
-- history_data.csv - Full viewing history
-- user_stats.csv - User statistics
-- movie_stats.csv - Movie popularity
-- tv_stats.csv - TV show popularity
+#### Activity Trends
+- **Daily Bar Chart** - Last 60 days of viewing activity by server and media type
+- **Monthly Bar Chart** - Long-term trends showing up to 60 months of history
 
-## 🎨 Viewing Your Results
+#### Distribution Analysis
+- **Category Pie Chart** - TV vs Movies breakdown
+- **Server Pie Chart** - Activity distribution across your servers
 
-**Option 1: Double-click**
-- Just double-click `dashboard.html` in Finder
+#### User Insights
+- **User Activity Chart** - Top 20 most active users ranked by play count
 
-**Option 2: From Terminal**
-```bash
-open dashboard.html
+#### Content Rankings
+- **Top Movies Chart** - Your 30 most-watched movies
+- **Top TV Shows Chart** - Your 30 most-watched TV series
+
+#### Summary Statistics
+- Total plays across all servers
+- Number of active users
+- Per-server play counts
+- Unique movies and TV shows in your library
+
+---
+
+## 🎯 Web Interface Guide
+
+### Home Page
+- View last analytics run status and timestamp
+- See configured servers at a glance
+- One-click button to run analytics
+- Quick access to dashboard and settings
+
+### Dashboard Page
+- Interactive charts with hover tooltips and zoom
+- Summary statistics cards at the top
+- **Refresh Analytics** button to rerun with latest data
+- Charts organized by category for easy navigation
+
+### Settings Page
+- **Server Configuration**:
+  - Add, edit, or remove Tautulli servers
+  - Specify server order (A/B)
+  - Test connections before saving
+
+- **Analytics Settings**:
+  - Daily trend days (1-365)
+  - Monthly trend months (1-120)
+  - History analysis period (1-365 days)
+  - Number of top movies/shows/users to display
+
+- **Import Config**:
+  - Import from existing `config.ini` file
+  - Useful for migrating from CLI to web interface
+
+---
+
+## 🖥️ CLI Mode (Optional)
+
+For automation, cron jobs, or scripting, you can still use the command-line interface:
+
+### Setup with config.ini
+
+1. Copy the example config:
+   ```bash
+   cp config.ini.example config.ini
+   ```
+
+2. Edit `config.ini` with your server details:
+   ```ini
+   [ServerA]
+   name = Server1
+   ip_address = 192.168.1.101:8181
+   api_key = your_tautulli_api_key_here
+
+   [ServerB]  # Optional - remove if not needed
+   name = Server2
+   ip_address = 192.168.1.102:8181
+   api_key = your_tautulli_api_key_here
+
+   [Settings]
+   daily_trend_days = 60
+   monthly_trend_months = 60
+   history_days = 60
+   top_movies = 30
+   top_tv_shows = 30
+   top_users = 20
+   ```
+
+3. Run the analytics script:
+   ```bash
+   python3 run_analytics.py
+   ```
+
+### CLI Output
+
+The CLI script generates:
+- **`dashboard.html`** - Standalone HTML dashboard (can be opened in any browser)
+- **`history_data.csv`** - Full viewing history
+- **`user_stats.csv`** - User statistics
+- **`movie_stats.csv`** - Movie rankings
+- **`tv_stats.csv`** - TV show rankings
+
+### Web vs CLI Comparison
+
+| Feature | Web Interface | CLI Script |
+|---------|--------------|------------|
+| Configuration | Web forms | config.ini file |
+| Running Analytics | Click button | Run command |
+| View Dashboard | In-browser | Open dashboard.html |
+| Automation | Manual | Cron/scheduled tasks |
+| Best For | Interactive use | Automation/scripting |
+
+**💡 Pro Tip:** Both methods work side-by-side! Use the web interface for daily viewing and configuration, and CLI for automated scheduled runs.
+
+---
+
+## 📁 Project Structure
+
+```
+MultiPlex_Stats/
+├── flask_app/                    # Web application
+│   ├── routes/                   # URL routes (dashboard, settings)
+│   │   ├── main.py              # Home, dashboard, analytics execution
+│   │   └── settings.py          # Server & analytics configuration
+│   ├── services/                 # Business logic layer
+│   │   ├── analytics_service.py # Analytics execution & caching
+│   │   └── config_service.py    # Database configuration management
+│   ├── templates/                # HTML templates (Jinja2)
+│   │   ├── base.html            # Base layout with navbar
+│   │   ├── index.html           # Landing page
+│   │   ├── dashboard.html       # Analytics dashboard
+│   │   └── settings.html        # Configuration forms
+│   ├── static/                   # Static assets
+│   │   └── css/style.css        # Dark theme styling
+│   ├── utils/                    # Utilities
+│   │   └── validators.py        # Form validation
+│   ├── models.py                # Database models (SQLAlchemy)
+│   └── config.py                # Flask configuration
+│
+├── multiplex_stats/              # Core analytics engine
+│   ├── api_client.py            # Tautulli API client
+│   ├── data_processing.py       # Data transformation & aggregation
+│   ├── visualization.py         # Plotly chart generation
+│   ├── models.py                # Data models
+│   ├── config_loader.py         # Configuration loader
+│   └── utils.py                 # Helper functions
+│
+├── instance/                     # Runtime data (auto-created)
+│   ├── multiplex_stats.db       # SQLite database
+│   └── cache/                   # Cached chart HTML
+│
+├── run_flask.py                 # Web interface entry point
+├── run_analytics.py             # CLI script entry point
+├── requirements.txt             # Python dependencies
+├── config.ini.example           # CLI config template
+└── README.md                    # This file
 ```
 
-**Option 3: Drag to Browser**
-- Drag `dashboard.html` to your browser window
+---
 
-## ⚙️ Customization
+## ⚙️ Configuration Options
 
-All settings are now in `config.ini` - no need to edit code!
+### Analytics Settings
 
-### Change Time Range
+Customize your analytics through the web interface Settings page:
 
-Edit `config.ini`:
-```ini
-[Settings]
-history_days = 30  # Change to 7, 60, 90, etc.
-```
+| Setting | Default | Range | Description |
+|---------|---------|-------|-------------|
+| Daily Trend Days | 60 | 1-365 | Days to display in daily activity chart |
+| Monthly Trend Months | 60 | 1-120 | Months to display in monthly chart |
+| History Days | 60 | 1-365 | Days of history for user/content analysis |
+| Top Movies | 30 | 1-100 | Number of top movies to show |
+| Top TV Shows | 30 | 1-100 | Number of top shows to show |
+| Top Users | 20 | 1-100 | Number of top users to display |
 
-### Change Number of Top Items
+### Server Configuration
 
-Edit `config.ini`:
-```ini
-[Settings]
-top_movies = 50      # Show top 50 movies
-top_tv_shows = 20    # Show top 20 TV shows
-```
+- **Server Name**: Friendly display name (e.g., "Home Server", "Remote Server")
+- **IP:Port**: Tautulli server address (e.g., `192.168.1.101:8181`)
+- **API Key**: Tautulli API key (Settings → Web Interface → API)
+- **Server Order**: Primary (A) or Secondary (B)
 
-**See [CONFIGURATION_GUIDE.md](CONFIGURATION_GUIDE.md) for all configuration options**
+---
 
 ## 🔧 Troubleshooting
 
-### "python: command not found"
-Use `python3` instead:
-```bash
-python3 run_analytics.py
-```
+### Web Interface Won't Start
 
-### "ModuleNotFoundError"
-Install dependencies:
+**Error: "ModuleNotFoundError"**
 ```bash
+# Install dependencies
 pip3 install -r requirements.txt
 ```
 
-### "Connection Error"
-- Check IP address and port are correct
-- Make sure Tautulli is running
-- Verify API key is correct
-
-### "No data" or empty charts
-- Check you have viewing history in Tautulli
-- Try reducing time range (change `history_days = 60` to `history_days = 7`)
-
-## 📝 Output Files
-
-The script generates:
-- **dashboard.html** - Your main analytics dashboard (keep this!)
-- **CSV files** - Raw data exports (optional to keep)
-
-All files are regenerated each time you run the script with fresh data.
-
-## 🔄 Running Again
-
-Just run the script again anytime you want updated stats:
+**Error: "Address already in use"**
 ```bash
-python3 run_analytics.py
+# Port 8983 is busy, kill the process or change port in run_flask.py
+lsof -ti:8983 | xargs kill -9
 ```
 
-It will overwrite the old files with fresh data.
+### Analytics Fail to Run
 
-## 📚 What's in multiplex_stats/
+**"No server configuration found"**
+- Add at least one server in Settings page
+- Verify server details are correct
 
-This folder contains the analytics engine. You don't need to modify it, but here's what's inside:
+**"Connection Error"**
+- Check IP address and port are correct
+- Ensure Tautulli is running and accessible
+- Verify firewall isn't blocking access
+- Test API key in Tautulli web interface
 
-- **api_client.py** - Connects to Tautulli API
-- **data_processing.py** - Processes and aggregates data
-- **visualization.py** - Creates charts
-- **models.py** - Configuration classes
-- **utils.py** - Helper functions
+**"API Key invalid"**
+- Get fresh API key from Tautulli: Settings → Web Interface → API
+- Copy the entire key without spaces
+- Avoid placeholder values like "YOUR_API_KEY"
 
-## 💡 Pro Tips
+### No Data or Empty Charts
 
-1. **Schedule it**: Set up a cron job to run daily and keep stats updated
-2. **Share the dashboard**: Email the `dashboard.html` file - it works offline!
-3. **Export for Excel**: All data is available in CSV format
-4. **Compare servers**: The dashboard shows which server is more popular
+**Charts show no data:**
+- Verify you have viewing history in Tautulli
+- Reduce the time range (try 7 days instead of 60)
+- Check that the correct servers are configured
+- Ensure the API key has proper permissions
 
-## 🆘 Need Help?
+**Dashboard shows old data:**
+- Click the "Refresh Analytics" button
+- Charts are cached until you rerun analytics
 
-If you get stuck:
-1. Read the error message - it usually tells you what's wrong
-2. Check your API keys are correct
-3. Make sure both servers are accessible
-4. Verify Tautulli is running on both servers
+---
 
-## 📦 Package Info
+## 💡 Tips & Best Practices
 
-**MultiPlex Stats** - A clean, modular Python package for Tautulli/Plex analytics, refactored from a Jupyter notebook with proper type hints and documentation.
+### For Regular Users
 
-**Version:** 1.0.0
-**Requirements:** Python 3.8+
+1. **Bookmark the Dashboard** - Add http://127.0.0.1:8983/dashboard to bookmarks
+2. **Weekly Refresh** - Run analytics weekly to track trends
+3. **Adjust Time Ranges** - Use shorter ranges (7-30 days) for faster processing
+4. **Share Insights** - Charts are interactive and print-friendly
+
+### For Advanced Users
+
+1. **Automate with CLI** - Set up cron job to run analytics daily:
+   ```bash
+   0 3 * * * cd /path/to/MultiPlex_Stats && /usr/bin/python3 run_analytics.py
+   ```
+
+2. **Export Data** - CSV files are generated for Excel/data analysis
+3. **Backup Database** - Save `instance/multiplex_stats.db` for config backup
+4. **Production Mode** - Set `FLASK_ENV=production` for deployment
+
+### For Developers
+
+- **Database Schema** - SQLAlchemy models in `flask_app/models.py`
+- **API Endpoints** - Routes defined in `flask_app/routes/`
+- **Chart Customization** - Modify `multiplex_stats/visualization.py`
+- **Styling** - Edit `flask_app/static/css/style.css`
+
+---
+
+## 📊 How It Works
+
+### Architecture Overview
+
+```
+┌─────────────────┐
+│   Web Browser   │
+│  (Port 8983)    │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Flask App     │
+│   (Routes)      │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│   Services      │
+│  (Business      │
+│   Logic)        │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐     ┌──────────────┐
+│  Analytics      │────▶│  SQLite DB   │
+│  Engine         │     │  (Config)    │
+│  (multiplex_    │     └──────────────┘
+│   stats)        │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Tautulli API   │
+│  (Servers A/B)  │
+└─────────────────┘
+```
+
+### Data Flow
+
+1. **User configures servers** → Saved to SQLite database
+2. **User clicks "Run Analytics"** → Flask route triggered
+3. **Analytics Service**:
+   - Loads config from database
+   - Fetches data from Tautulli API(s)
+   - Processes and aggregates data
+   - Generates Plotly charts
+   - Caches chart HTML to disk
+   - Stores run metadata in database
+4. **Dashboard displays** → Loads cached charts from disk
+
+---
+
+## 🛡️ Privacy & Security
+
+- **Local Only**: All data stays on your machine (no external services)
+- **API Keys**: Stored in local SQLite database (instance/multiplex_stats.db)
+- **No Telemetry**: Zero tracking or analytics sent anywhere
+- **Open Source**: Fully auditable code on GitHub
+
+**Security Best Practices:**
+- Don't expose Flask app to the internet without authentication
+- Keep API keys secure (they're not committed to git)
+- Regularly update dependencies for security patches
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Feel free to:
+- Report bugs or request features via GitHub Issues
+- Submit pull requests for improvements
+- Share your dashboard customizations
+- Improve documentation
+
+---
+
+## 📜 License
+
+This project is open source and available under the MIT License.
+
+---
+
+## 🙏 Acknowledgments
+
+- **Tautulli** - Amazing Plex monitoring tool that provides the API
+- **Plotly** - Beautiful interactive charting library
+- **Flask** - Lightweight and powerful web framework
+
+---
+
+## 📞 Support
+
+- **Documentation**: This README
+- **Issues**: [GitHub Issues](https://github.com/apollolabsai/MultiPlex-Stats/issues)
+- **Latest Version**: [GitHub Releases](https://github.com/apollolabsai/MultiPlex-Stats)
+
+---
+
+**Built with ❤️ for the Plex community**
+
+*MultiPlex Stats - Making multi-server analytics simple and beautiful*
