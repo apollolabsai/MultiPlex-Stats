@@ -13,11 +13,13 @@ class ServerConfig:
     name: str
     ip_address: str
     api_key: str
+    use_ssl: bool = False
 
     @property
     def base_url(self) -> str:
         """Get the base URL for API requests."""
-        return f"http://{self.ip_address}/api/v2"
+        protocol = "https" if self.use_ssl else "http"
+        return f"{protocol}://{self.ip_address}/api/v2"
 
     def __repr__(self) -> str:
         """String representation with masked API key."""
