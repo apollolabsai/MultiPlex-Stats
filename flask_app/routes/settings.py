@@ -82,6 +82,7 @@ def update_analytics_settings():
         settings.daily_trend_days = int(request.form.get('daily_trend_days', 60))
         settings.monthly_trend_months = int(request.form.get('monthly_trend_months', 60))
         settings.history_days = int(request.form.get('history_days', 60))
+        settings.history_table_days = int(request.form.get('history_table_days', 60))
         settings.top_movies = int(request.form.get('top_movies', 30))
         settings.top_tv_shows = int(request.form.get('top_tv_shows', 30))
         settings.top_users = int(request.form.get('top_users', 20))

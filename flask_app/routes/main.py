@@ -75,12 +75,14 @@ def dashboard():
         flash('No analytics data available. Please run analytics first.', 'info')
         return redirect(url_for('main.index'))
 
-    # Load cached chart HTML from service
+    # Load cached chart HTML and table data from service
     service = AnalyticsService()
     charts = service.get_cached_charts(last_run.id)
+    table_data = service.get_cached_table_data(last_run.id)
     summary = json.loads(last_run.summary_json)
 
     return render_template('dashboard.html',
                           charts=charts,
+                          table_data=table_data,
                           summary=summary,
                           last_run=last_run)

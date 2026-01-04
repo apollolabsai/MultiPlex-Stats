@@ -38,6 +38,7 @@ class AnalyticsSettings(db.Model):
     daily_trend_days = db.Column(db.Integer, default=60)
     monthly_trend_months = db.Column(db.Integer, default=60)
     history_days = db.Column(db.Integer, default=60)
+    history_table_days = db.Column(db.Integer, default=60)
     top_movies = db.Column(db.Integer, default=30)
     top_tv_shows = db.Column(db.Integer, default=30)
     top_users = db.Column(db.Integer, default=20)
