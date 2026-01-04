@@ -1,7 +1,7 @@
 services:
   multiplex-stats:
-    image: apollolabsai/MultiPlex_Stats:latest
-    container_name: multiplex-stats
+    build: .
+    container_name: multiplex-stats-dev
     ports:
       - "8487:8487"
     volumes:
@@ -9,7 +9,7 @@ services:
       - ./instance:/app/instance
     environment:
       - PORT=8487
-      - FLASK_ENV=production
+      - FLASK_ENV=development
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8487')"]
