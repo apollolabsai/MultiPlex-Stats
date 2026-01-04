@@ -25,7 +25,40 @@ Monitor your Plex Media Server ecosystem with beautiful interactive charts, user
 
 ## 🚀 Quick Start
 
-### 1. Installation
+### Option 1: Docker (Recommended)
+
+The easiest way to run MultiPlex Stats is with Docker:
+
+```bash
+docker run -d \
+  --name multiplex-stats \
+  -p 8487:8487 \
+  -v multiplex-data:/app/instance \
+  YOUR_DOCKERHUB_USERNAME/multiplex-stats:latest
+```
+
+Or using docker-compose:
+
+```yaml
+services:
+  multiplex-stats:
+    image: YOUR_DOCKERHUB_USERNAME/multiplex-stats:latest
+    container_name: multiplex-stats
+    ports:
+      - "8487:8487"
+    volumes:
+      - ./instance:/app/instance
+    restart: unless-stopped
+```
+
+Then:
+```bash
+docker-compose up -d
+```
+
+Open your browser to: **http://localhost:8487**
+
+### Option 2: Manual Installation
 
 Clone the repository and install dependencies:
 
@@ -35,17 +68,15 @@ cd MultiPlex-Stats
 pip3 install -r requirements.txt
 ```
 
-### 2. Launch the Web Interface
-
 Start the web server:
 
 ```bash
 python3 run_multiplex_stats.py
 ```
 
-Open your browser to: **http://127.0.0.1:8983**
+Open your browser to: **http://127.0.0.1:8487**
 
-### 3. Configure Your Servers
+### Configure Your Servers
 
 On first launch, you'll be redirected to the Settings page:
 
@@ -67,7 +98,11 @@ On first launch, you'll be redirected to the Settings page:
 2. Navigate to: Settings → Web Interface → API
 3. Copy the API key
 
-### 4. Run Analytics
+**HTTPS/SSL Support:**
+- Check "Use HTTPS/SSL" if your Tautulli server uses HTTPS
+- Leave "Verify SSL Certificate" unchecked if using self-signed certificates
+
+### Run Analytics
 
 1. Click the **"Run Analytics"** button on the home page
 2. Wait 30-60 seconds while data is fetched and processed
