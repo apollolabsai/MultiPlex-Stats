@@ -29,6 +29,7 @@ def add_server():
             'ip_address': request.form.get('ip_address'),
             'api_key': request.form.get('api_key'),
             'use_ssl': request.form.get('use_ssl') == '1',
+            'verify_ssl': request.form.get('verify_ssl') == '1',
             'server_order': int(request.form.get('server_order', 0))
         }
 
@@ -48,6 +49,7 @@ def add_server():
                 server.ip_address = data['ip_address']
                 server.api_key = data['api_key']
                 server.use_ssl = data['use_ssl']
+                server.verify_ssl = data['verify_ssl']
                 server.server_order = data['server_order']
             else:
                 flash('Server not found.', 'error')
