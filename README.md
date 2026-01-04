@@ -34,7 +34,7 @@ docker run -d \
   --name multiplex-stats \
   -p 8487:8487 \
   -v multiplex-data:/app/instance \
-  YOUR_DOCKERHUB_USERNAME/multiplex-stats:latest
+  powertowerpro/multiplex-stats:latest
 ```
 
 Or using docker-compose:
@@ -42,7 +42,7 @@ Or using docker-compose:
 ```yaml
 services:
   multiplex-stats:
-    image: YOUR_DOCKERHUB_USERNAME/multiplex-stats:latest
+    image: powertowerpro/multiplex-stats:latest
     container_name: multiplex-stats
     ports:
       - "8487:8487"
