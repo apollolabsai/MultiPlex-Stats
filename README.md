@@ -34,7 +34,7 @@ docker run -d \
   --name multiplex-stats \
   -p 8487:8487 \
   -v multiplex-data:/app/instance \
-  powertowerpro/multiplex-stats:latest
+  apollolabsai/MultiPlex_Stats:latest
 ```
 
 Or using docker-compose:
@@ -42,7 +42,7 @@ Or using docker-compose:
 ```yaml
 services:
   multiplex-stats:
-    image: powertowerpro/multiplex-stats:latest
+    image: apollolabsai/MultiPlex_Stats:latest
     container_name: multiplex-stats
     ports:
       - "8487:8487"
