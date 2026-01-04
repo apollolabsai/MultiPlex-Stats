@@ -15,24 +15,31 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 # Final stage
 FROM python:3.11-slim
 
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
 WORKDIR /app
 
 # Copy Python packages from builder
-COPY --from=builder /root/.local /root/.local
+COPY --from=builder /root/.local /home/appuser/.local
 
 # Copy application code
 COPY multiplex_stats/ ./multiplex_stats/
 COPY flask_app/ ./flask_app/
 COPY run_multiplex_stats.py .
 
-# Create necessary directories
-RUN mkdir -p instance/cache
+# Create necessary directories and set ownership
+RUN mkdir -p instance/cache && \
+    chown -R appuser:appuser /app
 
 # Set environment variables
-ENV PATH=/root/.local/bin:$PATH
+ENV PATH=/home/appuser/.local/bin:$PATH
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=run_multiplex_stats.py
 ENV PORT=8487
+
+# Switch to non-root user
+USER appuser
 
 # Expose port
 EXPOSE 8487
