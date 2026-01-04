@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Flask application entry point for MultiPlex Stats web interface.
+MultiPlex Stats - Web Interface Entry Point
 
 Run this script to start the web application:
-    python3 run_flask.py
+    python3 run_multiplex_stats.py
 
 Then open your browser to: http://127.0.0.1:8983
 """
