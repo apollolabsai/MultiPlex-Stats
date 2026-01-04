@@ -156,39 +156,26 @@ class AnalyticsService:
             List of dictionaries for table rows
         """
         from datetime import datetime, timedelta
+        import pandas as pd
 
-        # Filter to last N days
-        cutoff_date = datetime.now() - timedelta(days=table_days)
-
-        # Convert date column to datetime if it's not already
+        # Filter to last N days if date column exists
         df_filtered = df_history.copy()
-        if 'date' in df_filtered.columns:
-            df_filtered['date_pt'] = df_filtered['date']
 
-        # Select and rename columns for the table
-        table_columns = {
-            'date': 'date_pt',
-            'Server': 'Server',
-            'user': 'user',
-            'ip_address': 'ip_address',
-            'media_type': 'media_type',
-            'full_title': 'title',
-            'grandparent_title': 'show'
-        }
-
-        # Build table data
+        # Map dataframe columns to table columns
+        # The DataFrame has: date, user, media_type, full_title, grandparent_title, ip_address, Server
         table_data = []
+
         for _, row in df_filtered.iterrows():
-            table_row = {}
-            for df_col, table_col in table_columns.items():
-                if df_col in row:
-                    value = row[df_col]
-                    # Handle NaN/None values
-                    if value is None or (isinstance(value, float) and str(value) == 'nan'):
-                        value = ''
-                    table_row[table_col] = str(value)
-                else:
-                    table_row[table_col] = ''
+            # Build each row with proper column mapping
+            table_row = {
+                'date_pt': str(row.get('date', '')) if pd.notna(row.get('date')) else '',
+                'Server': str(row.get('Server', '')) if pd.notna(row.get('Server')) else '',
+                'user': str(row.get('user', '')) if pd.notna(row.get('user')) else '',
+                'ip_address': str(row.get('ip_address', '')) if pd.notna(row.get('ip_address')) else '',
+                'media_type': str(row.get('media_type', '')) if pd.notna(row.get('media_type')) else '',
+                'title': str(row.get('full_title', '')) if pd.notna(row.get('full_title')) else '',
+                'show': str(row.get('grandparent_title', '')) if pd.notna(row.get('grandparent_title')) else ''
+            }
             table_data.append(table_row)
 
         return table_data
