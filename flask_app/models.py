@@ -16,6 +16,7 @@ class ServerConfig(db.Model):
     ip_address = db.Column(db.String(255), nullable=False)
     api_key = db.Column(db.String(255), nullable=False)
     use_ssl = db.Column(db.Boolean, default=False)
+    verify_ssl = db.Column(db.Boolean, default=True)
     is_active = db.Column(db.Boolean, default=True)
     server_order = db.Column(db.Integer, default=0)  # 0=ServerA, 1=ServerB
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -28,7 +29,8 @@ class ServerConfig(db.Model):
             name=self.name,
             ip_address=self.ip_address,
             api_key=self.api_key,
-            use_ssl=self.use_ssl
+            use_ssl=self.use_ssl,
+            verify_ssl=self.verify_ssl
         )
 
 

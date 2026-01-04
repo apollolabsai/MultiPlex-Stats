@@ -3,10 +3,14 @@ Tautulli API client for fetching server statistics.
 """
 
 import requests
+import urllib3
 from typing import Any, Optional
 from datetime import datetime, timedelta
 
 from multiplex_stats.models import ServerConfig
+
+# Suppress SSL warnings for self-signed certificates
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class TautulliClient:
@@ -22,6 +26,7 @@ class TautulliClient:
         self.config = server_config
         self.base_url = server_config.base_url
         self.api_key = server_config.api_key
+        self.verify_ssl = server_config.verify_ssl
 
     def _make_request(self, command: str, **params: Any) -> dict[str, Any]:
         """
@@ -42,7 +47,7 @@ class TautulliClient:
         for key, value in params.items():
             url += f"&{key}={value}"
 
-        response = requests.get(url)
+        response = requests.get(url, verify=self.verify_ssl)
         response.raise_for_status()
         return response.json()
 
