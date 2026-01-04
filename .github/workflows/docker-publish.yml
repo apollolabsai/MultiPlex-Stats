@@ -18,7 +18,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/multiplex-stats
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/MultiPlex_Stats
 
 jobs:
   build-and-push:
