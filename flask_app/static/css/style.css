@@ -415,6 +415,23 @@ h1 {
     font-size: 0.85em;
 }
 
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.checkbox-group input[type="checkbox"] {
+    width: auto;
+    margin-right: 10px;
+    cursor: pointer;
+    transform: scale(1.2);
+}
+
+.checkbox-group small {
+    margin-left: 32px;
+}
+
 .server-list {
     margin-bottom: 20px;
 }

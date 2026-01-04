@@ -18,8 +18,8 @@
                 <div class="server-item">
                     <div class="server-info">
                         <h3>{{ server.name }}</h3>
-                        <p>{{ server.ip_address }}</p>
-                        <p class="server-meta">Order: {{ "ServerA" if server.server_order == 0 else "ServerB" }}</p>
+                        <p>{{ "https" if server.use_ssl else "http" }}://{{ server.ip_address }}</p>
+                        <p class="server-meta">Order: {{ "ServerA" if server.server_order == 0 else "ServerB" }}{% if server.use_ssl %} | SSL: ✓{% endif %}</p>
                     </div>
                     <div class="server-actions">
                         <form method="POST" action="{{ url_for('settings.delete_server', server_id=server.id) }}" style="display: inline;">
@@ -51,6 +51,14 @@
                     <label for="api_key">API Key</label>
                     <input type="text" id="api_key" name="api_key" required placeholder="Your Tautulli API key">
                     <small>Find in Tautulli: Settings → Web Interface → API</small>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input type="checkbox" id="use_ssl" name="use_ssl" value="1">
+                        Use HTTPS/SSL
+                    </label>
+                    <small>Check this if your Tautulli server uses HTTPS</small>
                 </div>
 
                 <div class="form-group">
