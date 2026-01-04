@@ -33,6 +33,8 @@ The easiest way to run MultiPlex Stats is with Docker:
 docker run -d \
   --name multiplex-stats \
   -p 8487:8487 \
+  -e PUID=1000 \
+  -e PGID=1000 \
   -v multiplex-data:/app/instance \
   powertowerpro/multiplex_stats:latest
 ```
@@ -48,8 +50,16 @@ services:
       - "8487:8487"
     volumes:
       - ./instance:/app/instance
+    environment:
+      - PUID=1000
+      - PGID=1000
     restart: unless-stopped
 ```
+
+**Setting PUID and PGID:**
+- Find your user ID: `id -u` (typically 1000)
+- Find your group ID: `id -g` (typically 1000)
+- Set PUID and PGID to match your user to avoid permission issues
 
 Then:
 ```bash

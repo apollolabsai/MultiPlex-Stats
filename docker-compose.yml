@@ -10,6 +10,8 @@ services:
     environment:
       - PORT=8487
       - FLASK_ENV=production
+      - PUID=1000
+      - PGID=1000
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8487')"]

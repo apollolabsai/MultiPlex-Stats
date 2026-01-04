@@ -15,31 +15,36 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 # Final stage
 FROM python:3.11-slim
 
-# Create non-root user
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+# Install gosu for step-down from root
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gosu && \
+    rm -rf /var/lib/apt/lists/* && \
+    gosu nobody true
 
 WORKDIR /app
 
 # Copy Python packages from builder
-COPY --from=builder /root/.local /home/appuser/.local
+COPY --from=builder /root/.local /root/.local
 
 # Copy application code
 COPY multiplex_stats/ ./multiplex_stats/
 COPY flask_app/ ./flask_app/
 COPY run_multiplex_stats.py .
+COPY entrypoint.sh /entrypoint.sh
 
-# Create necessary directories and set ownership
-RUN mkdir -p instance/cache && \
-    chown -R appuser:appuser /app
+# Make entrypoint executable
+RUN chmod +x /entrypoint.sh
+
+# Create instance directory
+RUN mkdir -p /app/instance/cache
 
 # Set environment variables
-ENV PATH=/home/appuser/.local/bin:$PATH
+ENV PATH=/root/.local/bin:$PATH
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=run_multiplex_stats.py
 ENV PORT=8487
-
-# Switch to non-root user
-USER appuser
+ENV PUID=1000
+ENV PGID=1000
 
 # Expose port
 EXPOSE 8487
@@ -48,5 +53,5 @@ EXPOSE 8487
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8487')" || exit 1
 
-# Run the application
-CMD ["python3", "run_multiplex_stats.py"]
+# Run the application via entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
