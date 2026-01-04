@@ -48,7 +48,7 @@ def create_daily_bar_chart(
 
     # Remove outlines and make stacked
     fig.update_traces(marker_line_color='rgba(0,0,0,0)')
-    fig.update_layout(barmode='relative')
+    fig.update_layout(barmode='stack')
 
     # Calculate totals and add annotations
     totals = df.groupby('Month', as_index=False)['Count'].sum()
