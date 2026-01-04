@@ -111,6 +111,12 @@ class AnalyticsService:
         with open(cache_path, 'w') as f:
             json.dump(charts_html, f)
 
+        # 6b. Prepare and cache viewing history table data
+        table_data = self._prepare_table_data(df_history, settings.history_table_days if hasattr(settings, 'history_table_days') else 60)
+        table_cache_path = os.path.join(self.cache_dir, f'run_{run_id}_table.json')
+        with open(table_cache_path, 'w') as f:
+            json.dump(table_data, f)
+
         # 7. Calculate summary statistics
         total_plays = len(df_history)
         total_users = len(df_users)
@@ -138,6 +144,55 @@ class AnalyticsService:
             'summary': summary
         }
 
+    def _prepare_table_data(self, df_history, table_days: int) -> list:
+        """
+        Prepare viewing history data for DataTables display.
+
+        Args:
+            df_history: DataFrame with viewing history
+            table_days: Number of days to include in table
+
+        Returns:
+            List of dictionaries for table rows
+        """
+        from datetime import datetime, timedelta
+
+        # Filter to last N days
+        cutoff_date = datetime.now() - timedelta(days=table_days)
+
+        # Convert date column to datetime if it's not already
+        df_filtered = df_history.copy()
+        if 'date' in df_filtered.columns:
+            df_filtered['date_pt'] = df_filtered['date']
+
+        # Select and rename columns for the table
+        table_columns = {
+            'date': 'date_pt',
+            'Server': 'Server',
+            'user': 'user',
+            'ip_address': 'ip_address',
+            'media_type': 'media_type',
+            'full_title': 'title',
+            'grandparent_title': 'show'
+        }
+
+        # Build table data
+        table_data = []
+        for _, row in df_filtered.iterrows():
+            table_row = {}
+            for df_col, table_col in table_columns.items():
+                if df_col in row:
+                    value = row[df_col]
+                    # Handle NaN/None values
+                    if value is None or (isinstance(value, float) and str(value) == 'nan'):
+                        value = ''
+                    table_row[table_col] = str(value)
+                else:
+                    table_row[table_col] = ''
+            table_data.append(table_row)
+
+        return table_data
+
     def get_cached_charts(self, run_id: int) -> Dict[str, str]:
         """
         Load cached chart HTML from previous run.
@@ -154,4 +209,22 @@ class AnalyticsService:
             raise FileNotFoundError(f"No cached charts found for run {run_id}")
 
         with open(cache_path, 'r') as f:
+            return json.load(f)
+
+    def get_cached_table_data(self, run_id: int) -> list:
+        """
+        Load cached table data from previous run.
+
+        Args:
+            run_id: Database ID of AnalyticsRun record
+
+        Returns:
+            List of dictionaries for table rows
+        """
+        table_cache_path = os.path.join(self.cache_dir, f'run_{run_id}_table.json')
+
+        if not os.path.exists(table_cache_path):
+            return []
+
+        with open(table_cache_path, 'r') as f:
             return json.load(f)
