@@ -1,0 +1,42 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Python cache
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Instance data (will be volume mounted)
+instance/
+
+# Documentation and examples
+README.md
+README.Docker.md
+LICENSE
+
+# Development files
+.env
+config.ini
+config.ini.example
+
+# Other
+.DS_Store
+*.log

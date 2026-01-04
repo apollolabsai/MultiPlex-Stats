@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  multiplex-stats:
+    build: .
+    container_name: multiplex-stats
+    ports:
+      - "8487:8487"
+    volumes:
+      # Persist database and cache
+      - ./instance:/app/instance
+    environment:
+      - PORT=8487
+      - FLASK_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8487')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
