@@ -2,7 +2,8 @@
 
 **A modern web application for combining and visualizing statistics from multiple Tautulli/Plex servers in one unified dashboard.**
 
-![MultiPlex Stats Dashboard](graph.png)
+![MultiPlex Stats Dashboard](images/graph.png)
+![MultiPlex Stats Dashboard](images/settings.png)
 
 Monitor your Plex Media Server ecosystem with beautiful interactive charts, user analytics, and content insights - all accessible through an easy-to-use web interface.
 
