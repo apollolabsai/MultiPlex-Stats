@@ -55,6 +55,7 @@ class AnalyticsSettings(db.Model):
             daily_trend_days=self.daily_trend_days,
             monthly_trend_months=self.monthly_trend_months,
             history_days=self.history_days,
+            history_table_days=self.history_table_days,
             top_movies=self.top_movies,
             top_tv_shows=self.top_tv_shows,
             top_users=self.top_users
