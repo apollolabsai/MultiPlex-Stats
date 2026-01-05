@@ -112,7 +112,7 @@ class AnalyticsService:
             json.dump(charts_html, f)
 
         # 6b. Prepare and cache viewing history table data
-        table_data = self._prepare_table_data(df_history, settings.history_table_days if hasattr(settings, 'history_table_days') else 60)
+        table_data = self._prepare_table_data(df_history, settings.history_table_days)
         table_cache_path = os.path.join(self.cache_dir, f'run_{run_id}_table.json')
         with open(table_cache_path, 'w') as f:
             json.dump(table_data, f)
@@ -158,8 +158,16 @@ class AnalyticsService:
         from datetime import datetime, timedelta
         import pandas as pd
 
-        # Filter to last N days if date column exists
+        # Filter to last N days
         df_filtered = df_history.copy()
+
+        # Filter by date_pt column (created by process_history_data)
+        if 'date_pt' in df_filtered.columns:
+            df_filtered['date_pt_datetime'] = pd.to_datetime(df_filtered['date_pt'])
+            cutoff_date = datetime.now() - timedelta(days=table_days)
+            df_filtered = df_filtered[df_filtered['date_pt_datetime'] >= cutoff_date]
+            # Drop the temporary datetime column
+            df_filtered = df_filtered.drop('date_pt_datetime', axis=1)
 
         # Map dataframe columns to table columns
         # The DataFrame has: date, user, media_type, full_title, grandparent_title, ip_address, Server

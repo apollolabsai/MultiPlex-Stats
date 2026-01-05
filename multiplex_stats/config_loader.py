@@ -25,6 +25,7 @@ class AnalyticsSettings:
 
     # History analysis
     history_days: int = 60
+    history_table_days: int = 60    # Number of days to show in viewing history table
 
     # Top N items to show
     top_movies: int = 30
