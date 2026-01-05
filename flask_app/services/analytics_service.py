@@ -9,7 +9,8 @@ from datetime import datetime
 from multiplex_stats import TautulliClient
 from multiplex_stats.data_processing import (
     process_daily_data, process_monthly_data, process_history_data,
-    aggregate_user_stats, aggregate_movie_stats, aggregate_tv_stats
+    aggregate_user_stats, aggregate_movie_stats, aggregate_tv_stats,
+    filter_history_by_date
 )
 from multiplex_stats.visualization import (
     create_daily_bar_chart, create_monthly_bar_chart,
@@ -69,15 +70,20 @@ class AnalyticsService:
             server_a_config.name, server_b_config.name if server_b_config else None
         )
 
-        # History data
-        history_data_a = client_a.get_history(days=settings.history_days)
-        history_data_b = client_b.get_history(days=settings.history_days) if client_b else None
-        df_history = process_history_data(
+        # History data - fetch max of history_days and history_table_days to ensure we have enough data
+        # for both charts and the viewing history table
+        max_history_days = max(settings.history_days, settings.history_table_days)
+        history_data_a = client_a.get_history(days=max_history_days)
+        history_data_b = client_b.get_history(days=max_history_days) if client_b else None
+        df_history_full = process_history_data(
             history_data_a, history_data_b,
             server_a_config.name, server_b_config.name if server_b_config else None
         )
 
-        # Aggregate stats
+        # Filter history data for charts/stats (using history_days setting)
+        df_history = filter_history_by_date(df_history_full, settings.history_days)
+
+        # Aggregate stats (using filtered data)
         df_users = aggregate_user_stats(df_history, top_n=settings.top_users)
         df_movies = aggregate_movie_stats(df_history, top_n=settings.top_movies)
         df_tv = aggregate_tv_stats(df_history, top_n=settings.top_tv_shows)
@@ -111,8 +117,8 @@ class AnalyticsService:
         with open(cache_path, 'w') as f:
             json.dump(charts_html, f)
 
-        # 6b. Prepare and cache viewing history table data
-        table_data = self._prepare_table_data(df_history, settings.history_table_days)
+        # 6b. Prepare and cache viewing history table data (using full history, will be filtered by table_days)
+        table_data = self._prepare_table_data(df_history_full, settings.history_table_days)
         table_cache_path = os.path.join(self.cache_dir, f'run_{run_id}_table.json')
         with open(table_cache_path, 'w') as f:
             json.dump(table_data, f)
