@@ -27,4 +27,4 @@ mkdir -p /app/instance/cache
 chown -R $PUID:$PGID /app/instance
 
 # Execute the application as the specified user with proper PATH
-exec gosu $PUID:$PGID env PATH=/root/.local/bin:$PATH PYTHONPATH=/app python3 run_multiplex_stats.py
+exec gosu $PUID:$PGID /bin/bash -c "export PATH=/root/.local/bin:\$PATH && export PYTHONPATH=/app && python3 run_multiplex_stats.py"
