@@ -15,6 +15,50 @@
     </form>
 </header>
 
+<div class="section">
+    <h2 class="section-title">🎬 Currently Streaming</h2>
+    <div class="table-container">
+        {% if current_activity and current_activity|length > 0 %}
+        <table class="display" style="width:100%">
+            <thead>
+                <tr>
+                    <th>Server</th>
+                    <th>User</th>
+                    <th>Title</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Progress</th>
+                    <th>Player</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stream in current_activity %}
+                <tr>
+                    <td>{{ stream.server }}</td>
+                    <td>{{ stream.user }}</td>
+                    <td>{{ stream.title }}</td>
+                    <td>{{ stream.media_type }}</td>
+                    <td>
+                        {% if stream.state == 'playing' %}
+                            <span style="color: #4CAF50;">● Playing</span>
+                        {% elif stream.state == 'paused' %}
+                            <span style="color: #FFC107;">⏸ Paused</span>
+                        {% else %}
+                            {{ stream.state }}
+                        {% endif %}
+                    </td>
+                    <td>{{ stream.progress_percent }}%</td>
+                    <td>{{ stream.player }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="info-message">No active streams at the moment. Check back later!</p>
+        {% endif %}
+    </div>
+</div>
+
 <div class="stats-grid">
     <div class="stat-card">
         <div class="stat-number">{{ "{:,}".format(summary.total_plays) }}</div>
