@@ -98,6 +98,15 @@ class TautulliClient:
 
         return self._make_request('get_history', after=after, length=length)
 
+    def get_activity(self) -> dict[str, Any]:
+        """
+        Get current streaming activity.
+
+        Returns:
+            API response containing current active streaming sessions
+        """
+        return self._make_request('get_activity')
+
     def get_library_user_stats(self, section_id: int) -> dict[str, Any]:
         """
         Get library user statistics.

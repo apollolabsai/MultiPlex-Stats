@@ -81,8 +81,12 @@ def dashboard():
     table_data = service.get_cached_table_data(last_run.id)
     summary = json.loads(last_run.summary_json)
 
+    # Get current streaming activity (real-time)
+    current_activity = service.get_current_activity()
+
     return render_template('dashboard.html',
                           charts=charts,
                           table_data=table_data,
                           summary=summary,
-                          last_run=last_run)
+                          last_run=last_run,
+                          current_activity=current_activity)

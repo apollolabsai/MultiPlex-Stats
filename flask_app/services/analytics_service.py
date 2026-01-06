@@ -230,3 +230,65 @@ class AnalyticsService:
 
         with open(table_cache_path, 'r') as f:
             return json.load(f)
+
+    def get_current_activity(self) -> list:
+        """
+        Get current streaming activity from all configured servers.
+
+        Returns:
+            List of dictionaries containing current streaming sessions
+        """
+        from multiplex_stats import TautulliClient
+
+        # Load server configurations
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+
+        if not server_a_config:
+            return []
+
+        current_streams = []
+
+        # Fetch activity from Server A
+        try:
+            client_a = TautulliClient(server_a_config)
+            activity_a = client_a.get_activity()
+
+            if activity_a and 'response' in activity_a and 'data' in activity_a['response']:
+                sessions = activity_a['response']['data'].get('sessions', [])
+                for session in sessions:
+                    current_streams.append({
+                        'server': server_a_config.name,
+                        'user': session.get('friendly_name', session.get('username', 'Unknown')),
+                        'title': session.get('full_title', session.get('title', 'Unknown')),
+                        'media_type': session.get('media_type', 'unknown'),
+                        'state': session.get('state', 'unknown'),
+                        'progress_percent': session.get('progress_percent', 0),
+                        'player': session.get('player', 'Unknown'),
+                        'ip_address': session.get('ip_address', 'Unknown')
+                    })
+        except Exception as e:
+            print(f"Error fetching activity from {server_a_config.name}: {e}")
+
+        # Fetch activity from Server B if configured
+        if server_b_config:
+            try:
+                client_b = TautulliClient(server_b_config)
+                activity_b = client_b.get_activity()
+
+                if activity_b and 'response' in activity_b and 'data' in activity_b['response']:
+                    sessions = activity_b['response']['data'].get('sessions', [])
+                    for session in sessions:
+                        current_streams.append({
+                            'server': server_b_config.name,
+                            'user': session.get('friendly_name', session.get('username', 'Unknown')),
+                            'title': session.get('full_title', session.get('title', 'Unknown')),
+                            'media_type': session.get('media_type', 'unknown'),
+                            'state': session.get('state', 'unknown'),
+                            'progress_percent': session.get('progress_percent', 0),
+                            'player': session.get('player', 'Unknown'),
+                            'ip_address': session.get('ip_address', 'Unknown')
+                        })
+            except Exception as e:
+                print(f"Error fetching activity from {server_b_config.name}: {e}")
+
+        return current_streams
