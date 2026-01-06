@@ -231,6 +231,40 @@ class AnalyticsService:
         with open(table_cache_path, 'r') as f:
             return json.load(f)
 
+    def _get_location_from_ip(self, ip_address: str) -> str:
+        """
+        Get location (city, state) from IP address using ip-api.com.
+
+        Args:
+            ip_address: IP address to lookup
+
+        Returns:
+            Location string in format "City, State" or "Unknown" if lookup fails
+        """
+        import requests
+
+        # Skip local/private IPs
+        if ip_address in ['Unknown', '127.0.0.1', 'localhost'] or ip_address.startswith('192.168.') or ip_address.startswith('10.'):
+            return 'Local Network'
+
+        try:
+            response = requests.get(f'http://ip-api.com/json/{ip_address}', timeout=2)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') == 'success':
+                    city = data.get('city', '')
+                    region = data.get('regionName', '')
+                    if city and region:
+                        return f"{city}, {region}"
+                    elif city:
+                        return city
+                    elif region:
+                        return region
+        except Exception as e:
+            print(f"Error looking up location for {ip_address}: {e}")
+
+        return 'Unknown'
+
     def get_current_activity(self) -> list:
         """
         Get current streaming activity from all configured servers.
@@ -256,6 +290,8 @@ class AnalyticsService:
             if activity_a and 'response' in activity_a and 'data' in activity_a['response']:
                 sessions = activity_a['response']['data'].get('sessions', [])
                 for session in sessions:
+                    ip_address = session.get('ip_address', 'Unknown')
+                    location = self._get_location_from_ip(ip_address)
                     current_streams.append({
                         'server': server_a_config.name,
                         'user': session.get('friendly_name', session.get('username', 'Unknown')),
@@ -264,7 +300,8 @@ class AnalyticsService:
                         'state': session.get('state', 'unknown'),
                         'progress_percent': session.get('progress_percent', 0),
                         'player': session.get('player', 'Unknown'),
-                        'ip_address': session.get('ip_address', 'Unknown')
+                        'ip_address': ip_address,
+                        'location': location
                     })
         except Exception as e:
             print(f"Error fetching activity from {server_a_config.name}: {e}")
@@ -278,6 +315,8 @@ class AnalyticsService:
                 if activity_b and 'response' in activity_b and 'data' in activity_b['response']:
                     sessions = activity_b['response']['data'].get('sessions', [])
                     for session in sessions:
+                        ip_address = session.get('ip_address', 'Unknown')
+                        location = self._get_location_from_ip(ip_address)
                         current_streams.append({
                             'server': server_b_config.name,
                             'user': session.get('friendly_name', session.get('username', 'Unknown')),
@@ -286,7 +325,8 @@ class AnalyticsService:
                             'state': session.get('state', 'unknown'),
                             'progress_percent': session.get('progress_percent', 0),
                             'player': session.get('player', 'Unknown'),
-                            'ip_address': session.get('ip_address', 'Unknown')
+                            'ip_address': ip_address,
+                            'location': location
                         })
             except Exception as e:
                 print(f"Error fetching activity from {server_b_config.name}: {e}")
