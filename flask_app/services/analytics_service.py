@@ -295,12 +295,18 @@ class AnalyticsService:
                     location = self._get_location_from_ip(ip_address)
 
                     # Build poster URL for hover preview
-                    thumb = session.get('thumb', '')
+                    # For TV episodes, use grandparent_thumb (show poster), otherwise use thumb
+                    media_type = session.get('media_type', '')
+                    if media_type == 'episode':
+                        poster_thumb = session.get('grandparent_thumb', session.get('thumb', ''))
+                    else:
+                        poster_thumb = session.get('thumb', '')
+
                     rating_key = session.get('rating_key', '')
                     poster_url = ''
-                    if thumb and rating_key:
-                        # Use Tautulli's pms_image_proxy to serve the poster
-                        poster_url = f"{server_a_config.ip_address}/pms_image_proxy?img={thumb}&rating_key={rating_key}&width=200&height=300&fallback=poster"
+                    if poster_thumb and rating_key:
+                        # Use Tautulli's pms_image_proxy to serve the poster (100x150 - half of previous size)
+                        poster_url = f"{server_a_config.ip_address}/pms_image_proxy?img={poster_thumb}&rating_key={rating_key}&width=100&height=150&fallback=poster"
 
                     current_streams.append({
                         'server': server_a_config.name,
@@ -330,12 +336,18 @@ class AnalyticsService:
                         location = self._get_location_from_ip(ip_address)
 
                         # Build poster URL for hover preview
-                        thumb = session.get('thumb', '')
+                        # For TV episodes, use grandparent_thumb (show poster), otherwise use thumb
+                        media_type = session.get('media_type', '')
+                        if media_type == 'episode':
+                            poster_thumb = session.get('grandparent_thumb', session.get('thumb', ''))
+                        else:
+                            poster_thumb = session.get('thumb', '')
+
                         rating_key = session.get('rating_key', '')
                         poster_url = ''
-                        if thumb and rating_key:
-                            # Use Tautulli's pms_image_proxy to serve the poster
-                            poster_url = f"{server_b_config.ip_address}/pms_image_proxy?img={thumb}&rating_key={rating_key}&width=200&height=300&fallback=poster"
+                        if poster_thumb and rating_key:
+                            # Use Tautulli's pms_image_proxy to serve the poster (100x150 - half of previous size)
+                            poster_url = f"{server_b_config.ip_address}/pms_image_proxy?img={poster_thumb}&rating_key={rating_key}&width=100&height=150&fallback=poster"
 
                         current_streams.append({
                             'server': server_b_config.name,
