@@ -294,13 +294,13 @@ class AnalyticsService:
                     ip_address = session.get('ip_address', 'Unknown')
                     location = self._get_location_from_ip(ip_address)
 
-                    # Build thumbnail URL for hover preview
+                    # Build poster URL for hover preview
                     thumb = session.get('thumb', '')
                     rating_key = session.get('rating_key', '')
-                    thumb_url = ''
+                    poster_url = ''
                     if thumb and rating_key:
-                        # Use Tautulli's pms_image_proxy to serve the thumbnail
-                        thumb_url = f"{server_a_config.ip_address}/pms_image_proxy?img={thumb}&rating_key={rating_key}&width=300&height=450&fallback=poster"
+                        # Use Tautulli's pms_image_proxy to serve the poster
+                        poster_url = f"{server_a_config.ip_address}/pms_image_proxy?img={thumb}&rating_key={rating_key}&width=200&height=300&fallback=poster"
 
                     current_streams.append({
                         'server': server_a_config.name,
@@ -312,7 +312,7 @@ class AnalyticsService:
                         'player': session.get('player', 'Unknown'),
                         'ip_address': ip_address,
                         'location': location,
-                        'thumb_url': thumb_url
+                        'poster_url': poster_url
                     })
         except Exception as e:
             print(f"Error fetching activity from {server_a_config.name}: {e}")
@@ -329,13 +329,13 @@ class AnalyticsService:
                         ip_address = session.get('ip_address', 'Unknown')
                         location = self._get_location_from_ip(ip_address)
 
-                        # Build thumbnail URL for hover preview
+                        # Build poster URL for hover preview
                         thumb = session.get('thumb', '')
                         rating_key = session.get('rating_key', '')
-                        thumb_url = ''
+                        poster_url = ''
                         if thumb and rating_key:
-                            # Use Tautulli's pms_image_proxy to serve the thumbnail
-                            thumb_url = f"{server_b_config.ip_address}/pms_image_proxy?img={thumb}&rating_key={rating_key}&width=300&height=450&fallback=poster"
+                            # Use Tautulli's pms_image_proxy to serve the poster
+                            poster_url = f"{server_b_config.ip_address}/pms_image_proxy?img={thumb}&rating_key={rating_key}&width=200&height=300&fallback=poster"
 
                         current_streams.append({
                             'server': server_b_config.name,
@@ -347,7 +347,7 @@ class AnalyticsService:
                             'player': session.get('player', 'Unknown'),
                             'ip_address': ip_address,
                             'location': location,
-                            'thumb_url': thumb_url
+                            'poster_url': poster_url
                         })
             except Exception as e:
                 print(f"Error fetching activity from {server_b_config.name}: {e}")

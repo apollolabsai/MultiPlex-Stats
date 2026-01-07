@@ -37,11 +37,11 @@
                     <td>{{ stream.server }}</td>
                     <td>{{ stream.user }}</td>
                     <td>
-                        {% if stream.thumb_url %}
+                        {% if stream.poster_url %}
                             <div class="title-with-preview">
                                 <span>{{ stream.title }}</span>
-                                <div class="thumbnail-preview">
-                                    <img src="http://{{ stream.thumb_url }}" alt="{{ stream.title }}">
+                                <div class="poster-preview">
+                                    <img src="http://{{ stream.poster_url }}" alt="{{ stream.title }}">
                                 </div>
                             </div>
                         {% else %}
@@ -181,7 +181,7 @@
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 
 <style>
-/* Thumbnail preview on hover */
+/* Poster preview on hover */
 .title-with-preview {
     position: relative;
     display: inline-block;
@@ -194,7 +194,7 @@
     text-decoration-color: #f18a3d;
 }
 
-.thumbnail-preview {
+.poster-preview {
     display: none;
     position: absolute;
     left: 0;
@@ -208,15 +208,15 @@
     margin-top: 5px;
 }
 
-.thumbnail-preview img {
+.poster-preview img {
     display: block;
-    width: 300px;
-    height: 450px;
+    width: 200px;
+    height: 300px;
     object-fit: cover;
     border-radius: 4px;
 }
 
-.title-with-preview:hover .thumbnail-preview {
+.title-with-preview:hover .poster-preview {
     display: block;
 }
 </style>
