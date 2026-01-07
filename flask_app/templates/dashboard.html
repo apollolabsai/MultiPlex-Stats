@@ -17,7 +17,7 @@
 
 <div class="section">
     <h2 class="section-title">🎬 Currently Streaming</h2>
-    <div class="table-container">
+    <div class="table-container" style="overflow: visible;">
         {% if current_activity and current_activity|length > 0 %}
         <table class="display" style="width:100%">
             <thead>
@@ -196,16 +196,14 @@
 
 .poster-preview {
     display: none;
-    position: absolute;
-    left: 0;
-    top: 100%;
-    z-index: 1000;
+    position: fixed;
+    z-index: 10000;
     background: #1a1a1a;
     border: 2px solid #f18a3d;
     border-radius: 8px;
     padding: 5px;
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.8);
-    margin-top: 5px;
+    pointer-events: none;
 }
 
 .poster-preview img {
@@ -214,10 +212,6 @@
     height: 150px;
     object-fit: cover;
     border-radius: 4px;
-}
-
-.title-with-preview:hover .poster-preview {
-    display: block;
 }
 </style>
 
@@ -234,6 +228,22 @@ $(document).ready(function() {
             infoEmpty: "No records available",
             infoFiltered: "(filtered from _MAX_ total records)"
         }
+    });
+
+    // Position poster preview on hover
+    $('.title-with-preview').on('mouseenter', function(e) {
+        var $preview = $(this).find('.poster-preview');
+        var rect = this.getBoundingClientRect();
+
+        // Position below the title
+        $preview.css({
+            'left': rect.left + 'px',
+            'top': (rect.bottom + 5) + 'px'
+        });
+
+        $preview.show();
+    }).on('mouseleave', function() {
+        $(this).find('.poster-preview').hide();
     });
 });
 </script>
