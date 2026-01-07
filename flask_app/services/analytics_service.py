@@ -305,8 +305,8 @@ class AnalyticsService:
                     rating_key = session.get('rating_key', '')
                     poster_url = ''
                     if poster_thumb and rating_key:
-                        # Use Tautulli's pms_image_proxy to serve the poster (100x150 - half of previous size)
-                        poster_url = f"{server_a_config.ip_address}/pms_image_proxy?img={poster_thumb}&rating_key={rating_key}&width=100&height=150&fallback=poster"
+                        # Use Tautulli's pms_image_proxy to serve the poster (150x225)
+                        poster_url = f"{server_a_config.ip_address}/pms_image_proxy?img={poster_thumb}&rating_key={rating_key}&width=150&height=225&fallback=poster"
 
                     current_streams.append({
                         'server': server_a_config.name,
@@ -346,8 +346,8 @@ class AnalyticsService:
                         rating_key = session.get('rating_key', '')
                         poster_url = ''
                         if poster_thumb and rating_key:
-                            # Use Tautulli's pms_image_proxy to serve the poster (100x150 - half of previous size)
-                            poster_url = f"{server_b_config.ip_address}/pms_image_proxy?img={poster_thumb}&rating_key={rating_key}&width=100&height=150&fallback=poster"
+                            # Use Tautulli's pms_image_proxy to serve the poster (150x225)
+                            poster_url = f"{server_b_config.ip_address}/pms_image_proxy?img={poster_thumb}&rating_key={rating_key}&width=150&height=225&fallback=poster"
 
                         current_streams.append({
                             'server': server_b_config.name,

@@ -22,6 +22,7 @@
         <table class="display" style="width:100%">
             <thead>
                 <tr>
+                    <th style="color:#f18a3d; text-align:left">#</th>
                     <th style="color:#f18a3d; text-align:left">Server</th>
                     <th style="color:#f18a3d; text-align:left">User</th>
                     <th style="color:#f18a3d; text-align:left">Title</th>
@@ -34,6 +35,7 @@
             <tbody>
                 {% for stream in current_activity %}
                 <tr>
+                    <td>{{ loop.index }}</td>
                     <td>{{ stream.server }}</td>
                     <td>{{ stream.user }}</td>
                     <td>
@@ -208,8 +210,8 @@
 
 .poster-preview img {
     display: block;
-    width: 100px;
-    height: 150px;
+    width: 150px;
+    height: 225px;
     object-fit: cover;
     border-radius: 4px;
 }
