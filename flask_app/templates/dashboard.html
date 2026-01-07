@@ -36,7 +36,18 @@
                 <tr>
                     <td>{{ stream.server }}</td>
                     <td>{{ stream.user }}</td>
-                    <td>{{ stream.title }}</td>
+                    <td>
+                        {% if stream.thumb_url %}
+                            <div class="title-with-preview">
+                                <span>{{ stream.title }}</span>
+                                <div class="thumbnail-preview">
+                                    <img src="http://{{ stream.thumb_url }}" alt="{{ stream.title }}">
+                                </div>
+                            </div>
+                        {% else %}
+                            {{ stream.title }}
+                        {% endif %}
+                    </td>
                     <td>
                         {% if stream.state == 'playing' %}
                             <span style="color: #4CAF50;">● Playing</span>
@@ -168,6 +179,47 @@
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+
+<style>
+/* Thumbnail preview on hover */
+.title-with-preview {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.title-with-preview span {
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-decoration-color: #f18a3d;
+}
+
+.thumbnail-preview {
+    display: none;
+    position: absolute;
+    left: 0;
+    top: 100%;
+    z-index: 1000;
+    background: #1a1a1a;
+    border: 2px solid #f18a3d;
+    border-radius: 8px;
+    padding: 5px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.8);
+    margin-top: 5px;
+}
+
+.thumbnail-preview img {
+    display: block;
+    width: 300px;
+    height: 450px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.title-with-preview:hover .thumbnail-preview {
+    display: block;
+}
+</style>
 
 <script>
 $(document).ready(function() {
