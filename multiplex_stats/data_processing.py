@@ -196,7 +196,7 @@ def process_history_data(
     records_a = data_a['response']['data']['data']
     df_a = pd.DataFrame(
         records_a,
-        columns=["date", "user", "media_type", "full_title", "grandparent_title", "ip_address"]
+        columns=["date", "user", "media_type", "full_title", "grandparent_title", "ip_address", "platform", "percent_complete"]
     )
     df_a['Server'] = server_a_name
 
@@ -205,7 +205,7 @@ def process_history_data(
         records_b = data_b['response']['data']['data']
         df_b = pd.DataFrame(
             records_b,
-            columns=["date", "user", "media_type", "full_title", "grandparent_title", "ip_address"]
+            columns=["date", "user", "media_type", "full_title", "grandparent_title", "ip_address", "platform", "percent_complete"]
         )
         df_b['Server'] = server_b_name
 

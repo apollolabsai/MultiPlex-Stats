@@ -176,7 +176,7 @@ class AnalyticsService:
             df_filtered = df_filtered.drop('date_pt_datetime', axis=1)
 
         # Map dataframe columns to table columns
-        # The DataFrame has: date, user, media_type, full_title, grandparent_title, ip_address, Server
+        # The DataFrame has: date, user, media_type, full_title, grandparent_title, ip_address, platform, percent_complete, Server
         table_data = []
 
         for _, row in df_filtered.iterrows():
@@ -189,7 +189,8 @@ class AnalyticsService:
                 'ip_address': str(row.get('ip_address', '')) if pd.notna(row.get('ip_address')) else '',
                 'media_type': str(row.get('media_type', '')) if pd.notna(row.get('media_type')) else '',
                 'title': str(row.get('full_title', '')) if pd.notna(row.get('full_title')) else '',
-                'show': str(row.get('grandparent_title', '')) if pd.notna(row.get('grandparent_title')) else ''
+                'platform': str(row.get('platform', '')) if pd.notna(row.get('platform')) else '',
+                'percent_complete': int(row.get('percent_complete', 0)) if pd.notna(row.get('percent_complete')) else 0
             }
             table_data.append(table_row)
 

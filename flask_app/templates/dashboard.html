@@ -136,7 +136,8 @@
                     <th>IP Address</th>
                     <th>Media Type</th>
                     <th>Title</th>
-                    <th>Show</th>
+                    <th>Platform</th>
+                    <th>% Complete</th>
                 </tr>
             </thead>
             <tbody>
@@ -148,7 +149,8 @@
                     <td>{{ row.ip_address }}</td>
                     <td>{{ row.media_type }}</td>
                     <td>{{ row.title }}</td>
-                    <td>{{ row.show }}</td>
+                    <td>{{ row.platform }}</td>
+                    <td>{{ row.percent_complete }}%</td>
                 </tr>
                 {% endfor %}
             </tbody>
