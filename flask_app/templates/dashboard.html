@@ -194,8 +194,15 @@
                     <!-- IP Address -->
                     <td>{{ row.ip_address }}</td>
 
-                    <!-- Platform -->
-                    <td>{{ row.platform }}</td>
+                    <!-- Platform with Product -->
+                    <td>
+                        <div class="content-cell">
+                            <div class="platform-name">{{ row.platform }}</div>
+                            {% if row.product %}
+                                <div class="platform-product">{{ row.product }}</div>
+                            {% endif %}
+                        </div>
+                    </td>
 
                     <!-- Quality -->
                     <td>

@@ -300,6 +300,7 @@ class AnalyticsService:
                 'title': title,
                 'subtitle': subtitle,
                 'platform': str(row.get('platform', '')) if pd.notna(row.get('platform')) else '',
+                'product': str(row.get('product', '')) if pd.notna(row.get('product')) else '',
                 'quality': quality,
                 'percent_complete': int(row.get('percent_complete', 0)) if pd.notna(row.get('percent_complete')) else 0
             }
