@@ -275,10 +275,18 @@ class AnalyticsService:
                         pass
                 title = full_title
 
-            # Format quality (prefer stream_video_full_resolution, fallback to quality_profile)
-            quality = str(row.get('stream_video_full_resolution', '')) if pd.notna(row.get('stream_video_full_resolution')) else ''
-            if not quality:
-                quality = str(row.get('quality_profile', '')) if pd.notna(row.get('quality_profile')) else ''
+            # Format quality (use transcode_decision: direct play, transcode, copy)
+            transcode_decision = str(row.get('transcode_decision', '')) if pd.notna(row.get('transcode_decision')) else ''
+
+            # Format transcode decision for display
+            if transcode_decision.lower() == 'direct play':
+                quality = 'Direct Play'
+            elif transcode_decision.lower() == 'transcode':
+                quality = 'Transcode'
+            elif transcode_decision.lower() == 'copy':
+                quality = 'Direct Stream'
+            else:
+                quality = transcode_decision.title() if transcode_decision else ''
 
             # Build table row
             table_row = {
@@ -293,8 +301,7 @@ class AnalyticsService:
                 'subtitle': subtitle,
                 'platform': str(row.get('platform', '')) if pd.notna(row.get('platform')) else '',
                 'quality': quality,
-                'percent_complete': int(row.get('percent_complete', 0)) if pd.notna(row.get('percent_complete')) else 0,
-                'transcode_decision': str(row.get('transcode_decision', '')) if pd.notna(row.get('transcode_decision')) else ''
+                'percent_complete': int(row.get('percent_complete', 0)) if pd.notna(row.get('percent_complete')) else 0
             }
             table_data.append(table_row)
 
