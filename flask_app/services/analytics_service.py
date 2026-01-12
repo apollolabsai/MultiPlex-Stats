@@ -250,20 +250,29 @@ class AnalyticsService:
             if media_type.lower() in ['tv', 'episode']:
                 season = row.get('parent_media_index', '')
                 episode = row.get('media_index', '')
-                if pd.notna(season) and pd.notna(episode):
-                    subtitle = f"S{int(season):02d}E{int(episode):02d}"
-                    # If full_title is different from grandparent_title, append episode name
-                    if full_title and grandparent_title and full_title != grandparent_title:
-                        # Extract episode name (usually after " - ")
-                        if ' - ' in full_title:
-                            episode_name = full_title.split(' - ', 1)[1]
-                            subtitle += f" - {episode_name}"
-                title = grandparent_title  # Use show name as main title
+                # Check if season and episode are valid numbers
+                if pd.notna(season) and pd.notna(episode) and season != '' and episode != '':
+                    try:
+                        subtitle = f"S{int(season):02d}E{int(episode):02d}"
+                        # If full_title is different from grandparent_title, append episode name
+                        if full_title and grandparent_title and full_title != grandparent_title:
+                            # Extract episode name (usually after " - ")
+                            if ' - ' in full_title:
+                                episode_name = full_title.split(' - ', 1)[1]
+                                subtitle += f" - {episode_name}"
+                    except (ValueError, TypeError):
+                        # If conversion fails, just leave subtitle empty
+                        pass
+                title = grandparent_title if grandparent_title else full_title  # Use show name as main title
             else:
                 # For movies, use year as subtitle
                 year = row.get('year', '')
-                if pd.notna(year) and year:
-                    subtitle = f"({int(year)})"
+                if pd.notna(year) and year != '' and year:
+                    try:
+                        subtitle = f"({int(year)})"
+                    except (ValueError, TypeError):
+                        # If conversion fails, just leave subtitle empty
+                        pass
                 title = full_title
 
             # Format quality (prefer stream_video_full_resolution, fallback to quality_profile)
