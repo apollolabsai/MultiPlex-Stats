@@ -143,27 +143,86 @@
         <table id="viewingHistoryTable" class="display" style="width:100%">
             <thead>
                 <tr>
-                    <th>Date</th>
-                    <th>Server</th>
-                    <th>User</th>
-                    <th>IP Address</th>
-                    <th>Media Type</th>
-                    <th>Title</th>
-                    <th>Platform</th>
-                    <th>% Complete</th>
+                    <th style="width: 120px;">Date</th>
+                    <th style="width: 80px;">Server</th>
+                    <th style="width: 100px;">User</th>
+                    <th style="width: 300px;">Content</th>
+                    <th style="width: 100px;">IP Address</th>
+                    <th style="width: 100px;">Platform</th>
+                    <th style="width: 80px;">Quality</th>
+                    <th style="width: 120px;">Progress</th>
                 </tr>
             </thead>
             <tbody>
                 {% for row in table_data %}
                 <tr>
-                    <td>{{ row.date_pt }}</td>
+                    <!-- Date & Time -->
+                    <td>
+                        <div class="datetime-cell">
+                            <span class="date-text">{{ row.date_pt }}</span>
+                            <span class="time-text">{{ row.time_pt }}</span>
+                        </div>
+                    </td>
+
+                    <!-- Server -->
                     <td>{{ row.Server }}</td>
-                    <td>{{ row.user }}</td>
+
+                    <!-- User with Avatar -->
+                    <td>
+                        <div class="history-table-row">
+                            {% if row.user_thumb %}
+                                <img src="http://{{ row.user_thumb }}" alt="{{ row.user }}" class="user-avatar" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <div class="user-avatar-placeholder" style="display:none;">{{ row.user[0]|upper }}</div>
+                            {% else %}
+                                <div class="user-avatar-placeholder">{{ row.user[0]|upper }}</div>
+                            {% endif %}
+                            <span>{{ row.user }}</span>
+                        </div>
+                    </td>
+
+                    <!-- Content (Title with Icon and Subtitle) -->
+                    <td>
+                        <div class="content-cell">
+                            <div>
+                                {% if row.media_type|lower in ['movie'] %}
+                                    <svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24">
+                                        <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
+                                    </svg>
+                                {% else %}
+                                    <svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24">
+                                        <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
+                                    </svg>
+                                {% endif %}
+                                <span class="content-title">{{ row.title }}</span>
+                            </div>
+                            {% if row.subtitle %}
+                                <div class="content-subtitle">{{ row.subtitle }}</div>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    <!-- IP Address -->
                     <td>{{ row.ip_address }}</td>
-                    <td>{{ row.media_type }}</td>
-                    <td>{{ row.title }}</td>
+
+                    <!-- Platform -->
                     <td>{{ row.platform }}</td>
-                    <td>{{ row.percent_complete }}%</td>
+
+                    <!-- Quality -->
+                    <td>
+                        {% if row.quality %}
+                            <span class="quality-badge">{{ row.quality }}</span>
+                        {% else %}
+                            <span style="color: #888;">N/A</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Progress Bar -->
+                    <td>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" style="width: {{ row.percent_complete }}%;"></div>
+                        </div>
+                        <div class="progress-text">{{ row.percent_complete }}%</div>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>

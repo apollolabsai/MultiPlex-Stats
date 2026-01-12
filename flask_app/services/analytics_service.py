@@ -150,6 +150,60 @@ class AnalyticsService:
             'summary': summary
         }
 
+    def _get_user_thumb_map(self) -> dict:
+        """
+        Get mapping of user_id to user_thumb (avatar URL) from all servers.
+
+        Returns:
+            Dictionary mapping user_id to user_thumb URL
+        """
+        from multiplex_stats import TautulliClient
+
+        user_thumb_map = {}
+
+        # Load server configurations
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+
+        if not server_a_config:
+            return user_thumb_map
+
+        # Fetch users from Server A
+        try:
+            client_a = TautulliClient(server_a_config)
+            users_response = client_a.get_users()
+
+            if users_response and 'response' in users_response and 'data' in users_response['response']:
+                users = users_response['response']['data']
+                for user in users:
+                    user_id = user.get('user_id')
+                    user_thumb = user.get('user_thumb', '')
+                    if user_id and user_thumb:
+                        # Build full URL for user thumbnail using pms_image_proxy
+                        thumb_url = f"{server_a_config.ip_address}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
+                        user_thumb_map[str(user_id)] = thumb_url
+        except Exception as e:
+            print(f"Error fetching users from {server_a_config.name}: {e}")
+
+        # Fetch users from Server B if configured
+        if server_b_config:
+            try:
+                client_b = TautulliClient(server_b_config)
+                users_response = client_b.get_users()
+
+                if users_response and 'response' in users_response and 'data' in users_response['response']:
+                    users = users_response['response']['data']
+                    for user in users:
+                        user_id = user.get('user_id')
+                        user_thumb = user.get('user_thumb', '')
+                        if user_id and user_thumb:
+                            # Build full URL for user thumbnail using pms_image_proxy
+                            thumb_url = f"{server_b_config.ip_address}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
+                            user_thumb_map[str(user_id)] = thumb_url
+            except Exception as e:
+                print(f"Error fetching users from {server_b_config.name}: {e}")
+
+        return user_thumb_map
+
     def _prepare_table_data(self, df_history, table_days: int) -> list:
         """
         Prepare viewing history data for DataTables display.
@@ -164,6 +218,9 @@ class AnalyticsService:
         from datetime import datetime, timedelta
         import pandas as pd
 
+        # Get user avatar mapping
+        user_thumb_map = self._get_user_thumb_map()
+
         # Filter to last N days
         df_filtered = df_history.copy()
 
@@ -176,21 +233,59 @@ class AnalyticsService:
             df_filtered = df_filtered.drop('date_pt_datetime', axis=1)
 
         # Map dataframe columns to table columns
-        # The DataFrame has: date, user, media_type, full_title, grandparent_title, ip_address, platform, percent_complete, Server
         table_data = []
 
         for _, row in df_filtered.iterrows():
-            # Build each row with proper column mapping
-            # Note: process_history_data creates 'date_pt' column (not 'date')
+            # Get user avatar URL
+            user_id = str(row.get('user_id', '')) if pd.notna(row.get('user_id')) else ''
+            user_thumb = user_thumb_map.get(user_id, '')
+
+            # Format title based on media type
+            media_type = str(row.get('media_type', '')) if pd.notna(row.get('media_type')) else ''
+            full_title = str(row.get('full_title', '')) if pd.notna(row.get('full_title')) else ''
+            grandparent_title = str(row.get('grandparent_title', '')) if pd.notna(row.get('grandparent_title')) else ''
+
+            # For TV shows, build "S01E04 - Episode Name" subtitle
+            subtitle = ''
+            if media_type.lower() in ['tv', 'episode']:
+                season = row.get('parent_media_index', '')
+                episode = row.get('media_index', '')
+                if pd.notna(season) and pd.notna(episode):
+                    subtitle = f"S{int(season):02d}E{int(episode):02d}"
+                    # If full_title is different from grandparent_title, append episode name
+                    if full_title and grandparent_title and full_title != grandparent_title:
+                        # Extract episode name (usually after " - ")
+                        if ' - ' in full_title:
+                            episode_name = full_title.split(' - ', 1)[1]
+                            subtitle += f" - {episode_name}"
+                title = grandparent_title  # Use show name as main title
+            else:
+                # For movies, use year as subtitle
+                year = row.get('year', '')
+                if pd.notna(year) and year:
+                    subtitle = f"({int(year)})"
+                title = full_title
+
+            # Format quality (prefer stream_video_full_resolution, fallback to quality_profile)
+            quality = str(row.get('stream_video_full_resolution', '')) if pd.notna(row.get('stream_video_full_resolution')) else ''
+            if not quality:
+                quality = str(row.get('quality_profile', '')) if pd.notna(row.get('quality_profile')) else ''
+
+            # Build table row
             table_row = {
                 'date_pt': str(row.get('date_pt', '')) if pd.notna(row.get('date_pt')) else '',
+                'time_pt': str(row.get('time_pt', '')) if pd.notna(row.get('time_pt')) else '',
                 'Server': str(row.get('Server', '')) if pd.notna(row.get('Server')) else '',
-                'user': str(row.get('user', '')) if pd.notna(row.get('user')) else '',
+                'user': str(row.get('friendly_name', row.get('user', ''))) if pd.notna(row.get('friendly_name')) else str(row.get('user', '')),
+                'user_thumb': user_thumb,
                 'ip_address': str(row.get('ip_address', '')) if pd.notna(row.get('ip_address')) else '',
-                'media_type': str(row.get('media_type', '')) if pd.notna(row.get('media_type')) else '',
-                'title': str(row.get('full_title', '')) if pd.notna(row.get('full_title')) else '',
+                'media_type': media_type,
+                'title': title,
+                'subtitle': subtitle,
                 'platform': str(row.get('platform', '')) if pd.notna(row.get('platform')) else '',
-                'percent_complete': int(row.get('percent_complete', 0)) if pd.notna(row.get('percent_complete')) else 0
+                'quality': quality,
+                'percent_complete': int(row.get('percent_complete', 0)) if pd.notna(row.get('percent_complete')) else 0,
+                'transcode_decision': str(row.get('transcode_decision', '')) if pd.notna(row.get('transcode_decision')) else ''
             }
             table_data.append(table_row)
 

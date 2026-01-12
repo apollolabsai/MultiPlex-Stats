@@ -499,6 +499,111 @@ h1 {
     overflow-x: auto;
 }
 
+/* Viewing History Table - Tautulli Style */
+.history-table-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(237, 84, 43, 0.5);
+}
+
+.user-avatar-placeholder {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(237, 84, 43, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: #ed542b;
+    border: 2px solid rgba(237, 84, 43, 0.5);
+}
+
+.media-icon {
+    width: 20px;
+    height: 20px;
+    display: inline-block;
+    margin-right: 8px;
+    vertical-align: middle;
+    opacity: 0.8;
+}
+
+.content-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.content-title {
+    font-weight: 600;
+    color: #fff;
+    font-size: 0.95em;
+}
+
+.content-subtitle {
+    font-size: 0.85em;
+    color: #aaa;
+}
+
+.datetime-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    white-space: nowrap;
+}
+
+.date-text {
+    font-weight: 500;
+    color: #ddd;
+}
+
+.time-text {
+    font-size: 0.85em;
+    color: #888;
+}
+
+.quality-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: rgba(76, 175, 80, 0.2);
+    color: #4caf50;
+    font-size: 0.85em;
+    font-weight: 500;
+    border: 1px solid rgba(76, 175, 80, 0.4);
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ed542b 0%, #764ba2 100%);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-size: 0.85em;
+    color: #aaa;
+    text-align: center;
+    margin-top: 4px;
+}
+
 table.dataTable {
     width: 100% !important;
     margin: 0 !important;
