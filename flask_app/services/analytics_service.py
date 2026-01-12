@@ -236,20 +236,20 @@ class AnalyticsService:
         table_data = []
 
         for _, row in df_filtered.iterrows():
-            # Get user avatar URL
-            user_id = str(row.get('user_id', '')) if pd.notna(row.get('user_id')) else ''
+            # Get user avatar URL (use bracket notation for Series)
+            user_id = str(row['user_id']) if 'user_id' in row and pd.notna(row['user_id']) else ''
             user_thumb = user_thumb_map.get(user_id, '')
 
-            # Format title based on media type
-            media_type = str(row.get('media_type', '')) if pd.notna(row.get('media_type')) else ''
-            full_title = str(row.get('full_title', '')) if pd.notna(row.get('full_title')) else ''
-            grandparent_title = str(row.get('grandparent_title', '')) if pd.notna(row.get('grandparent_title')) else ''
+            # Format title based on media type (use bracket notation for Series)
+            media_type = str(row['media_type']) if 'media_type' in row and pd.notna(row['media_type']) else ''
+            full_title = str(row['full_title']) if 'full_title' in row and pd.notna(row['full_title']) else ''
+            grandparent_title = str(row['grandparent_title']) if 'grandparent_title' in row and pd.notna(row['grandparent_title']) else ''
 
             # For TV shows, build "S01E04 - Episode Name" subtitle
             subtitle = ''
             if media_type.lower() in ['tv', 'episode']:
-                season = row.get('parent_media_index', '')
-                episode = row.get('media_index', '')
+                season = row['parent_media_index'] if 'parent_media_index' in row else ''
+                episode = row['media_index'] if 'media_index' in row else ''
                 # Check if season and episode are valid numbers
                 if pd.notna(season) and pd.notna(episode) and season != '' and episode != '':
                     try:
@@ -266,7 +266,7 @@ class AnalyticsService:
                 title = grandparent_title if grandparent_title else full_title  # Use show name as main title
             else:
                 # For movies, use year as subtitle
-                year = row.get('year', '')
+                year = row['year'] if 'year' in row else ''
                 if pd.notna(year) and year != '' and year:
                     try:
                         subtitle = f"({int(year)})"
@@ -276,7 +276,7 @@ class AnalyticsService:
                 title = full_title
 
             # Format quality (use transcode_decision: direct play, transcode, copy)
-            transcode_decision = str(row.get('transcode_decision', '')) if pd.notna(row.get('transcode_decision')) else ''
+            transcode_decision = str(row['transcode_decision']) if 'transcode_decision' in row and pd.notna(row['transcode_decision']) else ''
 
             # Format transcode decision for display
             if transcode_decision.lower() == 'direct play':
@@ -288,21 +288,21 @@ class AnalyticsService:
             else:
                 quality = transcode_decision.title() if transcode_decision else ''
 
-            # Build table row
+            # Build table row (use bracket notation for Series)
             table_row = {
-                'date_pt': str(row.get('date_pt', '')) if pd.notna(row.get('date_pt')) else '',
-                'time_pt': str(row.get('time_pt', '')) if pd.notna(row.get('time_pt')) else '',
-                'Server': str(row.get('Server', '')) if pd.notna(row.get('Server')) else '',
-                'user': str(row.get('friendly_name', row.get('user', ''))) if pd.notna(row.get('friendly_name')) else str(row.get('user', '')),
+                'date_pt': str(row['date_pt']) if 'date_pt' in row and pd.notna(row['date_pt']) else '',
+                'time_pt': str(row['time_pt']) if 'time_pt' in row and pd.notna(row['time_pt']) else '',
+                'Server': str(row['Server']) if 'Server' in row and pd.notna(row['Server']) else '',
+                'user': str(row['friendly_name']) if 'friendly_name' in row and pd.notna(row['friendly_name']) else str(row['user']) if 'user' in row else '',
                 'user_thumb': user_thumb,
-                'ip_address': str(row.get('ip_address', '')) if pd.notna(row.get('ip_address')) else '',
+                'ip_address': str(row['ip_address']) if 'ip_address' in row and pd.notna(row['ip_address']) else '',
                 'media_type': media_type,
                 'title': title,
                 'subtitle': subtitle,
-                'platform': str(row.get('platform', '')) if pd.notna(row.get('platform')) else '',
-                'product': str(row.get('product', '')) if pd.notna(row.get('product')) else '',
+                'platform': str(row['platform']) if 'platform' in row and pd.notna(row['platform']) else '',
+                'product': str(row['product']) if 'product' in row and pd.notna(row['product']) else '',
                 'quality': quality,
-                'percent_complete': int(row.get('percent_complete', 0)) if pd.notna(row.get('percent_complete')) else 0
+                'percent_complete': int(row['percent_complete']) if 'percent_complete' in row and pd.notna(row['percent_complete']) else 0
             }
             table_data.append(table_row)
 
