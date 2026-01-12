@@ -167,18 +167,8 @@
                     <!-- Server -->
                     <td>{{ row.Server }}</td>
 
-                    <!-- User with Avatar -->
-                    <td>
-                        <div class="history-table-row">
-                            {% if row.user_thumb %}
-                                <img src="http://{{ row.user_thumb }}" alt="{{ row.user }}" class="user-avatar" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                <div class="user-avatar-placeholder" style="display:none;">{{ row.user[0]|upper }}</div>
-                            {% else %}
-                                <div class="user-avatar-placeholder">{{ row.user[0]|upper }}</div>
-                            {% endif %}
-                            <span>{{ row.user }}</span>
-                        </div>
-                    </td>
+                    <!-- User -->
+                    <td>{{ row.user }}</td>
 
                     <!-- Content (Title with Icon and Subtitle) -->
                     <td>
