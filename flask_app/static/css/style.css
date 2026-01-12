@@ -553,6 +553,17 @@ h1 {
     color: #aaa;
 }
 
+.platform-name {
+    font-weight: 600;
+    color: #fff;
+    font-size: 0.95em;
+}
+
+.platform-product {
+    font-size: 0.85em;
+    color: #aaa;
+}
+
 .datetime-cell {
     display: flex;
     flex-direction: column;
