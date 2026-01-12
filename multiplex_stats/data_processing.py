@@ -196,7 +196,9 @@ def process_history_data(
     records_a = data_a['response']['data']['data']
     df_a = pd.DataFrame(
         records_a,
-        columns=["date", "user", "media_type", "full_title", "grandparent_title", "ip_address", "platform", "percent_complete"]
+        columns=["date", "user", "friendly_name", "user_id", "media_type", "full_title", "grandparent_title",
+                 "parent_media_index", "media_index", "year", "ip_address", "platform", "percent_complete",
+                 "stream_video_full_resolution", "transcode_decision", "quality_profile"]
     )
     df_a['Server'] = server_a_name
 
@@ -205,7 +207,9 @@ def process_history_data(
         records_b = data_b['response']['data']['data']
         df_b = pd.DataFrame(
             records_b,
-            columns=["date", "user", "media_type", "full_title", "grandparent_title", "ip_address", "platform", "percent_complete"]
+            columns=["date", "user", "friendly_name", "user_id", "media_type", "full_title", "grandparent_title",
+                     "parent_media_index", "media_index", "year", "ip_address", "platform", "percent_complete",
+                     "stream_video_full_resolution", "transcode_decision", "quality_profile"]
         )
         df_b['Server'] = server_b_name
 
@@ -226,8 +230,9 @@ def process_history_data(
         .dt.tz_convert('America/Los_Angeles')
     )
 
-    # Extract date string
+    # Extract date and time strings
     df_combined['date_pt'] = df_combined['date_pst'].dt.strftime('%Y-%m-%d')
+    df_combined['time_pt'] = df_combined['date_pst'].dt.strftime('%H:%M:%S')
 
     # Clean up columns
     df_combined.rename(columns={'date': 'date_time'}, inplace=True)
