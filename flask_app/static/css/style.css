@@ -585,11 +585,26 @@ h1 {
     display: inline-block;
     padding: 4px 10px;
     border-radius: 4px;
-    background: rgba(76, 175, 80, 0.2);
-    color: #4caf50;
     font-size: 0.85em;
     font-weight: 500;
+}
+
+.quality-badge.direct-play {
+    background: rgba(76, 175, 80, 0.2);
+    color: #4caf50;
     border: 1px solid rgba(76, 175, 80, 0.4);
+}
+
+.quality-badge.transcode {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffc107;
+    border: 1px solid rgba(255, 193, 7, 0.4);
+}
+
+.quality-badge.direct-stream {
+    background: rgba(33, 150, 243, 0.2);
+    color: #2196f3;
+    border: 1px solid rgba(33, 150, 243, 0.4);
 }
 
 .progress-bar-container {
