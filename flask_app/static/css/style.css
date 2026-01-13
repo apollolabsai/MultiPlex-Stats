@@ -124,6 +124,12 @@ h1 {
     background-clip: text;
 }
 
+h1.settings-title {
+    color: #ed542b;
+    background: none;
+    -webkit-text-fill-color: #ed542b;
+}
+
 .subtitle {
     font-size: 1.2em;
     color: #aaa;
