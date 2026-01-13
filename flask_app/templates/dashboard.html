@@ -7,7 +7,7 @@
     <img src="{{ url_for('static', filename='logo.png') }}" alt="MultiPlex Stats" style="max-width: 400px; height: auto; margin-bottom: 10px;">
     <div class="subtitle">Plex Server Analytics & Insights</div>
     <div class="timestamp">
-        Last {{ summary.history_days }} Days | Generated: {{ last_run.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}
+        Last {{ summary.history_days }} Days | Generated: {{ completed_at_pt.strftime('%Y-%m-%d %I:%M:%S %p') }} PT
     </div>
 
     <form method="POST" action="{{ url_for('main.run_analytics') }}" style="margin-top: 20px;">
