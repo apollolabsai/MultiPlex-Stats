@@ -491,7 +491,7 @@ h1 {
 
 /* DataTables Styling */
 .table-container {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(0, 0, 0, 0.7);
     border-radius: 12px;
     padding: 20px;
     margin-bottom: 20px;
