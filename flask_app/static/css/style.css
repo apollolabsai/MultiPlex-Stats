@@ -653,6 +653,10 @@ h1.settings-title {
     transition: width 0.3s ease;
 }
 
+.progress-bar-fill.orange {
+    background: linear-gradient(90deg, #ff9800 0%, #ed542b 100%);
+}
+
 .progress-text {
     font-size: 0.85em;
     color: #aaa;
