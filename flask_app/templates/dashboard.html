@@ -25,10 +25,11 @@
                     <th style="color:#f18a3d; text-align:left">#</th>
                     <th style="color:#f18a3d; text-align:left">Server</th>
                     <th style="color:#f18a3d; text-align:left">User</th>
-                    <th style="color:#f18a3d; text-align:left">Title</th>
+                    <th style="color:#f18a3d; text-align:left">Content</th>
                     <th style="color:#f18a3d; text-align:left">Status</th>
                     <th style="color:#f18a3d; text-align:left">Progress</th>
-                    <th style="color:#f18a3d; text-align:left">Player</th>
+                    <th style="color:#f18a3d; text-align:left">Quality</th>
+                    <th style="color:#f18a3d; text-align:left">Platform</th>
                     <th style="color:#f18a3d; text-align:left">Location</th>
                 </tr>
             </thead>
@@ -36,20 +37,64 @@
                 {% for stream in current_activity %}
                 <tr>
                     <td>{{ loop.index }}</td>
-                    <td>{{ stream.server }}</td>
+
+                    <!-- Server with badge -->
+                    <td>
+                        <span class="server-badge {{ stream.server_order }}">
+                            {{ stream.server }}
+                        </span>
+                    </td>
+
+                    <!-- User -->
                     <td>{{ stream.user }}</td>
+
+                    <!-- Content (Title with Icon and Subtitle) -->
                     <td>
                         {% if stream.poster_url %}
                             <div class="title-with-preview">
-                                <span>{{ stream.title }}</span>
+                                <div class="content-cell">
+                                    <div>
+                                        {% if stream.media_type|lower in ['movie'] %}
+                                            <svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24">
+                                                <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
+                                            </svg>
+                                        {% else %}
+                                            <svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24">
+                                                <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
+                                            </svg>
+                                        {% endif %}
+                                        <span class="content-title">{{ stream.title }}</span>
+                                    </div>
+                                    {% if stream.subtitle %}
+                                        <div class="content-subtitle">{{ stream.subtitle }}</div>
+                                    {% endif %}
+                                </div>
                                 <div class="poster-preview">
                                     <img src="http://{{ stream.poster_url }}" alt="{{ stream.title }}">
                                 </div>
                             </div>
                         {% else %}
-                            {{ stream.title }}
+                            <div class="content-cell">
+                                <div>
+                                    {% if stream.media_type|lower in ['movie'] %}
+                                        <svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24">
+                                            <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
+                                        </svg>
+                                    {% else %}
+                                        <svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24">
+                                            <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
+                                        </svg>
+                                    {% endif %}
+                                    <span class="content-title">{{ stream.title }}</span>
+                                </div>
+                                {% if stream.subtitle %}
+                                    <div class="content-subtitle">{{ stream.subtitle }}</div>
+                                {% endif %}
+                            </div>
                         {% endif %}
                     </td>
+
+                    <!-- Status -->
                     <td>
                         {% if stream.state == 'playing' %}
                             <span style="color: #4CAF50;">● Playing</span>
@@ -59,8 +104,38 @@
                             {{ stream.state }}
                         {% endif %}
                     </td>
+
+                    <!-- Progress -->
                     <td>{{ stream.progress_percent }}%</td>
-                    <td>{{ stream.player }}</td>
+
+                    <!-- Quality -->
+                    <td>
+                        {% if stream.quality %}
+                            {% if stream.quality == 'Direct Play' %}
+                                <span class="quality-badge direct-play">{{ stream.quality }}</span>
+                            {% elif stream.quality == 'Transcode' %}
+                                <span class="quality-badge transcode">{{ stream.quality }}</span>
+                            {% elif stream.quality == 'Direct Stream' %}
+                                <span class="quality-badge direct-stream">{{ stream.quality }}</span>
+                            {% else %}
+                                <span class="quality-badge">{{ stream.quality }}</span>
+                            {% endif %}
+                        {% else %}
+                            <span style="color: #888;">N/A</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Platform with Product -->
+                    <td>
+                        <div class="content-cell">
+                            <div class="platform-name">{{ stream.platform }}</div>
+                            {% if stream.product %}
+                                <div class="platform-product">{{ stream.product }}</div>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    <!-- Location -->
                     <td>{{ stream.location }}</td>
                 </tr>
                 {% endfor %}
