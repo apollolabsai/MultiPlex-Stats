@@ -54,10 +54,14 @@ def run_analytics():
         return redirect(url_for('main.dashboard'))
 
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        print(f"Analytics error traceback:\n{error_traceback}")
+
         if 'run' in locals():
             run.status = 'failed'
             run.completed_at = datetime.utcnow()
-            run.error_message = str(e)
+            run.error_message = f"{str(e)}\n\nTraceback:\n{error_traceback}"
             db.session.commit()
 
         flash(f'Analytics failed: {str(e)}', 'error')
