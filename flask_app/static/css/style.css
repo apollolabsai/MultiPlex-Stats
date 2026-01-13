@@ -204,7 +204,7 @@ h1 {
 /* Buttons */
 .btn {
     padding: 12px 24px;
-    border: none;
+    border: 2px solid;
     border-radius: 8px;
     font-size: 1em;
     font-weight: 500;
@@ -212,6 +212,7 @@ h1 {
     transition: all 0.3s ease;
     text-decoration: none;
     display: inline-block;
+    background: #000000;
 }
 
 .btn-large {
@@ -220,23 +221,25 @@ h1 {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #ed542b 0%, #764ba2 100%);
-    color: white;
+    background: #000000;
+    color: #ed542b;
+    border-color: #ed542b;
 }
 
 .btn-primary:hover {
+    background: rgba(237, 84, 43, 0.1);
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(237, 84, 43, 0.4);
 }
 
 .btn-success {
-    background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
-    color: white;
+    background: #000000;
+    color: #4caf50;
+    border-color: #4caf50;
 }
 
 .btn-success:hover {
+    background: rgba(76, 175, 80, 0.1);
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
 }
 
 .btn-secondary {
@@ -250,13 +253,14 @@ h1 {
 }
 
 .btn-danger {
-    background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
-    color: white;
+    background: #000000;
+    color: #f44336;
+    border-color: #f44336;
 }
 
 .btn-danger:hover {
+    background: rgba(244, 67, 54, 0.1);
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(244, 67, 54, 0.4);
 }
 
 /* Cards */
