@@ -106,7 +106,12 @@
                     </td>
 
                     <!-- Progress -->
-                    <td>{{ stream.progress_percent }}%</td>
+                    <td>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill orange" style="width: {{ stream.progress_percent }}%;"></div>
+                        </div>
+                        <div class="progress-text">{{ stream.progress_percent }}%</div>
+                    </td>
 
                     <!-- Quality -->
                     <td>
