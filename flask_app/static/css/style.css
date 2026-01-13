@@ -7,7 +7,7 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+    background: #000000;
     color: #ffffff;
     min-height: 100vh;
     padding-bottom: 80px;
@@ -109,10 +109,10 @@ body {
 header {
     text-align: center;
     padding: 40px 20px;
-    background: rgba(255, 255, 255, 0.05);
+    background: #000000;
     border-radius: 15px;
     margin-bottom: 30px;
-    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 h1 {
@@ -145,11 +145,11 @@ h1 {
 }
 
 .stat-card {
-    background: rgba(255, 255, 255, 0.05);
+    background: #000000;
     padding: 25px;
     border-radius: 12px;
     text-align: center;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -187,11 +187,11 @@ h1 {
 
 /* Chart Container */
 .chart-container {
-    background: rgba(255, 255, 255, 0.03);
+    background: #000000;
     border-radius: 12px;
     padding: 20px;
     margin-bottom: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .grid-2 {
@@ -261,11 +261,11 @@ h1 {
 
 /* Cards */
 .welcome-card, .action-card, .status-card, .info-section {
-    background: rgba(255, 255, 255, 0.05);
+    background: #000000;
     border-radius: 15px;
     padding: 30px;
     margin-bottom: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .welcome-card h2, .action-card h2, .status-card h2, .info-section h2 {
@@ -361,10 +361,10 @@ h1 {
 }
 
 .settings-section {
-    background: rgba(255, 255, 255, 0.05);
+    background: #000000;
     border-radius: 15px;
     padding: 30px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .form-card {
@@ -491,11 +491,11 @@ h1 {
 
 /* DataTables Styling */
 .table-container {
-    background: rgba(0, 0, 0, 0.7);
+    background: #000000;
     border-radius: 12px;
     padding: 20px;
     margin-bottom: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     overflow-x: auto;
 }
 
