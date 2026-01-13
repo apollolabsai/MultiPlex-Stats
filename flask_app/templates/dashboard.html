@@ -169,7 +169,11 @@
                     <td style="display:none;">{{ row.sortable_datetime }}</td>
 
                     <!-- Server -->
-                    <td>{{ row.Server }}</td>
+                    <td>
+                        <span class="server-badge {{ 'apollo' if row.Server == 'Apollo' else 'apolloss' if row.Server == 'ApolloSS' else '' }}">
+                            {{ row.Server }}
+                        </span>
+                    </td>
 
                     <!-- User -->
                     <td>{{ row.user }}</td>
