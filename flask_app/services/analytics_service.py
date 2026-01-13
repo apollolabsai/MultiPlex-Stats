@@ -236,20 +236,25 @@ class AnalyticsService:
         table_data = []
 
         for _, row in df_filtered.iterrows():
-            # Get user avatar URL (use bracket notation for Series)
-            user_id = str(row['user_id']) if 'user_id' in row and pd.notna(row['user_id']) else ''
+            # Get user avatar URL
+            user_id = str(row.get('user_id', '')) if pd.notna(row.get('user_id')) else ''
             user_thumb = user_thumb_map.get(user_id, '')
 
-            # Format title based on media type (use bracket notation for Series)
-            media_type = str(row['media_type']) if 'media_type' in row and pd.notna(row['media_type']) else ''
-            full_title = str(row['full_title']) if 'full_title' in row and pd.notna(row['full_title']) else ''
-            grandparent_title = str(row['grandparent_title']) if 'grandparent_title' in row and pd.notna(row['grandparent_title']) else ''
+            # Format title based on media type
+            media_type_raw = row.get('media_type', '')
+            media_type = str(media_type_raw) if pd.notna(media_type_raw) else ''
+
+            full_title_raw = row.get('full_title', '')
+            full_title = str(full_title_raw) if pd.notna(full_title_raw) else ''
+
+            grandparent_title_raw = row.get('grandparent_title', '')
+            grandparent_title = str(grandparent_title_raw) if pd.notna(grandparent_title_raw) else ''
 
             # For TV shows, build "S01E04 - Episode Name" subtitle
             subtitle = ''
-            if media_type.lower() in ['tv', 'episode']:
-                season = row['parent_media_index'] if 'parent_media_index' in row else ''
-                episode = row['media_index'] if 'media_index' in row else ''
+            if media_type and media_type.lower() in ['tv', 'episode']:
+                season = row.get('parent_media_index', '')
+                episode = row.get('media_index', '')
                 # Check if season and episode are valid numbers
                 if pd.notna(season) and pd.notna(episode) and season != '' and episode != '':
                     try:
@@ -266,7 +271,7 @@ class AnalyticsService:
                 title = grandparent_title if grandparent_title else full_title  # Use show name as main title
             else:
                 # For movies, use year as subtitle
-                year = row['year'] if 'year' in row else ''
+                year = row.get('year', '')
                 if pd.notna(year) and year != '' and year:
                     try:
                         subtitle = f"({int(year)})"
@@ -276,33 +281,44 @@ class AnalyticsService:
                 title = full_title
 
             # Format quality (use transcode_decision: direct play, transcode, copy)
-            transcode_decision = str(row['transcode_decision']) if 'transcode_decision' in row and pd.notna(row['transcode_decision']) else ''
+            transcode_decision_raw = row.get('transcode_decision', '')
+            transcode_decision = str(transcode_decision_raw) if pd.notna(transcode_decision_raw) else ''
 
             # Format transcode decision for display
-            if transcode_decision.lower() == 'direct play':
+            if transcode_decision and transcode_decision.lower() == 'direct play':
                 quality = 'Direct Play'
-            elif transcode_decision.lower() == 'transcode':
+            elif transcode_decision and transcode_decision.lower() == 'transcode':
                 quality = 'Transcode'
-            elif transcode_decision.lower() == 'copy':
+            elif transcode_decision and transcode_decision.lower() == 'copy':
                 quality = 'Direct Stream'
             else:
                 quality = transcode_decision.title() if transcode_decision else ''
 
-            # Build table row (use bracket notation for Series)
+            # Build table row
+            date_pt_raw = row.get('date_pt', '')
+            time_pt_raw = row.get('time_pt', '')
+            server_raw = row.get('Server', '')
+            friendly_name_raw = row.get('friendly_name', '')
+            user_raw = row.get('user', '')
+            ip_address_raw = row.get('ip_address', '')
+            platform_raw = row.get('platform', '')
+            product_raw = row.get('product', '')
+            percent_complete_raw = row.get('percent_complete', 0)
+
             table_row = {
-                'date_pt': str(row['date_pt']) if 'date_pt' in row and pd.notna(row['date_pt']) else '',
-                'time_pt': str(row['time_pt']) if 'time_pt' in row and pd.notna(row['time_pt']) else '',
-                'Server': str(row['Server']) if 'Server' in row and pd.notna(row['Server']) else '',
-                'user': str(row['friendly_name']) if 'friendly_name' in row and pd.notna(row['friendly_name']) else str(row['user']) if 'user' in row else '',
+                'date_pt': str(date_pt_raw) if pd.notna(date_pt_raw) else '',
+                'time_pt': str(time_pt_raw) if pd.notna(time_pt_raw) else '',
+                'Server': str(server_raw) if pd.notna(server_raw) else '',
+                'user': str(friendly_name_raw) if pd.notna(friendly_name_raw) else str(user_raw) if pd.notna(user_raw) else '',
                 'user_thumb': user_thumb,
-                'ip_address': str(row['ip_address']) if 'ip_address' in row and pd.notna(row['ip_address']) else '',
+                'ip_address': str(ip_address_raw) if pd.notna(ip_address_raw) else '',
                 'media_type': media_type,
                 'title': title,
                 'subtitle': subtitle,
-                'platform': str(row['platform']) if 'platform' in row and pd.notna(row['platform']) else '',
-                'product': str(row['product']) if 'product' in row and pd.notna(row['product']) else '',
+                'platform': str(platform_raw) if pd.notna(platform_raw) else '',
+                'product': str(product_raw) if pd.notna(product_raw) else '',
                 'quality': quality,
-                'percent_complete': int(row['percent_complete']) if 'percent_complete' in row and pd.notna(row['percent_complete']) else 0
+                'percent_complete': int(percent_complete_raw) if pd.notna(percent_complete_raw) else 0
             }
             table_data.append(table_row)
 
