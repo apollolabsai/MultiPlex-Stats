@@ -170,7 +170,7 @@
 
                     <!-- Server -->
                     <td>
-                        <span class="server-badge {{ 'apollo' if row.Server == 'Apollo' else 'apolloss' if row.Server == 'ApolloSS' else '' }}">
+                        <span class="server-badge {{ row.server_order }}">
                             {{ row.Server }}
                         </span>
                     </td>
