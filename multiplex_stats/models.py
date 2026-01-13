@@ -57,8 +57,8 @@ class MediaColors:
 class PlotTheme:
     """Theme configuration for plots."""
 
-    plot_bgcolor: str = '#333333'
-    paper_bgcolor: str = '#282828'
+    plot_bgcolor: str = '#000000'
+    paper_bgcolor: str = '#000000'
     title_color: str = 'white'
     text_color: str = 'white'
     grid_color: str = 'grey'
