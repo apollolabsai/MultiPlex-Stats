@@ -3,6 +3,7 @@ Main application routes for dashboard and analytics execution.
 """
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from flask import Blueprint, render_template, redirect, url_for, flash
 from flask_app.models import db, AnalyticsRun
 from flask_app.services.analytics_service import AnalyticsService
@@ -79,6 +80,9 @@ def dashboard():
         flash('No analytics data available. Please run analytics first.', 'info')
         return redirect(url_for('main.index'))
 
+    # Convert completed_at from UTC to Pacific Time
+    completed_at_pt = last_run.completed_at.replace(tzinfo=ZoneInfo('UTC')).astimezone(ZoneInfo('America/Los_Angeles'))
+
     # Load cached chart HTML and table data from service
     service = AnalyticsService()
     charts = service.get_cached_charts(last_run.id)
@@ -93,4 +97,5 @@ def dashboard():
                           table_data=table_data,
                           summary=summary,
                           last_run=last_run,
+                          completed_at_pt=completed_at_pt,
                           current_activity=current_activity)
