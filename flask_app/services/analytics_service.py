@@ -460,14 +460,63 @@ class AnalyticsService:
                         # Use Tautulli's pms_image_proxy to serve the poster (150x225)
                         poster_url = f"{server_a_config.ip_address}/pms_image_proxy?img={poster_thumb}&rating_key={rating_key}&width=150&height=225&fallback=poster"
 
+                    # Format title and subtitle like viewing history table
+                    full_title = session.get('full_title', session.get('title', 'Unknown'))
+                    grandparent_title = session.get('grandparent_title', '')
+                    title = full_title
+                    subtitle = ''
+
+                    if media_type == 'episode':
+                        # For TV shows, build "S01E04 - Episode Name" subtitle
+                        season = session.get('parent_media_index', '')
+                        episode = session.get('media_index', '')
+                        if season and episode:
+                            try:
+                                subtitle = f"S{int(season):02d}E{int(episode):02d}"
+                                # If full_title is different from grandparent_title, append episode name
+                                if full_title and grandparent_title and full_title != grandparent_title:
+                                    if ' - ' in full_title:
+                                        episode_name = full_title.split(' - ', 1)[1]
+                                        subtitle += f" - {episode_name}"
+                            except (ValueError, TypeError):
+                                pass
+                        title = grandparent_title if grandparent_title else full_title
+                    elif media_type == 'movie':
+                        # For movies, use year as subtitle
+                        year = session.get('year', '')
+                        if year:
+                            try:
+                                subtitle = f"({int(year)})"
+                            except (ValueError, TypeError):
+                                pass
+
+                    # Format quality like viewing history table
+                    transcode_decision = session.get('transcode_decision', '').lower()
+                    if transcode_decision == 'direct play':
+                        quality = 'Direct Play'
+                    elif transcode_decision == 'transcode':
+                        quality = 'Transcode'
+                    elif transcode_decision == 'copy':
+                        quality = 'Direct Stream'
+                    else:
+                        quality = transcode_decision.title() if transcode_decision else ''
+
+                    # Format platform and product like viewing history table
+                    platform = session.get('platform', 'Unknown')
+                    product = session.get('product', '')
+
                     current_streams.append({
                         'server': server_a_config.name,
+                        'server_order': 'server-a',
                         'user': session.get('friendly_name', session.get('username', 'Unknown')),
-                        'title': session.get('full_title', session.get('title', 'Unknown')),
-                        'media_type': session.get('media_type', 'unknown'),
+                        'title': title,
+                        'subtitle': subtitle,
+                        'media_type': media_type,
                         'state': session.get('state', 'unknown'),
                         'progress_percent': session.get('progress_percent', 0),
-                        'player': session.get('player', 'Unknown'),
+                        'platform': platform,
+                        'product': product,
+                        'quality': quality,
                         'ip_address': ip_address,
                         'location': location,
                         'poster_url': poster_url
@@ -501,14 +550,63 @@ class AnalyticsService:
                             # Use Tautulli's pms_image_proxy to serve the poster (150x225)
                             poster_url = f"{server_b_config.ip_address}/pms_image_proxy?img={poster_thumb}&rating_key={rating_key}&width=150&height=225&fallback=poster"
 
+                        # Format title and subtitle like viewing history table
+                        full_title = session.get('full_title', session.get('title', 'Unknown'))
+                        grandparent_title = session.get('grandparent_title', '')
+                        title = full_title
+                        subtitle = ''
+
+                        if media_type == 'episode':
+                            # For TV shows, build "S01E04 - Episode Name" subtitle
+                            season = session.get('parent_media_index', '')
+                            episode = session.get('media_index', '')
+                            if season and episode:
+                                try:
+                                    subtitle = f"S{int(season):02d}E{int(episode):02d}"
+                                    # If full_title is different from grandparent_title, append episode name
+                                    if full_title and grandparent_title and full_title != grandparent_title:
+                                        if ' - ' in full_title:
+                                            episode_name = full_title.split(' - ', 1)[1]
+                                            subtitle += f" - {episode_name}"
+                                except (ValueError, TypeError):
+                                    pass
+                            title = grandparent_title if grandparent_title else full_title
+                        elif media_type == 'movie':
+                            # For movies, use year as subtitle
+                            year = session.get('year', '')
+                            if year:
+                                try:
+                                    subtitle = f"({int(year)})"
+                                except (ValueError, TypeError):
+                                    pass
+
+                        # Format quality like viewing history table
+                        transcode_decision = session.get('transcode_decision', '').lower()
+                        if transcode_decision == 'direct play':
+                            quality = 'Direct Play'
+                        elif transcode_decision == 'transcode':
+                            quality = 'Transcode'
+                        elif transcode_decision == 'copy':
+                            quality = 'Direct Stream'
+                        else:
+                            quality = transcode_decision.title() if transcode_decision else ''
+
+                        # Format platform and product like viewing history table
+                        platform = session.get('platform', 'Unknown')
+                        product = session.get('product', '')
+
                         current_streams.append({
                             'server': server_b_config.name,
+                            'server_order': 'server-b',
                             'user': session.get('friendly_name', session.get('username', 'Unknown')),
-                            'title': session.get('full_title', session.get('title', 'Unknown')),
-                            'media_type': session.get('media_type', 'unknown'),
+                            'title': title,
+                            'subtitle': subtitle,
+                            'media_type': media_type,
                             'state': session.get('state', 'unknown'),
                             'progress_percent': session.get('progress_percent', 0),
-                            'player': session.get('player', 'Unknown'),
+                            'platform': platform,
+                            'product': product,
+                            'quality': quality,
                             'ip_address': ip_address,
                             'location': location,
                             'poster_url': poster_url
