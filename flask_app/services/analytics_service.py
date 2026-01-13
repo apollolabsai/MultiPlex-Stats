@@ -118,7 +118,8 @@ class AnalyticsService:
             json.dump(charts_html, f)
 
         # 6b. Prepare and cache viewing history table data (using full history, will be filtered by table_days)
-        table_data = self._prepare_table_data(df_history_full, settings.history_table_days)
+        table_data = self._prepare_table_data(df_history_full, settings.history_table_days,
+                                               server_a_config.name, server_b_config.name if server_b_config else None)
         table_cache_path = os.path.join(self.cache_dir, f'run_{run_id}_table.json')
         with open(table_cache_path, 'w') as f:
             json.dump(table_data, f)
@@ -204,13 +205,15 @@ class AnalyticsService:
 
         return user_thumb_map
 
-    def _prepare_table_data(self, df_history, table_days: int) -> list:
+    def _prepare_table_data(self, df_history, table_days: int, server_a_name: str, server_b_name: str = None) -> list:
         """
         Prepare viewing history data for DataTables display.
 
         Args:
             df_history: DataFrame with viewing history
             table_days: Number of days to include in table
+            server_a_name: Name of Server A
+            server_b_name: Name of Server B (optional)
 
         Returns:
             List of dictionaries for table rows
@@ -320,11 +323,16 @@ class AnalyticsService:
                 except:
                     sortable_datetime = date_pt_str
 
+            # Determine server order (A or B)
+            server_name = str(server_raw) if pd.notna(server_raw) else ''
+            server_order = 'server-a' if server_name == server_a_name else 'server-b' if server_name == server_b_name else ''
+
             table_row = {
                 'date_pt': date_pt_str,
                 'time_pt': time_pt_str,
                 'sortable_datetime': sortable_datetime,
-                'Server': str(server_raw) if pd.notna(server_raw) else '',
+                'Server': server_name,
+                'server_order': server_order,
                 'user': str(friendly_name_raw) if pd.notna(friendly_name_raw) else str(user_raw) if pd.notna(user_raw) else '',
                 'user_thumb': user_thumb,
                 'ip_address': str(ip_address_raw) if pd.notna(ip_address_raw) else '',
