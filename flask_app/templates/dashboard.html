@@ -207,7 +207,15 @@
                     <!-- Quality -->
                     <td>
                         {% if row.quality %}
-                            <span class="quality-badge">{{ row.quality }}</span>
+                            {% if row.quality == 'Direct Play' %}
+                                <span class="quality-badge direct-play">{{ row.quality }}</span>
+                            {% elif row.quality == 'Transcode' %}
+                                <span class="quality-badge transcode">{{ row.quality }}</span>
+                            {% elif row.quality == 'Direct Stream' %}
+                                <span class="quality-badge direct-stream">{{ row.quality }}</span>
+                            {% else %}
+                                <span class="quality-badge">{{ row.quality }}</span>
+                            {% endif %}
                         {% else %}
                             <span style="color: #888;">N/A</span>
                         {% endif %}
