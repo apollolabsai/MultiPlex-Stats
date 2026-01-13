@@ -144,6 +144,7 @@
             <thead>
                 <tr>
                     <th style="width: 120px;">Date</th>
+                    <th style="display:none;">Sortable DateTime</th>
                     <th style="width: 80px;">Server</th>
                     <th style="width: 100px;">User</th>
                     <th style="width: 300px;">Content</th>
@@ -163,6 +164,9 @@
                             <span class="time-text">{{ row.time_pt }}</span>
                         </div>
                     </td>
+
+                    <!-- Hidden sortable datetime column -->
+                    <td style="display:none;">{{ row.sortable_datetime }}</td>
 
                     <!-- Server -->
                     <td>{{ row.Server }}</td>
@@ -285,8 +289,11 @@
 $(document).ready(function() {
     $('#viewingHistoryTable').DataTable({
         pageLength: 25,
-        order: [[0, 'desc']], // Sort by date descending by default
+        order: [[1, 'desc']], // Sort by hidden sortable_datetime column (most recent first)
         lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+        columnDefs: [
+            { targets: 1, visible: false } // Hide the sortable datetime column
+        ],
         language: {
             search: "Filter records:",
             lengthMenu: "Show _MENU_ entries",
