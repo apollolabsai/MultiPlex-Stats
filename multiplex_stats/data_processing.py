@@ -232,7 +232,7 @@ def process_history_data(
 
     # Extract date and time strings
     df_combined['date_pt'] = df_combined['date_pst'].dt.strftime('%Y-%m-%d')
-    df_combined['time_pt'] = df_combined['date_pst'].dt.strftime('%-I:%M%p').lower()
+    df_combined['time_pt'] = df_combined['date_pst'].dt.strftime('%-I:%M%p').str.lower()
 
     # Clean up columns
     df_combined.rename(columns={'date': 'date_time'}, inplace=True)
