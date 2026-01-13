@@ -305,9 +305,25 @@ class AnalyticsService:
             product_raw = row.get('product', '')
             percent_complete_raw = row.get('percent_complete', 0)
 
+            # Create a sortable datetime string (YYYY-MM-DD HH:MM format for sorting)
+            # Convert time from "9:34pm" to "21:34" format for sorting
+            date_pt_str = str(date_pt_raw) if pd.notna(date_pt_raw) else ''
+            time_pt_str = str(time_pt_raw) if pd.notna(time_pt_raw) else ''
+
+            # Convert 12-hour time to 24-hour for sorting
+            sortable_datetime = date_pt_str
+            if time_pt_str:
+                try:
+                    from datetime import datetime
+                    time_obj = datetime.strptime(time_pt_str, '%I:%M%p')
+                    sortable_datetime = f"{date_pt_str} {time_obj.strftime('%H:%M')}"
+                except:
+                    sortable_datetime = date_pt_str
+
             table_row = {
-                'date_pt': str(date_pt_raw) if pd.notna(date_pt_raw) else '',
-                'time_pt': str(time_pt_raw) if pd.notna(time_pt_raw) else '',
+                'date_pt': date_pt_str,
+                'time_pt': time_pt_str,
+                'sortable_datetime': sortable_datetime,
                 'Server': str(server_raw) if pd.notna(server_raw) else '',
                 'user': str(friendly_name_raw) if pd.notna(friendly_name_raw) else str(user_raw) if pd.notna(user_raw) else '',
                 'user_thumb': user_thumb,
