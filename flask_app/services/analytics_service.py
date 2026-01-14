@@ -481,30 +481,28 @@ class AnalyticsService:
 
         # Generate visualizations
         if not df_daily.empty:
-            # Melt the dataframe to long format for plotting
+            # Melt the dataframe to long format for plotting (chart functions expect 'Month' column even for daily data)
             date_cols = [col for col in df_daily.columns if col not in ['Server', 'Category']]
-            df_daily_long = df_daily.melt(id_vars=['Server', 'Category'], value_vars=date_cols, var_name='Date', value_name='Count')
-            df_daily_long['Date'] = pd.to_datetime(df_daily_long['Date'])
-            df_daily_long['Type'] = df_daily_long['Server'] + '_' + df_daily_long['Category']
-            df_daily_long = df_daily_long.set_index('Date')
+            df_daily_long = df_daily.melt(id_vars=['Server', 'Category'], value_vars=date_cols, var_name='Month', value_name='Count')
+            df_daily_long['ColorMapping'] = df_daily_long['Server'] + '_' + df_daily_long['Category']
             fig_daily = create_daily_bar_chart(df_daily_long, server_a_config.name, server_b_config.name if server_b_config else None)
         else:
             fig_daily = None
+            df_daily_long = pd.DataFrame()
 
         if not df_monthly.empty:
             month_cols = [col for col in df_monthly.columns if col not in ['Server', 'Category']]
             df_monthly_long = df_monthly.melt(id_vars=['Server', 'Category'], value_vars=month_cols, var_name='Month', value_name='Count')
-            df_monthly_long['Type'] = df_monthly_long['Server'] + '_' + df_monthly_long['Category']
-            df_monthly_long = df_monthly_long.set_index('Month')
+            df_monthly_long['ColorMapping'] = df_monthly_long['Server'] + '_' + df_monthly_long['Category']
             fig_monthly = create_monthly_bar_chart(df_monthly_long, server_a_config.name, server_b_config.name if server_b_config else None)
         else:
             fig_monthly = None
 
         fig_movies = create_movie_bar_chart(df_movies, settings.history_days) if not df_movies.empty else None
         fig_tv = create_tv_bar_chart(df_tv, settings.history_days) if not df_tv.empty else None
-        fig_category = create_category_pie_chart(df_daily_long if not df_daily.empty else pd.DataFrame(), settings.history_days) if not df_daily.empty else None
+        fig_category = create_category_pie_chart(df_daily_long, settings.history_days) if not df_daily.empty else None
         fig_server = create_server_pie_chart(
-            df_daily_long if not df_daily.empty else pd.DataFrame(),
+            df_daily_long,
             server_a_config.name,
             server_b_config.name if server_b_config else None,
             settings.history_days
