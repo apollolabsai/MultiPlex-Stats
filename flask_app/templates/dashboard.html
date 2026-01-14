@@ -155,7 +155,7 @@
 <!-- User Filter -->
 <div class="section">
     <div class="user-filter-container">
-        <label for="userFilter" class="filter-label">📊 Filter by User:</label>
+        <label for="userFilter" class="filter-label">Filter by User:</label>
         <select id="userFilter" class="user-filter-dropdown" onchange="window.location.href='/dashboard?user=' + this.value;">
             <option value="all" {% if not filtered_user or filtered_user == 'all' %}selected{% endif %}>All Users</option>
             {% for user in unique_users %}
