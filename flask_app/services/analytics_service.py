@@ -432,19 +432,19 @@ class AnalyticsService:
         df_history = filter_history_by_date(df_history_user, settings.history_days)
 
         # Build daily data from history for this user
-        df_history['Date'] = pd.to_datetime(df_history['Date'])
-        daily_tv = df_history[df_history['media_type'] == 'episode'].groupby(['Date', 'Server']).size().reset_index(name='Count')
-        daily_movies = df_history[df_history['media_type'] == 'movie'].groupby(['Date', 'Server']).size().reset_index(name='Count')
+        df_history['date_dt'] = pd.to_datetime(df_history['date_pt'])
+        daily_tv = df_history[df_history['media_type'] == 'TV'].groupby(['date_dt', 'Server']).size().reset_index(name='Count')
+        daily_movies = df_history[df_history['media_type'] == 'movie'].groupby(['date_dt', 'Server']).size().reset_index(name='Count')
 
         # Create daily dataframe in the format expected by the chart function
-        date_range = pd.date_range(start=df_history['Date'].min(), end=df_history['Date'].max(), freq='D')
+        date_range = pd.date_range(start=df_history['date_dt'].min(), end=df_history['date_dt'].max(), freq='D')
         df_daily_list = []
         for server in df_history['Server'].unique():
             for category, df_cat in [('TV', daily_tv), ('Movies', daily_movies)]:
                 df_server = df_cat[df_cat['Server'] == server]
                 counts = []
                 for date in date_range:
-                    count = df_server[df_server['Date'] == date]['Count'].sum()
+                    count = df_server[df_server['date_dt'] == date]['Count'].sum()
                     counts.append(count)
                 df_daily_list.append({
                     'Server': server,
@@ -454,8 +454,8 @@ class AnalyticsService:
         df_daily = pd.DataFrame(df_daily_list) if df_daily_list else pd.DataFrame()
 
         # Build monthly data from history for this user
-        df_history['Month'] = df_history['Date'].dt.to_period('M').astype(str)
-        monthly_tv = df_history[df_history['media_type'] == 'episode'].groupby(['Month', 'Server']).size().reset_index(name='Count')
+        df_history['Month'] = df_history['date_dt'].dt.to_period('M').astype(str)
+        monthly_tv = df_history[df_history['media_type'] == 'TV'].groupby(['Month', 'Server']).size().reset_index(name='Count')
         monthly_movies = df_history[df_history['media_type'] == 'movie'].groupby(['Month', 'Server']).size().reset_index(name='Count')
 
         # Create monthly dataframe
