@@ -304,8 +304,8 @@ def create_category_pie_chart(
     df_category['Percentage'] = df_category['Count'] / df_category['Count'].sum() * 100
 
     custom_colors = {
-        'TV': '#0f4c5c',
-        'Movies': '#e36414',
+        'TV': '#FCE762',
+        'Movies': '#D35F3D',
     }
 
     fig = px.pie(
@@ -362,10 +362,10 @@ def create_server_pie_chart(
     df_server['Percentage'] = df_server['Count'] / df_server['Count'].sum() * 100
 
     custom_colors = {
-        server_a_name: '#0f4c5c',
+        server_a_name: '#FCE762',
     }
     if server_b_name:
-        custom_colors[server_b_name] = '#e36414'
+        custom_colors[server_b_name] = '#D35F3D'
 
     fig = px.pie(
         df_server,
