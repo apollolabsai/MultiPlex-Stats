@@ -3,6 +3,7 @@ Analytics service that bridges Flask to the existing multiplex_stats package.
 """
 import os
 import json
+import pandas as pd
 from typing import Dict, Any
 from datetime import datetime
 
@@ -383,6 +384,160 @@ class AnalyticsService:
 
         with open(table_cache_path, 'r') as f:
             return json.load(f)
+
+    def get_filtered_charts(self, run_id: int, username: str) -> tuple[Dict[str, str], Dict[str, Any]]:
+        """
+        Generate charts filtered for a specific user by building from history data.
+
+        Args:
+            run_id: Database ID of AnalyticsRun record
+            username: Username to filter by
+
+        Returns:
+            Tuple of (charts_dict, summary_dict)
+        """
+        # Load configuration from database
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        settings = ConfigService.get_analytics_settings()
+
+        # Fetch fresh data
+        client_a = TautulliClient(server_a_config)
+        client_b = TautulliClient(server_b_config) if server_b_config else None
+
+        # Fetch history data
+        max_history_days = max(settings.history_days, settings.history_table_days)
+        history_data_a = client_a.get_history(days=max_history_days)
+        history_data_b = client_b.get_history(days=max_history_days) if client_b else None
+        df_history_full = process_history_data(
+            history_data_a, history_data_b,
+            server_a_config.name, server_b_config.name if server_b_config else None
+        )
+
+        # Filter by user
+        df_history_user = df_history_full[df_history_full['user'] == username].copy()
+
+        if df_history_user.empty:
+            # Return empty charts if no data for user
+            return {}, {
+                'total_plays': 0,
+                'total_users': 1,
+                'server_a_name': server_a_config.name,
+                'server_a_plays': 0,
+                'server_b_name': server_b_config.name if server_b_config else None,
+                'server_b_plays': 0,
+                'history_days': settings.history_days
+            }
+
+        # Filter history data for charts
+        df_history = filter_history_by_date(df_history_user, settings.history_days)
+
+        # Build daily data from history for this user
+        df_history['Date'] = pd.to_datetime(df_history['Date'])
+        daily_tv = df_history[df_history['media_type'] == 'episode'].groupby(['Date', 'Server']).size().reset_index(name='Count')
+        daily_movies = df_history[df_history['media_type'] == 'movie'].groupby(['Date', 'Server']).size().reset_index(name='Count')
+
+        # Create daily dataframe in the format expected by the chart function
+        date_range = pd.date_range(start=df_history['Date'].min(), end=df_history['Date'].max(), freq='D')
+        df_daily_list = []
+        for server in df_history['Server'].unique():
+            for category, df_cat in [('TV', daily_tv), ('Movies', daily_movies)]:
+                df_server = df_cat[df_cat['Server'] == server]
+                counts = []
+                for date in date_range:
+                    count = df_server[df_server['Date'] == date]['Count'].sum()
+                    counts.append(count)
+                df_daily_list.append({
+                    'Server': server,
+                    'Category': category,
+                    **{date.strftime('%Y-%m-%d'): count for date, count in zip(date_range, counts)}
+                })
+        df_daily = pd.DataFrame(df_daily_list) if df_daily_list else pd.DataFrame()
+
+        # Build monthly data from history for this user
+        df_history['Month'] = df_history['Date'].dt.to_period('M').astype(str)
+        monthly_tv = df_history[df_history['media_type'] == 'episode'].groupby(['Month', 'Server']).size().reset_index(name='Count')
+        monthly_movies = df_history[df_history['media_type'] == 'movie'].groupby(['Month', 'Server']).size().reset_index(name='Count')
+
+        # Create monthly dataframe
+        months = sorted(df_history['Month'].unique())
+        df_monthly_list = []
+        for server in df_history['Server'].unique():
+            for category, df_cat in [('TV', monthly_tv), ('Movies', monthly_movies)]:
+                df_server = df_cat[df_cat['Server'] == server]
+                counts = []
+                for month in months:
+                    count = df_server[df_server['Month'] == month]['Count'].sum()
+                    counts.append(count)
+                df_monthly_list.append({
+                    'Server': server,
+                    'Category': category,
+                    **{month: count for month, count in zip(months, counts)}
+                })
+        df_monthly = pd.DataFrame(df_monthly_list) if df_monthly_list else pd.DataFrame()
+
+        # Aggregate stats for this user only
+        df_movies = aggregate_movie_stats(df_history, top_n=settings.top_movies)
+        df_tv = aggregate_tv_stats(df_history, top_n=settings.top_tv_shows)
+
+        # Generate visualizations
+        if not df_daily.empty:
+            # Melt the dataframe to long format for plotting
+            date_cols = [col for col in df_daily.columns if col not in ['Server', 'Category']]
+            df_daily_long = df_daily.melt(id_vars=['Server', 'Category'], value_vars=date_cols, var_name='Date', value_name='Count')
+            df_daily_long['Date'] = pd.to_datetime(df_daily_long['Date'])
+            df_daily_long['Type'] = df_daily_long['Server'] + '_' + df_daily_long['Category']
+            df_daily_long = df_daily_long.set_index('Date')
+            fig_daily = create_daily_bar_chart(df_daily_long, server_a_config.name, server_b_config.name if server_b_config else None)
+        else:
+            fig_daily = None
+
+        if not df_monthly.empty:
+            month_cols = [col for col in df_monthly.columns if col not in ['Server', 'Category']]
+            df_monthly_long = df_monthly.melt(id_vars=['Server', 'Category'], value_vars=month_cols, var_name='Month', value_name='Count')
+            df_monthly_long['Type'] = df_monthly_long['Server'] + '_' + df_monthly_long['Category']
+            df_monthly_long = df_monthly_long.set_index('Month')
+            fig_monthly = create_monthly_bar_chart(df_monthly_long, server_a_config.name, server_b_config.name if server_b_config else None)
+        else:
+            fig_monthly = None
+
+        fig_movies = create_movie_bar_chart(df_movies, settings.history_days) if not df_movies.empty else None
+        fig_tv = create_tv_bar_chart(df_tv, settings.history_days) if not df_tv.empty else None
+        fig_category = create_category_pie_chart(df_daily_long if not df_daily.empty else pd.DataFrame(), settings.history_days) if not df_daily.empty else None
+        fig_server = create_server_pie_chart(
+            df_daily_long if not df_daily.empty else pd.DataFrame(),
+            server_a_config.name,
+            server_b_config.name if server_b_config else None,
+            settings.history_days
+        ) if not df_daily.empty else None
+
+        # Convert charts to HTML
+        charts_html = {
+            'daily': fig_daily.to_html(full_html=False, include_plotlyjs=False) if fig_daily else '',
+            'monthly': fig_monthly.to_html(full_html=False, include_plotlyjs=False) if fig_monthly else '',
+            'users': '',  # No user chart when filtering by user
+            'movies': fig_movies.to_html(full_html=False, include_plotlyjs=False) if fig_movies else '',
+            'tv': fig_tv.to_html(full_html=False, include_plotlyjs=False) if fig_tv else '',
+            'category': fig_category.to_html(full_html=False, include_plotlyjs=False) if fig_category else '',
+            'server': fig_server.to_html(full_html=False, include_plotlyjs=False) if fig_server else ''
+        }
+
+        # Calculate summary statistics for this user
+        total_plays = len(df_history)
+        server_a_plays = len(df_history[df_history['Server'] == server_a_config.name])
+        server_b_plays = len(df_history[df_history['Server'] == server_b_config.name]) if server_b_config else 0
+
+        summary = {
+            'total_plays': total_plays,
+            'total_users': 1,  # Only one user when filtered
+            'server_a_name': server_a_config.name,
+            'server_a_plays': server_a_plays,
+            'server_b_name': server_b_config.name if server_b_config else None,
+            'server_b_plays': server_b_plays,
+            'history_days': settings.history_days,
+            'filtered_user': username
+        }
+
+        return charts_html, summary
 
     def _get_location_from_ip(self, ip_address: str) -> str:
         """

@@ -4,7 +4,7 @@ Main application routes for dashboard and analytics execution.
 import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from flask import Blueprint, render_template, redirect, url_for, flash
+from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_app.models import db, AnalyticsRun
 from flask_app.services.analytics_service import AnalyticsService
 from flask_app.services.config_service import ConfigService
@@ -85,12 +85,28 @@ def dashboard():
 
     # Load cached chart HTML and table data from service
     service = AnalyticsService()
-    charts = service.get_cached_charts(last_run.id)
-    table_data = service.get_cached_table_data(last_run.id)
-    summary = json.loads(last_run.summary_json)
+
+    # Check if filtering by user
+    filtered_user = request.args.get('user', None)
+
+    if filtered_user and filtered_user != 'all':
+        # Generate filtered charts for specific user
+        charts, summary = service.get_filtered_charts(last_run.id, filtered_user)
+        table_data = service.get_cached_table_data(last_run.id)
+        # Filter table data by user
+        table_data = [row for row in table_data if row.get('user') == filtered_user]
+    else:
+        # Load regular cached charts
+        charts = service.get_cached_charts(last_run.id)
+        table_data = service.get_cached_table_data(last_run.id)
+        summary = json.loads(last_run.summary_json)
 
     # Get current streaming activity (real-time)
     current_activity = service.get_current_activity()
+
+    # Get unique users for dropdown
+    all_table_data = service.get_cached_table_data(last_run.id)
+    unique_users = sorted(list(set(row['user'] for row in all_table_data if row.get('user'))))
 
     return render_template('dashboard.html',
                           charts=charts,
@@ -98,4 +114,6 @@ def dashboard():
                           summary=summary,
                           last_run=last_run,
                           completed_at_pt=completed_at_pt,
-                          current_activity=current_activity)
+                          current_activity=current_activity,
+                          filtered_user=filtered_user,
+                          unique_users=unique_users)
