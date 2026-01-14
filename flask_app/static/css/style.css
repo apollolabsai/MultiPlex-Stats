@@ -189,6 +189,14 @@ h1.settings-title {
     padding-bottom: 10px;
     border-bottom: 2px solid rgba(255, 255, 255, 0.1);
     color: #ed542b;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-icon {
+    color: #ed542b;
+    flex-shrink: 0;
 }
 
 /* Chart Container */
