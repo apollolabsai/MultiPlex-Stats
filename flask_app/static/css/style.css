@@ -225,8 +225,14 @@ h1.settings-title {
     cursor: pointer;
     transition: all 0.3s ease;
     text-decoration: none;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     background: #000000;
+}
+
+.button-icon {
+    flex-shrink: 0;
 }
 
 .btn-large {
