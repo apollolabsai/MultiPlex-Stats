@@ -152,6 +152,17 @@
     </div>
 </div>
 
+<!-- User Filter -->
+<div class="section">
+    <div class="user-filter-container">
+        <label for="userFilter" class="filter-label">📊 Filter by User:</label>
+        <select id="userFilter" class="user-filter-dropdown">
+            <option value="all" selected>All Users</option>
+            <!-- Options populated by JavaScript from table_data -->
+        </select>
+    </div>
+</div>
+
 <div class="stats-grid">
     <div class="stat-card">
         <div class="stat-number">{{ "{:,}".format(summary.total_plays) }}</div>
@@ -402,6 +413,117 @@ $(document).ready(function() {
     }).on('mouseleave', function() {
         $(this).find('.poster-preview').hide();
     });
+
+    // User Filter Functionality
+    const userFilter = document.getElementById('userFilter');
+    const statsGrid = document.querySelector('.stats-grid');
+    const historyTable = $('#viewingHistoryTable');
+
+    // Extract unique users from table_data
+    const tableData = {{ table_data | tojson | safe }};
+    const uniqueUsers = [...new Set(tableData.map(row => row.user))].filter(user => user).sort();
+
+    // Populate dropdown with users
+    uniqueUsers.forEach(user => {
+        const option = document.createElement('option');
+        option.value = user;
+        option.textContent = user;
+        userFilter.appendChild(option);
+    });
+
+    // Store original stats for reset
+    const originalStats = {
+        totalPlays: parseInt(document.querySelector('.stat-card:nth-child(1) .stat-number').textContent.replace(/,/g, '')),
+        activeUsers: parseInt(document.querySelector('.stat-card:nth-child(2) .stat-number').textContent.replace(/,/g, ''))
+    };
+
+    // Filter event handler
+    userFilter.addEventListener('change', function() {
+        const selectedUser = this.value;
+
+        if (selectedUser === 'all') {
+            showAllData();
+        } else {
+            filterByUser(selectedUser);
+        }
+    });
+
+    function showAllData() {
+        // Reset stats cards to original values
+        updateStatsCards(originalStats.totalPlays, originalStats.activeUsers);
+
+        // Remove chart notes
+        document.querySelectorAll('.chart-note').forEach(note => note.remove());
+
+        // Reset history table filter
+        historyTable.DataTable().column(3).search('').draw();
+    }
+
+    function filterByUser(username) {
+        // Filter history table by user column (column index 3)
+        historyTable.DataTable().column(3).search('^' + $.fn.dataTable.util.escapeRegex(username) + '$', true, false).draw();
+
+        // Calculate user-specific stats from filtered data
+        const userStats = calculateUserStats(username);
+        updateStatsCards(userStats.totalPlays, 1); // 1 active user when filtered
+
+        // Add chart notes
+        addChartNotes(username);
+    }
+
+    function calculateUserStats(username) {
+        const userRows = tableData.filter(row => row.user === username);
+        return {
+            totalPlays: userRows.length,
+            serverAPlays: userRows.filter(row => row.server_order === 'server-a').length,
+            serverBPlays: userRows.filter(row => row.server_order === 'server-b').length
+        };
+    }
+
+    function updateStatsCards(totalPlays, activeUsers) {
+        const statCards = statsGrid.querySelectorAll('.stat-card');
+
+        statCards.forEach(card => {
+            const label = card.querySelector('.stat-label');
+            const number = card.querySelector('.stat-number');
+
+            if (label && number) {
+                const labelText = label.textContent;
+
+                if (labelText.includes('Total Plays')) {
+                    number.textContent = totalPlays.toLocaleString();
+                } else if (labelText.includes('Active Users')) {
+                    number.textContent = activeUsers.toLocaleString();
+                }
+                // Server-specific stats remain unchanged as charts show all data
+            }
+        });
+    }
+
+    function addChartNotes(username) {
+        // Remove existing notes
+        document.querySelectorAll('.chart-note').forEach(note => note.remove());
+
+        // Add note to each chart section (except Currently Streaming and Viewing History)
+        document.querySelectorAll('.section').forEach(section => {
+            const title = section.querySelector('.section-title');
+            if (title) {
+                const titleText = title.textContent;
+
+                // Skip Currently Streaming and Viewing History sections
+                if (!titleText.includes('Currently Streaming') && !titleText.includes('Viewing History')) {
+                    const chartContainer = section.querySelector('.chart-container, .grid-2');
+
+                    if (chartContainer && !section.querySelector('.chart-note')) {
+                        const note = document.createElement('div');
+                        note.className = 'chart-note';
+                        note.innerHTML = `<strong>Note:</strong> Charts below display aggregate data for all users and cannot be filtered. Only the Viewing History table shows data for <strong>${username}</strong>.`;
+                        section.insertBefore(note, chartContainer);
+                    }
+                }
+            }
+        });
+    }
 });
 </script>
 {% endblock %}
