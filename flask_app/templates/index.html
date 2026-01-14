@@ -12,7 +12,13 @@
 <div class="welcome-card">
     <h2>Welcome to MultiPlex Stats!</h2>
     <p>Get started by configuring your Tautulli server connection.</p>
-    <a href="{{ url_for('settings.index') }}" class="btn btn-primary btn-large">⚙️ Go to Settings</a>
+    <a href="{{ url_for('settings.index') }}" class="btn btn-primary btn-large">
+        <svg class="button-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 1v6m0 6v6m5.196-14.196l-4.242 4.242m0 5.908l-4.242 4.242m14.196-5.196l-6 0m-6 0l-6 0m14.196 5.196l-4.242-4.242m0-5.908l-4.242-4.242"></path>
+        </svg>
+        Go to Settings
+    </a>
 </div>
 {% else %}
 <div class="action-card">
