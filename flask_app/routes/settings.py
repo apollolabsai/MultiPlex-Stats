@@ -1,9 +1,10 @@
 """
 Settings routes for managing server configuration and analytics settings.
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_app.models import db, ServerConfig, AnalyticsSettings
 from flask_app.services.config_service import ConfigService
+from flask_app.services.history_sync_service import HistorySyncService
 from flask_app.utils.validators import validate_server_config
 
 settings_bp = Blueprint('settings', __name__)
@@ -15,9 +16,16 @@ def index():
     servers = ServerConfig.query.order_by(ServerConfig.server_order).all()
     settings = AnalyticsSettings.query.first()
 
+    # Get history sync status and stats
+    sync_service = HistorySyncService()
+    sync_status = sync_service.get_sync_status()
+    history_stats = sync_service.get_history_stats()
+
     return render_template('settings.html',
                           servers=servers,
-                          settings=settings)
+                          settings=settings,
+                          sync_status=sync_status,
+                          history_stats=history_stats)
 
 
 @settings_bp.route('/server/add', methods=['POST'])
@@ -86,7 +94,6 @@ def update_analytics_settings():
         settings.daily_trend_days = int(request.form.get('daily_trend_days', 60))
         settings.monthly_trend_months = int(request.form.get('monthly_trend_months', 60))
         settings.history_days = int(request.form.get('history_days', 60))
-        settings.history_table_days = int(request.form.get('history_table_days', 60))
         settings.top_movies = int(request.form.get('top_movies', 30))
         settings.top_tv_shows = int(request.form.get('top_tv_shows', 30))
         settings.top_users = int(request.form.get('top_users', 20))
@@ -127,3 +134,41 @@ def import_from_ini():
         flash(f'Error importing config.ini: {str(e)}', 'error')
 
     return redirect(url_for('settings.index'))
+
+
+# History Sync Routes
+
+@settings_bp.route('/history/backfill', methods=['POST'])
+def start_history_backfill():
+    """Start a full history backfill."""
+    try:
+        days = int(request.form.get('backfill_days', 60))
+        if days < 1 or days > 3650:  # Max ~10 years
+            flash('Days must be between 1 and 3650.', 'error')
+            return redirect(url_for('settings.index'))
+
+        # Update the backfill days setting
+        settings = AnalyticsSettings.query.first()
+        if settings:
+            settings.history_backfill_days = days
+            db.session.commit()
+
+        sync_service = HistorySyncService()
+        if not sync_service.start_backfill(days):
+            flash('A sync is already in progress.', 'error')
+        else:
+            flash(f'Started loading {days} days of history. Check progress below.', 'info')
+
+    except ValueError:
+        flash('Please enter a valid number of days.', 'error')
+    except Exception as e:
+        flash(f'Error starting backfill: {str(e)}', 'error')
+
+    return redirect(url_for('settings.index'))
+
+
+@settings_bp.route('/history/sync-status', methods=['GET'])
+def get_history_sync_status():
+    """Get current sync status for polling (JSON endpoint)."""
+    sync_service = HistorySyncService()
+    return jsonify(sync_service.get_sync_status())

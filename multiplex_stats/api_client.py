@@ -98,6 +98,31 @@ class TautulliClient:
 
         return self._make_request('get_history', after=after, length=length)
 
+    def get_history_paginated(
+        self,
+        start: int = 0,
+        length: int = 1000,
+        after: Optional[str] = None
+    ) -> dict[str, Any]:
+        """
+        Get play history with pagination support.
+
+        Args:
+            start: Row offset to start from (for pagination)
+            length: Number of records to return per page (max 1000 recommended)
+            after: Optional date string in YYYY-MM-DD format to filter records after this date
+
+        Returns:
+            API response containing:
+            - response.data: List of history records
+            - response.recordsTotal: Total records available
+            - response.recordsFiltered: Records matching filter
+        """
+        params = {'start': start, 'length': length}
+        if after:
+            params['after'] = after
+        return self._make_request('get_history', **params)
+
     def get_activity(self) -> dict[str, Any]:
         """
         Get current streaming activity.

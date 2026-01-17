@@ -41,8 +41,8 @@ class AnalyticsSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     daily_trend_days = db.Column(db.Integer, default=60)
     monthly_trend_months = db.Column(db.Integer, default=60)
-    history_days = db.Column(db.Integer, default=60)
-    history_table_days = db.Column(db.Integer, default=60)
+    history_days = db.Column(db.Integer, default=60)  # Used for User Activity and Top Content charts
+    history_backfill_days = db.Column(db.Integer, default=60)  # Days to load for viewing history table
     top_movies = db.Column(db.Integer, default=30)
     top_tv_shows = db.Column(db.Integer, default=30)
     top_users = db.Column(db.Integer, default=20)
@@ -55,7 +55,6 @@ class AnalyticsSettings(db.Model):
             daily_trend_days=self.daily_trend_days,
             monthly_trend_months=self.monthly_trend_months,
             history_days=self.history_days,
-            history_table_days=self.history_table_days,
             top_movies=self.top_movies,
             top_tv_shows=self.top_tv_shows,
             top_users=self.top_users
@@ -74,3 +73,83 @@ class AnalyticsRun(db.Model):
     total_plays = db.Column(db.Integer, nullable=True)
     total_users = db.Column(db.Integer, nullable=True)
     summary_json = db.Column(db.Text, nullable=True)  # JSON blob of key stats
+
+
+class ViewingHistory(db.Model):
+    """Cached viewing history from Tautulli."""
+    __tablename__ = 'viewing_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    row_id = db.Column(db.Integer, nullable=False, unique=True, index=True)  # Tautulli's unique ID
+    server_name = db.Column(db.String(100), nullable=False)
+    server_order = db.Column(db.Integer, default=0)  # 0=ServerA, 1=ServerB
+
+    # User info
+    user_id = db.Column(db.Integer, nullable=True)
+    user = db.Column(db.String(255), nullable=True)
+
+    # Media info
+    media_type = db.Column(db.String(50), nullable=True)  # movie, episode, track
+    full_title = db.Column(db.String(500), nullable=True)
+    title = db.Column(db.String(500), nullable=True)  # Movie title or episode title
+    grandparent_title = db.Column(db.String(500), nullable=True)  # Show name for TV
+    parent_media_index = db.Column(db.Integer, nullable=True)  # Season number
+    media_index = db.Column(db.Integer, nullable=True)  # Episode number
+    year = db.Column(db.Integer, nullable=True)
+    rating_key = db.Column(db.Integer, nullable=True)
+    parent_rating_key = db.Column(db.Integer, nullable=True)
+    grandparent_rating_key = db.Column(db.Integer, nullable=True)
+    thumb = db.Column(db.String(500), nullable=True)
+
+    # Playback info
+    started = db.Column(db.Integer, nullable=True)  # Unix timestamp
+    stopped = db.Column(db.Integer, nullable=True)  # Unix timestamp
+    duration = db.Column(db.Integer, nullable=True)  # Duration in seconds
+    play_duration = db.Column(db.Integer, nullable=True)  # Actual play time
+    percent_complete = db.Column(db.Integer, nullable=True)
+    watched_status = db.Column(db.Float, nullable=True)
+
+    # Client/platform info
+    ip_address = db.Column(db.String(50), nullable=True)
+    platform = db.Column(db.String(100), nullable=True)
+    product = db.Column(db.String(100), nullable=True)
+    player = db.Column(db.String(100), nullable=True)
+    quality_profile = db.Column(db.String(100), nullable=True)
+    transcode_decision = db.Column(db.String(50), nullable=True)  # direct play, transcode, etc.
+
+    # Location info
+    location = db.Column(db.String(50), nullable=True)  # lan, wan
+    geo_city = db.Column(db.String(100), nullable=True)
+    geo_region = db.Column(db.String(100), nullable=True)
+    geo_country = db.Column(db.String(100), nullable=True)
+
+    # Derived fields (calculated on insert)
+    date_played = db.Column(db.Date, nullable=True, index=True)  # Date in PT timezone
+    time_played = db.Column(db.String(20), nullable=True)  # Time string in PT
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class HistorySyncStatus(db.Model):
+    """Track history sync status for progress polling."""
+    __tablename__ = 'history_sync_status'
+
+    id = db.Column(db.Integer, primary_key=True)
+    status = db.Column(db.String(20), default='idle')  # idle, running, success, failed
+    sync_type = db.Column(db.String(20), nullable=True)  # backfill, incremental
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+    # Progress tracking
+    records_fetched = db.Column(db.Integer, default=0)
+    records_total = db.Column(db.Integer, nullable=True)  # Estimated total
+    current_server = db.Column(db.String(100), nullable=True)
+
+    # Result info
+    records_inserted = db.Column(db.Integer, default=0)
+    records_skipped = db.Column(db.Integer, default=0)  # Duplicates
+    error_message = db.Column(db.Text, nullable=True)
+
+    # Last successful sync
+    last_sync_date = db.Column(db.DateTime, nullable=True)
+    last_sync_record_count = db.Column(db.Integer, nullable=True)
