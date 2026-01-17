@@ -5,10 +5,11 @@ on:
   release:
     types: [published]
 
-  # Trigger on push to main or docker branches
+  # Trigger on push to main, dev, or docker branches
   push:
     branches:
       - main
+      - dev
       - docker
     tags:
       - 'v*.*.*'
