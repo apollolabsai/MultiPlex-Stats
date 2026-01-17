@@ -78,7 +78,7 @@ class TautulliClient:
     def get_history(
         self,
         days: int = 60,
-        length: int = 4000,
+        length: int = 25000,
         after: Optional[str] = None
     ) -> dict[str, Any]:
         """
