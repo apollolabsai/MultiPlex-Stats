@@ -264,13 +264,19 @@ class AnalyticsService:
                 # For TV shows, use show name as title and episode info as subtitle
                 if record.grandparent_title:
                     title = record.grandparent_title
-                if record.parent_media_index is not None and record.media_index is not None:
-                    subtitle = f"S{int(record.parent_media_index):02d}E{int(record.media_index):02d}"
-                    # Add episode name if available
-                    if record.full_title and record.grandparent_title and record.full_title != record.grandparent_title:
-                        if ' - ' in record.full_title:
-                            episode_name = record.full_title.split(' - ', 1)[1]
-                            subtitle += f" - {episode_name}"
+                # Check for valid season/episode numbers (not None and not empty string)
+                season = record.parent_media_index
+                episode = record.media_index
+                if season not in (None, '') and episode not in (None, ''):
+                    try:
+                        subtitle = f"S{int(season):02d}E{int(episode):02d}"
+                        # Add episode name if available
+                        if record.full_title and record.grandparent_title and record.full_title != record.grandparent_title:
+                            if ' - ' in record.full_title:
+                                episode_name = record.full_title.split(' - ', 1)[1]
+                                subtitle += f" - {episode_name}"
+                    except (ValueError, TypeError):
+                        pass
             else:
                 # For movies, use year as subtitle
                 if record.year:
