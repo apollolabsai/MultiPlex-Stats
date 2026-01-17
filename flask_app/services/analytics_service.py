@@ -226,12 +226,16 @@ class AnalyticsService:
 
         # Filter to last N days
         df_filtered = df_history.copy()
+        print(f"[DEBUG] _prepare_table_data called with table_days={table_days}")
+        print(f"[DEBUG] df_history has {len(df_history)} rows before filtering")
 
         # Filter by date_pt column (created by process_history_data)
         if 'date_pt' in df_filtered.columns:
             df_filtered['date_pt_datetime'] = pd.to_datetime(df_filtered['date_pt'])
             cutoff_date = datetime.now() - timedelta(days=table_days)
+            print(f"[DEBUG] cutoff_date = {cutoff_date}")
             df_filtered = df_filtered[df_filtered['date_pt_datetime'] >= cutoff_date]
+            print(f"[DEBUG] df_filtered has {len(df_filtered)} rows after filtering")
             # Drop the temporary datetime column
             df_filtered = df_filtered.drop('date_pt_datetime', axis=1)
 
