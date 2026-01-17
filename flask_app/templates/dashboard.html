@@ -276,7 +276,6 @@
         Viewing History
     </h2>
     <div class="table-container">
-        {% if table_data and table_data|length > 0 %}
         <table id="viewingHistoryTable" class="display" style="width:100%">
             <thead>
                 <tr>
@@ -292,94 +291,9 @@
                 </tr>
             </thead>
             <tbody>
-                {% for row in table_data %}
-                <tr>
-                    <!-- Date & Time -->
-                    <td>
-                        <div class="datetime-cell">
-                            <span class="date-text">{{ row.date_pt }}</span>
-                            <span class="time-text">{{ row.time_pt }}</span>
-                        </div>
-                    </td>
-
-                    <!-- Hidden sortable datetime column -->
-                    <td style="display:none;">{{ row.sortable_datetime }}</td>
-
-                    <!-- Server -->
-                    <td>
-                        <span class="server-badge {{ row.server_order }}">
-                            {{ row.Server }}
-                        </span>
-                    </td>
-
-                    <!-- User -->
-                    <td>{{ row.user }}</td>
-
-                    <!-- Content (Title with Icon and Subtitle) -->
-                    <td>
-                        <div class="content-cell">
-                            <div>
-                                {% if row.media_type|lower in ['movie'] %}
-                                    <svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24">
-                                        <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
-                                    </svg>
-                                {% else %}
-                                    <svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24">
-                                        <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
-                                    </svg>
-                                {% endif %}
-                                <span class="content-title">{{ row.title }}</span>
-                            </div>
-                            {% if row.subtitle %}
-                                <div class="content-subtitle">{{ row.subtitle }}</div>
-                            {% endif %}
-                        </div>
-                    </td>
-
-                    <!-- IP Address -->
-                    <td>{{ row.ip_address }}</td>
-
-                    <!-- Platform with Product -->
-                    <td>
-                        <div class="content-cell">
-                            <div class="platform-name">{{ row.platform }}</div>
-                            {% if row.product %}
-                                <div class="platform-product">{{ row.product }}</div>
-                            {% endif %}
-                        </div>
-                    </td>
-
-                    <!-- Quality -->
-                    <td>
-                        {% if row.quality %}
-                            {% if row.quality == 'Direct Play' %}
-                                <span class="quality-badge direct-play">{{ row.quality }}</span>
-                            {% elif row.quality == 'Transcode' %}
-                                <span class="quality-badge transcode">{{ row.quality }}</span>
-                            {% elif row.quality == 'Direct Stream' %}
-                                <span class="quality-badge direct-stream">{{ row.quality }}</span>
-                            {% else %}
-                                <span class="quality-badge">{{ row.quality }}</span>
-                            {% endif %}
-                        {% else %}
-                            <span style="color: #888;">N/A</span>
-                        {% endif %}
-                    </td>
-
-                    <!-- Progress Bar -->
-                    <td>
-                        <div class="progress-bar-container">
-                            <div class="progress-bar-fill orange" style="width: {{ row.percent_complete }}%;"></div>
-                        </div>
-                        <div class="progress-text">{{ row.percent_complete }}%</div>
-                    </td>
-                </tr>
-                {% endfor %}
+                <!-- Data loaded via AJAX -->
             </tbody>
         </table>
-        {% else %}
-        <p class="info-message">No viewing history data available for the selected time period.</p>
-        {% endif %}
     </div>
 </div>
 {% endblock %}
@@ -428,10 +342,99 @@
 
 <script>
 $(document).ready(function() {
+    // Movie icon SVG
+    var movieIcon = '<svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>';
+    // TV icon SVG
+    var tvIcon = '<svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>';
+
     $('#viewingHistoryTable').DataTable({
-        pageLength: 25,
-        order: [[1, 'desc']], // Sort by hidden sortable_datetime column (most recent first)
-        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+        processing: true,
+        serverSide: true,
+        ajax: {
+            url: '{{ url_for("main.api_viewing_history") }}',
+            type: 'GET'
+        },
+        pageLength: 50,
+        order: [[0, 'desc']], // Sort by date column (most recent first)
+        lengthMenu: [[25, 50, 100, 200], [25, 50, 100, 200]],
+        columns: [
+            // Date & Time
+            {
+                data: null,
+                render: function(data, type, row) {
+                    return '<div class="datetime-cell">' +
+                           '<span class="date-text">' + (row.date_pt || '') + '</span>' +
+                           '<span class="time-text">' + (row.time_pt || '') + '</span>' +
+                           '</div>';
+                }
+            },
+            // Hidden sortable datetime
+            { data: 'sortable_datetime', visible: false },
+            // Server
+            {
+                data: null,
+                render: function(data, type, row) {
+                    return '<span class="server-badge ' + (row.server_order || '') + '">' +
+                           (row.Server || '') + '</span>';
+                }
+            },
+            // User
+            { data: 'user' },
+            // Content
+            {
+                data: null,
+                render: function(data, type, row) {
+                    var icon = (row.media_type || '').toLowerCase() === 'movie' ? movieIcon : tvIcon;
+                    var html = '<div class="content-cell"><div>' + icon +
+                               '<span class="content-title">' + (row.title || '') + '</span></div>';
+                    if (row.subtitle) {
+                        html += '<div class="content-subtitle">' + row.subtitle + '</div>';
+                    }
+                    html += '</div>';
+                    return html;
+                }
+            },
+            // IP Address
+            { data: 'ip_address' },
+            // Platform
+            {
+                data: null,
+                render: function(data, type, row) {
+                    var html = '<div class="content-cell">' +
+                               '<div class="platform-name">' + (row.platform || '') + '</div>';
+                    if (row.product) {
+                        html += '<div class="platform-product">' + row.product + '</div>';
+                    }
+                    html += '</div>';
+                    return html;
+                }
+            },
+            // Quality
+            {
+                data: null,
+                render: function(data, type, row) {
+                    if (!row.quality) {
+                        return '<span style="color: #888;">N/A</span>';
+                    }
+                    var badgeClass = 'quality-badge';
+                    if (row.quality === 'Direct Play') badgeClass += ' direct-play';
+                    else if (row.quality === 'Transcode') badgeClass += ' transcode';
+                    else if (row.quality === 'Direct Stream') badgeClass += ' direct-stream';
+                    return '<span class="' + badgeClass + '">' + row.quality + '</span>';
+                }
+            },
+            // Progress
+            {
+                data: null,
+                render: function(data, type, row) {
+                    var percent = row.percent_complete || 0;
+                    return '<div class="progress-bar-container">' +
+                           '<div class="progress-bar-fill orange" style="width: ' + percent + '%;"></div>' +
+                           '</div>' +
+                           '<div class="progress-text">' + percent + '%</div>';
+                }
+            }
+        ],
         columnDefs: [
             { targets: 1, visible: false } // Hide the sortable datetime column
         ],
@@ -440,7 +443,8 @@ $(document).ready(function() {
             lengthMenu: "Show _MENU_ entries",
             info: "Showing _START_ to _END_ of _TOTAL_ viewing records",
             infoEmpty: "No records available",
-            infoFiltered: "(filtered from _MAX_ total records)"
+            infoFiltered: "(filtered from _MAX_ total records)",
+            processing: "Loading..."
         }
     });
 

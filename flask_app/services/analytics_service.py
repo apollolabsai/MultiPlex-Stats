@@ -317,15 +317,170 @@ class AnalyticsService:
 
     def get_cached_table_data(self, run_id: int) -> list:
         """
-        Legacy method - now redirects to ViewingHistory database.
+        Legacy method - now returns empty list since we use server-side pagination.
 
         Args:
             run_id: Database ID of AnalyticsRun record (ignored)
 
         Returns:
-            List of dictionaries for table rows from ViewingHistory
+            Empty list - data is now loaded via AJAX
         """
-        return self.get_viewing_history_table_data()
+        return []
+
+    def get_viewing_history_paginated(
+        self,
+        start: int = 0,
+        length: int = 50,
+        search_value: str = '',
+        order_column: int = 0,
+        order_dir: str = 'desc'
+    ) -> dict:
+        """
+        Get paginated viewing history data for DataTables server-side processing.
+
+        Args:
+            start: Row offset to start from
+            length: Number of records to return
+            search_value: Search filter string
+            order_column: Column index to sort by
+            order_dir: Sort direction ('asc' or 'desc')
+
+        Returns:
+            Dictionary with DataTables format:
+            - draw: Request counter (set by caller)
+            - recordsTotal: Total records in database
+            - recordsFiltered: Records after filtering
+            - data: List of row data
+        """
+        from flask_app.models import ViewingHistory
+        from sqlalchemy import or_
+
+        # Get server configs for server order mapping
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        server_a_name = server_a_config.name if server_a_config else ''
+        server_b_name = server_b_config.name if server_b_config else ''
+
+        # Base query
+        query = ViewingHistory.query
+
+        # Get total count before filtering
+        total_records = query.count()
+
+        # Apply search filter
+        if search_value:
+            search_filter = or_(
+                ViewingHistory.user.ilike(f'%{search_value}%'),
+                ViewingHistory.full_title.ilike(f'%{search_value}%'),
+                ViewingHistory.title.ilike(f'%{search_value}%'),
+                ViewingHistory.grandparent_title.ilike(f'%{search_value}%'),
+                ViewingHistory.server_name.ilike(f'%{search_value}%'),
+                ViewingHistory.platform.ilike(f'%{search_value}%'),
+                ViewingHistory.ip_address.ilike(f'%{search_value}%')
+            )
+            query = query.filter(search_filter)
+
+        # Get filtered count
+        filtered_records = query.count()
+
+        # Apply ordering - map column index to column
+        column_map = {
+            0: ViewingHistory.started,  # Date column sorts by started timestamp
+            1: ViewingHistory.started,  # Hidden sortable column
+            2: ViewingHistory.server_name,
+            3: ViewingHistory.user,
+            4: ViewingHistory.full_title,
+            5: ViewingHistory.ip_address,
+            6: ViewingHistory.platform,
+            7: ViewingHistory.transcode_decision,
+            8: ViewingHistory.percent_complete
+        }
+
+        order_col = column_map.get(order_column, ViewingHistory.started)
+        if order_dir == 'asc':
+            query = query.order_by(order_col.asc())
+        else:
+            query = query.order_by(order_col.desc())
+
+        # Apply pagination
+        records = query.offset(start).limit(length).all()
+
+        # Format records for response
+        data = []
+        for record in records:
+            # Format date and time
+            date_str = record.date_played.strftime('%Y-%m-%d') if record.date_played else ''
+            time_str = record.time_played or ''
+
+            # Create sortable datetime
+            sortable_datetime = date_str
+            if time_str:
+                try:
+                    time_obj = datetime.strptime(time_str, '%I:%M%p')
+                    sortable_datetime = f"{date_str} {time_obj.strftime('%H:%M')}"
+                except:
+                    pass
+
+            # Determine server order class
+            server_order = 'server-a' if record.server_name == server_a_name else 'server-b' if record.server_name == server_b_name else ''
+
+            # Format title and subtitle based on media type
+            media_type = record.media_type or ''
+            title = record.full_title or record.title or ''
+            subtitle = ''
+
+            if media_type.lower() in ['tv', 'episode']:
+                if record.grandparent_title:
+                    title = record.grandparent_title
+                season = record.parent_media_index
+                episode = record.media_index
+                if season not in (None, '') and episode not in (None, ''):
+                    try:
+                        subtitle = f"S{int(season):02d}E{int(episode):02d}"
+                        if record.full_title and record.grandparent_title and record.full_title != record.grandparent_title:
+                            if ' - ' in record.full_title:
+                                episode_name = record.full_title.split(' - ', 1)[1]
+                                subtitle += f" - {episode_name}"
+                    except (ValueError, TypeError):
+                        pass
+            else:
+                if record.year:
+                    subtitle = f"({record.year})"
+
+            # Format quality
+            quality = ''
+            if record.transcode_decision:
+                td = record.transcode_decision.lower()
+                if td == 'direct play':
+                    quality = 'Direct Play'
+                elif td == 'transcode':
+                    quality = 'Transcode'
+                elif td == 'copy':
+                    quality = 'Direct Stream'
+                else:
+                    quality = record.transcode_decision.title()
+
+            data.append({
+                'date_pt': date_str,
+                'time_pt': time_str,
+                'sortable_datetime': sortable_datetime,
+                'Server': record.server_name or '',
+                'server_order': server_order,
+                'user': record.user or '',
+                'ip_address': record.ip_address or '',
+                'media_type': media_type,
+                'title': title,
+                'subtitle': subtitle,
+                'platform': record.platform or '',
+                'product': record.product or '',
+                'quality': quality,
+                'percent_complete': record.percent_complete or 0
+            })
+
+        return {
+            'recordsTotal': total_records,
+            'recordsFiltered': filtered_records,
+            'data': data
+        }
 
     def _get_location_from_ip(self, ip_address: str) -> str:
         """

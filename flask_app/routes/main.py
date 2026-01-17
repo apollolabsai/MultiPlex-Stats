@@ -4,7 +4,7 @@ Main application routes for dashboard and analytics execution.
 import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from flask import Blueprint, render_template, redirect, url_for, flash
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_app.models import db, AnalyticsRun
 from flask_app.services.analytics_service import AnalyticsService
 from flask_app.services.config_service import ConfigService
@@ -99,3 +99,43 @@ def dashboard():
                           last_run=last_run,
                           completed_at_pt=completed_at_pt,
                           current_activity=current_activity)
+
+
+@main_bp.route('/api/viewing-history')
+def api_viewing_history():
+    """
+    AJAX endpoint for DataTables server-side processing of viewing history.
+
+    Query params (from DataTables):
+        draw: Request counter for DataTables
+        start: Row offset
+        length: Number of rows to return
+        search[value]: Search filter
+        order[0][column]: Column index to sort by
+        order[0][dir]: Sort direction (asc/desc)
+
+    Returns:
+        JSON with DataTables format
+    """
+    # Parse DataTables parameters
+    draw = request.args.get('draw', 1, type=int)
+    start = request.args.get('start', 0, type=int)
+    length = request.args.get('length', 50, type=int)
+    search_value = request.args.get('search[value]', '')
+    order_column = request.args.get('order[0][column]', 0, type=int)
+    order_dir = request.args.get('order[0][dir]', 'desc')
+
+    # Get paginated data
+    service = AnalyticsService()
+    result = service.get_viewing_history_paginated(
+        start=start,
+        length=length,
+        search_value=search_value,
+        order_column=order_column,
+        order_dir=order_dir
+    )
+
+    # Add draw counter for DataTables
+    result['draw'] = draw
+
+    return jsonify(result)
