@@ -23,9 +23,8 @@ class AnalyticsSettings:
     daily_trend_days: int = 60      # Number of days to show in daily trends chart
     monthly_trend_months: int = 60  # Number of months to show in monthly trends chart
 
-    # History analysis
+    # History analysis (for User Activity and Top Content charts)
     history_days: int = 60
-    history_table_days: int = 60    # Number of days to show in viewing history table
 
     # Top N items to show
     top_movies: int = 30

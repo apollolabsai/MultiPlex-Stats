@@ -3,8 +3,9 @@ Analytics service that bridges Flask to the existing multiplex_stats package.
 """
 import os
 import json
-from typing import Dict, Any
-from datetime import datetime
+from typing import Dict, Any, List
+from datetime import datetime, timedelta
+import pandas as pd
 
 from multiplex_stats import TautulliClient
 from multiplex_stats.data_processing import (
@@ -18,6 +19,8 @@ from multiplex_stats.visualization import (
     create_category_pie_chart, create_server_pie_chart
 )
 from flask_app.services.config_service import ConfigService
+from flask_app.services.history_sync_service import HistorySyncService
+from flask_app.models import ViewingHistory
 
 
 class AnalyticsService:
@@ -70,18 +73,19 @@ class AnalyticsService:
             server_a_config.name, server_b_config.name if server_b_config else None
         )
 
-        # History data - fetch max of history_days and history_table_days to ensure we have enough data
-        # for both charts and the viewing history table
-        max_history_days = max(settings.history_days, settings.history_table_days)
-        history_data_a = client_a.get_history(days=max_history_days)
-        history_data_b = client_b.get_history(days=max_history_days) if client_b else None
-        df_history_full = process_history_data(
+        # History data - fetch from API for charts (uses history_days setting)
+        # The Viewing History table uses the local database instead
+        history_data_a = client_a.get_history(days=settings.history_days)
+        history_data_b = client_b.get_history(days=settings.history_days) if client_b else None
+        df_history = process_history_data(
             history_data_a, history_data_b,
             server_a_config.name, server_b_config.name if server_b_config else None
         )
 
-        # Filter history data for charts/stats (using history_days setting)
-        df_history = filter_history_by_date(df_history_full, settings.history_days)
+        # Run incremental sync for the viewing history table (if data exists)
+        sync_service = HistorySyncService()
+        if sync_service.has_history_data():
+            sync_service.start_incremental_sync()
 
         # Aggregate stats (using filtered data)
         df_users = aggregate_user_stats(df_history, top_n=settings.top_users)
@@ -117,12 +121,7 @@ class AnalyticsService:
         with open(cache_path, 'w') as f:
             json.dump(charts_html, f)
 
-        # 6b. Prepare and cache viewing history table data (using full history, will be filtered by table_days)
-        table_data = self._prepare_table_data(df_history_full, settings.history_table_days,
-                                               server_a_config.name, server_b_config.name if server_b_config else None)
-        table_cache_path = os.path.join(self.cache_dir, f'run_{run_id}_table.json')
-        with open(table_cache_path, 'w') as f:
-            json.dump(table_data, f)
+        # 6b. Table data now comes from ViewingHistory database table (no caching needed)
 
         # 7. Calculate summary statistics
         total_plays = len(df_history)
@@ -205,153 +204,6 @@ class AnalyticsService:
 
         return user_thumb_map
 
-    def _prepare_table_data(self, df_history, table_days: int, server_a_name: str, server_b_name: str = None) -> list:
-        """
-        Prepare viewing history data for DataTables display.
-
-        Args:
-            df_history: DataFrame with viewing history
-            table_days: Number of days to include in table
-            server_a_name: Name of Server A
-            server_b_name: Name of Server B (optional)
-
-        Returns:
-            List of dictionaries for table rows
-        """
-        from datetime import datetime, timedelta
-        import pandas as pd
-
-        # Get user avatar mapping
-        user_thumb_map = self._get_user_thumb_map()
-
-        # Filter to last N days
-        df_filtered = df_history.copy()
-        print(f"[DEBUG] _prepare_table_data called with table_days={table_days}")
-        print(f"[DEBUG] df_history has {len(df_history)} rows before filtering")
-
-        # Filter by date_pt column (created by process_history_data)
-        if 'date_pt' in df_filtered.columns:
-            df_filtered['date_pt_datetime'] = pd.to_datetime(df_filtered['date_pt'])
-            cutoff_date = datetime.now() - timedelta(days=table_days)
-            print(f"[DEBUG] cutoff_date = {cutoff_date}")
-            df_filtered = df_filtered[df_filtered['date_pt_datetime'] >= cutoff_date]
-            print(f"[DEBUG] df_filtered has {len(df_filtered)} rows after filtering")
-            # Drop the temporary datetime column
-            df_filtered = df_filtered.drop('date_pt_datetime', axis=1)
-
-        # Map dataframe columns to table columns
-        table_data = []
-
-        for _, row in df_filtered.iterrows():
-            # Get user avatar URL
-            user_id = str(row.get('user_id', '')) if pd.notna(row.get('user_id')) else ''
-            user_thumb = user_thumb_map.get(user_id, '')
-
-            # Format title based on media type
-            media_type_raw = row.get('media_type', '')
-            media_type = str(media_type_raw) if pd.notna(media_type_raw) else ''
-
-            full_title_raw = row.get('full_title', '')
-            full_title = str(full_title_raw) if pd.notna(full_title_raw) else ''
-
-            grandparent_title_raw = row.get('grandparent_title', '')
-            grandparent_title = str(grandparent_title_raw) if pd.notna(grandparent_title_raw) else ''
-
-            # For TV shows, build "S01E04 - Episode Name" subtitle
-            subtitle = ''
-            if media_type and media_type.lower() in ['tv', 'episode']:
-                season = row.get('parent_media_index', '')
-                episode = row.get('media_index', '')
-                # Check if season and episode are valid numbers
-                if pd.notna(season) and pd.notna(episode) and season != '' and episode != '':
-                    try:
-                        subtitle = f"S{int(season):02d}E{int(episode):02d}"
-                        # If full_title is different from grandparent_title, append episode name
-                        if full_title and grandparent_title and full_title != grandparent_title:
-                            # Extract episode name (usually after " - ")
-                            if ' - ' in full_title:
-                                episode_name = full_title.split(' - ', 1)[1]
-                                subtitle += f" - {episode_name}"
-                    except (ValueError, TypeError):
-                        # If conversion fails, just leave subtitle empty
-                        pass
-                title = grandparent_title if grandparent_title else full_title  # Use show name as main title
-            else:
-                # For movies, use year as subtitle
-                year = row.get('year', '')
-                if pd.notna(year) and year != '' and year:
-                    try:
-                        subtitle = f"({int(year)})"
-                    except (ValueError, TypeError):
-                        # If conversion fails, just leave subtitle empty
-                        pass
-                title = full_title
-
-            # Format quality (use transcode_decision: direct play, transcode, copy)
-            transcode_decision_raw = row.get('transcode_decision', '')
-            transcode_decision = str(transcode_decision_raw) if pd.notna(transcode_decision_raw) else ''
-
-            # Format transcode decision for display
-            if transcode_decision and transcode_decision.lower() == 'direct play':
-                quality = 'Direct Play'
-            elif transcode_decision and transcode_decision.lower() == 'transcode':
-                quality = 'Transcode'
-            elif transcode_decision and transcode_decision.lower() == 'copy':
-                quality = 'Direct Stream'
-            else:
-                quality = transcode_decision.title() if transcode_decision else ''
-
-            # Build table row
-            date_pt_raw = row.get('date_pt', '')
-            time_pt_raw = row.get('time_pt', '')
-            server_raw = row.get('Server', '')
-            friendly_name_raw = row.get('friendly_name', '')
-            user_raw = row.get('user', '')
-            ip_address_raw = row.get('ip_address', '')
-            platform_raw = row.get('platform', '')
-            product_raw = row.get('product', '')
-            percent_complete_raw = row.get('percent_complete', 0)
-
-            # Create a sortable datetime string (YYYY-MM-DD HH:MM format for sorting)
-            # Convert time from "9:34pm" to "21:34" format for sorting
-            date_pt_str = str(date_pt_raw) if pd.notna(date_pt_raw) else ''
-            time_pt_str = str(time_pt_raw) if pd.notna(time_pt_raw) else ''
-
-            # Convert 12-hour time to 24-hour for sorting
-            sortable_datetime = date_pt_str
-            if time_pt_str:
-                try:
-                    from datetime import datetime
-                    time_obj = datetime.strptime(time_pt_str, '%I:%M%p')
-                    sortable_datetime = f"{date_pt_str} {time_obj.strftime('%H:%M')}"
-                except:
-                    sortable_datetime = date_pt_str
-
-            # Determine server order (A or B)
-            server_name = str(server_raw) if pd.notna(server_raw) else ''
-            server_order = 'server-a' if server_name == server_a_name else 'server-b' if server_name == server_b_name else ''
-
-            table_row = {
-                'date_pt': date_pt_str,
-                'time_pt': time_pt_str,
-                'sortable_datetime': sortable_datetime,
-                'Server': server_name,
-                'server_order': server_order,
-                'user': str(friendly_name_raw) if pd.notna(friendly_name_raw) else str(user_raw) if pd.notna(user_raw) else '',
-                'user_thumb': user_thumb,
-                'ip_address': str(ip_address_raw) if pd.notna(ip_address_raw) else '',
-                'media_type': media_type,
-                'title': title,
-                'subtitle': subtitle,
-                'platform': str(platform_raw) if pd.notna(platform_raw) else '',
-                'product': str(product_raw) if pd.notna(product_raw) else '',
-                'quality': quality,
-                'percent_complete': int(percent_complete_raw) if pd.notna(percent_complete_raw) else 0
-            }
-            table_data.append(table_row)
-
-        return table_data
-
     def get_cached_charts(self, run_id: int) -> Dict[str, str]:
         """
         Load cached chart HTML from previous run.
@@ -370,23 +222,104 @@ class AnalyticsService:
         with open(cache_path, 'r') as f:
             return json.load(f)
 
-    def get_cached_table_data(self, run_id: int) -> list:
+    def get_viewing_history_table_data(self) -> List[Dict[str, Any]]:
         """
-        Load cached table data from previous run.
-
-        Args:
-            run_id: Database ID of AnalyticsRun record
+        Get viewing history data from the database for display in the dashboard table.
 
         Returns:
             List of dictionaries for table rows
         """
-        table_cache_path = os.path.join(self.cache_dir, f'run_{run_id}_table.json')
+        # Get server configs for server order mapping
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        server_a_name = server_a_config.name if server_a_config else ''
+        server_b_name = server_b_config.name if server_b_config else ''
 
-        if not os.path.exists(table_cache_path):
-            return []
+        # Query all records from ViewingHistory, ordered by date descending
+        records = ViewingHistory.query.order_by(ViewingHistory.started.desc()).all()
 
-        with open(table_cache_path, 'r') as f:
-            return json.load(f)
+        table_data = []
+        for record in records:
+            # Format date and time
+            date_str = record.date_played.strftime('%Y-%m-%d') if record.date_played else ''
+            time_str = record.time_played or ''
+
+            # Create sortable datetime
+            sortable_datetime = date_str
+            if time_str:
+                try:
+                    time_obj = datetime.strptime(time_str, '%I:%M%p')
+                    sortable_datetime = f"{date_str} {time_obj.strftime('%H:%M')}"
+                except:
+                    pass
+
+            # Determine server order class
+            server_order = 'server-a' if record.server_name == server_a_name else 'server-b' if record.server_name == server_b_name else ''
+
+            # Format title and subtitle based on media type
+            media_type = record.media_type or ''
+            title = record.full_title or record.title or ''
+            subtitle = ''
+
+            if media_type.lower() in ['tv', 'episode']:
+                # For TV shows, use show name as title and episode info as subtitle
+                if record.grandparent_title:
+                    title = record.grandparent_title
+                if record.parent_media_index is not None and record.media_index is not None:
+                    subtitle = f"S{int(record.parent_media_index):02d}E{int(record.media_index):02d}"
+                    # Add episode name if available
+                    if record.full_title and record.grandparent_title and record.full_title != record.grandparent_title:
+                        if ' - ' in record.full_title:
+                            episode_name = record.full_title.split(' - ', 1)[1]
+                            subtitle += f" - {episode_name}"
+            else:
+                # For movies, use year as subtitle
+                if record.year:
+                    subtitle = f"({record.year})"
+
+            # Format quality
+            quality = ''
+            if record.transcode_decision:
+                td = record.transcode_decision.lower()
+                if td == 'direct play':
+                    quality = 'Direct Play'
+                elif td == 'transcode':
+                    quality = 'Transcode'
+                elif td == 'copy':
+                    quality = 'Direct Stream'
+                else:
+                    quality = record.transcode_decision.title()
+
+            table_data.append({
+                'date_pt': date_str,
+                'time_pt': time_str,
+                'sortable_datetime': sortable_datetime,
+                'Server': record.server_name or '',
+                'server_order': server_order,
+                'user': record.user or '',
+                'user_thumb': '',  # Could be populated from user cache if needed
+                'ip_address': record.ip_address or '',
+                'media_type': media_type,
+                'title': title,
+                'subtitle': subtitle,
+                'platform': record.platform or '',
+                'product': record.product or '',
+                'quality': quality,
+                'percent_complete': record.percent_complete or 0
+            })
+
+        return table_data
+
+    def get_cached_table_data(self, run_id: int) -> list:
+        """
+        Legacy method - now redirects to ViewingHistory database.
+
+        Args:
+            run_id: Database ID of AnalyticsRun record (ignored)
+
+        Returns:
+            List of dictionaries for table rows from ViewingHistory
+        """
+        return self.get_viewing_history_table_data()
 
     def _get_location_from_ip(self, ip_address: str) -> str:
         """

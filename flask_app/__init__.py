@@ -42,10 +42,15 @@ def create_app(config_name='development'):
 
 
 def _initialize_default_settings():
-    """Create default AnalyticsSettings if none exist."""
-    from flask_app.models import db, AnalyticsSettings
+    """Create default AnalyticsSettings and HistorySyncStatus if none exist."""
+    from flask_app.models import db, AnalyticsSettings, HistorySyncStatus
 
     if AnalyticsSettings.query.first() is None:
         default_settings = AnalyticsSettings()
         db.session.add(default_settings)
+        db.session.commit()
+
+    if HistorySyncStatus.query.first() is None:
+        default_sync_status = HistorySyncStatus()
+        db.session.add(default_sync_status)
         db.session.commit()
