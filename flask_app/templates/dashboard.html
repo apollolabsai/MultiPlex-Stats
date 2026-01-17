@@ -93,8 +93,7 @@
                                         <div class="content-subtitle">{{ stream.subtitle }}</div>
                                     {% endif %}
                                 </div>
-                                <div class="poster-preview">
-                                    <img src="http://{{ stream.poster_url }}" alt="{{ stream.title }}">
+                                <div class="poster-preview" data-poster-url="http://{{ stream.poster_url }}">
                                 </div>
                             </div>
                         {% else %}
@@ -445,9 +444,26 @@ $(document).ready(function() {
         }
     });
 
-    // Position poster preview on hover
+    // Preload poster images in background after page loads
+    $('.poster-preview').each(function() {
+        var $preview = $(this);
+        var url = $preview.data('poster-url');
+        if (url) {
+            var img = new Image();
+            img.onload = function() {
+                // Image is now cached, add it to the DOM
+                $preview.append($('<img>').attr('src', url).attr('alt', 'Poster'));
+                $preview.addClass('loaded');
+            };
+            img.src = url; // Start loading in background
+        }
+    });
+
+    // Position poster preview on hover (only show if loaded)
     $('.title-with-preview').on('mouseenter', function(e) {
         var $preview = $(this).find('.poster-preview');
+        if (!$preview.hasClass('loaded')) return;
+
         var rect = this.getBoundingClientRect();
 
         // Position below the title
