@@ -89,11 +89,23 @@
         </div>
 
         <div class="import-section">
-            <h3>Import from config.ini</h3>
-            <p>Already have a config.ini file? Import your existing configuration.</p>
+            <h3>Import from Environment Variables</h3>
+            <p>Load server configuration from Docker environment variables defined in your docker-compose.yml file.</p>
             <form method="POST" action="{{ url_for('settings.import_from_ini') }}">
-                <button type="submit" class="btn btn-secondary">Import from config.ini</button>
+                <button type="submit" class="btn btn-secondary">Import from Environment</button>
             </form>
+            <div class="env-example">
+                <h4>Example docker-compose.yml:</h4>
+                <pre><code>environment:
+  - TAUTULLI_A_NAME=MyServer
+  - TAUTULLI_A_IP=192.168.1.100:8181
+  - TAUTULLI_A_APIKEY=your_api_key_here
+  - TAUTULLI_A_SSL=false
+  # Optional second server:
+  - TAUTULLI_B_NAME=Server2
+  - TAUTULLI_B_IP=192.168.1.101:8181
+  - TAUTULLI_B_APIKEY=another_api_key</code></pre>
+            </div>
         </div>
     </div>
 
@@ -385,6 +397,35 @@
     color: #aaa;
     margin-bottom: 20px;
     line-height: 1.5;
+}
+
+.env-example {
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.env-example h4 {
+    margin: 0 0 10px 0;
+    color: #aaa;
+    font-size: 0.9em;
+}
+
+.env-example pre {
+    margin: 0;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 6px;
+    overflow-x: auto;
+}
+
+.env-example code {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.85em;
+    color: #7cb3f1;
+    line-height: 1.6;
 }
 </style>
 {% endblock %}
