@@ -391,6 +391,12 @@ h1.settings-title {
     }
 }
 
+.settings-right-column {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
 .settings-section {
     background: #000000;
     border-radius: 15px;
