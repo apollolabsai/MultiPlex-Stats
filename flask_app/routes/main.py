@@ -139,3 +139,17 @@ def api_viewing_history():
     result['draw'] = draw
 
     return jsonify(result)
+
+
+@main_bp.route('/users')
+def users():
+    """Display all users from configured servers."""
+    # Check if servers are configured
+    if not ConfigService.has_valid_config():
+        flash('Please configure at least one server before viewing users.', 'error')
+        return redirect(url_for('settings.index'))
+
+    service = AnalyticsService()
+    all_users = service.get_all_users()
+
+    return render_template('users.html', users=all_users)

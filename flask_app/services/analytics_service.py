@@ -713,3 +713,89 @@ class AnalyticsService:
                 print(f"Error fetching activity from {server_b_config.name}: {e}")
 
         return current_streams
+
+    def get_all_users(self) -> List[Dict[str, Any]]:
+        """
+        Get all users from all configured servers with their statistics.
+
+        Returns:
+            List of dictionaries containing user information from all servers
+        """
+        from multiplex_stats import TautulliClient
+
+        # Load server configurations
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+
+        if not server_a_config:
+            return []
+
+        all_users = []
+        seen_user_ids = set()  # Track user_ids to avoid duplicates across servers
+
+        # Fetch users from Server A
+        try:
+            client_a = TautulliClient(server_a_config)
+            users_response = client_a.get_users()
+
+            if users_response and 'response' in users_response and 'data' in users_response['response']:
+                users = users_response['response']['data']
+                for user in users:
+                    user_id = user.get('user_id')
+                    if user_id and user_id not in seen_user_ids:
+                        seen_user_ids.add(user_id)
+
+                        # Build user thumb URL
+                        user_thumb = user.get('user_thumb', '')
+                        thumb_url = ''
+                        if user_thumb:
+                            thumb_url = f"{server_a_config.ip_address}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
+
+                        all_users.append({
+                            'user_id': user_id,
+                            'friendly_name': user.get('friendly_name', ''),
+                            'username': user.get('username', ''),
+                            'email': user.get('email', ''),
+                            'total_plays': user.get('plays', 0),
+                            'user_thumb': thumb_url,
+                            'is_active': user.get('is_active', 1),
+                            'server': server_a_config.name
+                        })
+        except Exception as e:
+            print(f"Error fetching users from {server_a_config.name}: {e}")
+
+        # Fetch users from Server B if configured
+        if server_b_config:
+            try:
+                client_b = TautulliClient(server_b_config)
+                users_response = client_b.get_users()
+
+                if users_response and 'response' in users_response and 'data' in users_response['response']:
+                    users = users_response['response']['data']
+                    for user in users:
+                        user_id = user.get('user_id')
+                        if user_id and user_id not in seen_user_ids:
+                            seen_user_ids.add(user_id)
+
+                            # Build user thumb URL
+                            user_thumb = user.get('user_thumb', '')
+                            thumb_url = ''
+                            if user_thumb:
+                                thumb_url = f"{server_b_config.ip_address}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
+
+                            all_users.append({
+                                'user_id': user_id,
+                                'friendly_name': user.get('friendly_name', ''),
+                                'username': user.get('username', ''),
+                                'email': user.get('email', ''),
+                                'total_plays': user.get('plays', 0),
+                                'user_thumb': thumb_url,
+                                'is_active': user.get('is_active', 1),
+                                'server': server_b_config.name
+                            })
+            except Exception as e:
+                print(f"Error fetching users from {server_b_config.name}: {e}")
+
+        # Sort by total plays descending
+        all_users.sort(key=lambda x: x.get('total_plays', 0), reverse=True)
+
+        return all_users
