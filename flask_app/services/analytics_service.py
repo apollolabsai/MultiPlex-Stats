@@ -31,7 +31,7 @@ class AnalyticsService:
         self.cache_dir = os.path.join('instance', 'cache')
         os.makedirs(self.cache_dir, exist_ok=True)
 
-    def run_full_analytics(self, run_id: int) -> Dict[str, Any]:
+    def run_full_analytics(self, run_id: int, daily_trend_days_override: int | None = None) -> Dict[str, Any]:
         """
         Execute full analytics pipeline using database config.
 
@@ -49,6 +49,7 @@ class AnalyticsService:
         # 1. Load configuration from database
         server_a_config, server_b_config = ConfigService.get_server_configs()
         settings = ConfigService.get_analytics_settings()
+        daily_trend_days = daily_trend_days_override or settings.daily_trend_days
 
         if not server_a_config:
             raise ValueError("No server configuration found. Please configure at least one server.")
@@ -59,8 +60,8 @@ class AnalyticsService:
 
         # 3. Fetch and process data (following run_analytics.py logic)
         # Daily data
-        daily_data_a = client_a.get_plays_by_date(time_range=settings.daily_trend_days)
-        daily_data_b = client_b.get_plays_by_date(time_range=settings.daily_trend_days) if client_b else None
+        daily_data_a = client_a.get_plays_by_date(time_range=daily_trend_days)
+        daily_data_b = client_b.get_plays_by_date(time_range=daily_trend_days) if client_b else None
         df_daily = process_daily_data(
             daily_data_a, daily_data_b,
             server_a_config.name, server_b_config.name if server_b_config else None
@@ -143,6 +144,7 @@ class AnalyticsService:
             'server_a_plays': server_a_plays,
             'server_b_name': server_b_config.name if server_b_config else None,
             'server_b_plays': server_b_plays,
+            'daily_trend_days': daily_trend_days,
             'history_days': settings.history_days,
             'generated_at': datetime.now(get_local_timezone()).isoformat()
         }

@@ -34,6 +34,18 @@ def run_analytics():
             flash('Please configure at least one server before running analytics.', 'error')
             return redirect(url_for('settings.index'))
 
+        daily_trend_days = None
+        if request.form:
+            custom_requested = request.form.get('apply_custom')
+            if custom_requested:
+                custom_days = request.form.get('daily_trend_days_custom', type=int)
+                if not custom_days or custom_days < 1 or custom_days > 3650:
+                    flash('Please enter a valid number of days (1-3650).', 'error')
+                    return redirect(request.referrer or url_for('main.index'))
+                daily_trend_days = custom_days
+            else:
+                daily_trend_days = request.form.get('daily_trend_days', type=int)
+
         # Create run record
         run = AnalyticsRun(status='running')
         db.session.add(run)
@@ -41,7 +53,7 @@ def run_analytics():
 
         # Execute analytics (synchronous - blocks for 30-60s)
         service = AnalyticsService()
-        result = service.run_full_analytics(run.id)
+        result = service.run_full_analytics(run.id, daily_trend_days_override=daily_trend_days)
 
         # Update run record with results
         run.status = 'success'

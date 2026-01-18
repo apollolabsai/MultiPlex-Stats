@@ -195,6 +195,22 @@
         </svg>
         Activity Trends
     </h2>
+    <div class="chart-controls">
+        <div class="chart-controls-label">Daily range</div>
+        <form method="POST" action="{{ url_for('main.run_analytics') }}" class="chart-controls-form">
+            <div class="chart-controls-group">
+                <button type="submit" name="daily_trend_days" value="7" class="range-pill {% if summary.daily_trend_days == 7 %}active{% endif %}">7d</button>
+                <button type="submit" name="daily_trend_days" value="30" class="range-pill {% if summary.daily_trend_days == 30 %}active{% endif %}">30d</button>
+                <button type="submit" name="daily_trend_days" value="60" class="range-pill {% if summary.daily_trend_days == 60 %}active{% endif %}">60d</button>
+                <button type="submit" name="daily_trend_days" value="90" class="range-pill {% if summary.daily_trend_days == 90 %}active{% endif %}">90d</button>
+                <div class="range-custom">
+                    <input type="number" name="daily_trend_days_custom" min="1" max="3650" placeholder="Custom days"
+                           value="{% if summary.daily_trend_days not in [7, 30, 60, 90] %}{{ summary.daily_trend_days }}{% endif %}">
+                    <button type="submit" name="apply_custom" value="1" class="range-pill">Apply</button>
+                </div>
+            </div>
+        </form>
+    </div>
     <div class="chart-container">
         {{ charts.daily | safe }}
     </div>
@@ -328,6 +344,76 @@
     height: 225px;
     object-fit: cover;
     border-radius: 4px;
+}
+
+/* Daily chart range controls */
+.chart-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.chart-controls-label {
+    font-size: 0.95em;
+    color: #bdbdbd;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.chart-controls-form {
+    width: 100%;
+}
+
+.chart-controls-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.range-pill {
+    border: 0;
+    padding: 8px 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.range-pill:hover {
+    background: rgba(255, 255, 255, 0.14);
+    transform: translateY(-1px);
+}
+
+.range-pill.active {
+    background: #f18a3d;
+    color: #111;
+}
+
+.range-custom {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.range-custom input {
+    width: 140px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.3);
+    color: #fff;
+}
+
+@media (min-width: 900px) {
+    .chart-controls-form {
+        width: auto;
+    }
 }
 </style>
 
