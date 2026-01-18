@@ -42,7 +42,7 @@ class AnalyticsSettings(db.Model):
     daily_trend_days = db.Column(db.Integer, default=60)
     monthly_trend_months = db.Column(db.Integer, default=60)
     history_days = db.Column(db.Integer, default=60)  # Used for User Activity and Top Content charts
-    history_backfill_days = db.Column(db.Integer, default=60)  # Days to load for viewing history table
+    history_backfill_days = db.Column(db.Integer, default=365)  # Days to load for viewing history table
     top_movies = db.Column(db.Integer, default=30)
     top_tv_shows = db.Column(db.Integer, default=30)
     top_users = db.Column(db.Integer, default=20)
