@@ -758,6 +758,7 @@ class AnalyticsService:
                                 'username': user.get('username', ''),
                                 'email': user.get('email', ''),
                                 'total_plays': 0,
+                                'last_play': None,  # Unix timestamp of most recent play
                                 'user_thumb': thumb_url,
                                 'is_active': user.get('is_active', 1),
                             }
@@ -772,9 +773,14 @@ class AnalyticsService:
                         for stat in stats_response['response']['data']:
                             friendly_name = stat.get('friendly_name', '')
                             plays = stat.get('total_plays', 0)
+                            last_play = stat.get('last_play', None)
 
                             if friendly_name in users_by_name:
                                 users_by_name[friendly_name]['total_plays'] += plays
+                                # Keep the most recent last_play across all libraries
+                                current_last = users_by_name[friendly_name].get('last_play')
+                                if last_play and (current_last is None or last_play > current_last):
+                                    users_by_name[friendly_name]['last_play'] = last_play
                             elif friendly_name:
                                 # User exists in library stats but not in users list
                                 users_by_name[friendly_name] = {
@@ -783,6 +789,7 @@ class AnalyticsService:
                                     'username': '',
                                     'email': '',
                                     'total_plays': plays,
+                                    'last_play': last_play,
                                     'user_thumb': '',
                                     'is_active': 1,
                                 }
