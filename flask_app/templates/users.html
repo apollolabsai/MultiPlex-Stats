@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Users - MultiPlex Stats{% endblock %}
+
+{% block content %}
+<header>
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="MultiPlex Stats" style="max-width: 400px; height: auto; margin-bottom: 10px;">
+    <div class="subtitle">User Directory</div>
+</header>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-number">{{ users|length }}</div>
+        <div class="stat-label">Total Users</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ users|selectattr('is_active', 'equalto', 1)|list|length }}</div>
+        <div class="stat-label">Active Users</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ "{:,}".format(users|sum(attribute='total_plays')) }}</div>
+        <div class="stat-label">Total Plays (All Time)</div>
+    </div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">
+        <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+        All Users
+    </h2>
+    <div class="table-container">
+        {% if users and users|length > 0 %}
+        <table id="usersTable" class="display" style="width:100%">
+            <thead>
+                <tr>
+                    <th style="color:#f18a3d; text-align:center; width: 50px;">#</th>
+                    <th style="color:#f18a3d; text-align:left; width: 60px;">Avatar</th>
+                    <th style="color:#f18a3d; text-align:left;">Friendly Name</th>
+                    <th style="color:#f18a3d; text-align:left;">Username</th>
+                    <th style="color:#f18a3d; text-align:left;">Email</th>
+                    <th style="color:#f18a3d; text-align:right;">Total Plays</th>
+                    <th style="color:#f18a3d; text-align:center;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td style="text-align: center;">{{ loop.index }}</td>
+                    <td style="text-align: center;">
+                        {% if user.user_thumb %}
+                        <img src="http://{{ user.user_thumb }}" alt="{{ user.friendly_name }}" class="user-avatar" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="user-avatar-placeholder" style="display: none;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                        </div>
+                        {% else %}
+                        <div class="user-avatar-placeholder">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="user-friendly-name">{{ user.friendly_name or '-' }}</span>
+                    </td>
+                    <td>
+                        <span class="user-username">{{ user.username or '-' }}</span>
+                    </td>
+                    <td>
+                        {% if user.email %}
+                        <a href="mailto:{{ user.email }}" class="user-email">{{ user.email }}</a>
+                        {% else %}
+                        <span style="color: #666;">-</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: right;">
+                        <span class="user-plays">{{ "{:,}".format(user.total_plays) }}</span>
+                    </td>
+                    <td style="text-align: center;">
+                        {% if user.is_active == 1 %}
+                        <span class="status-badge active">Active</span>
+                        {% else %}
+                        <span class="status-badge inactive">Inactive</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="info-message">No users found. Make sure your servers are configured and accessible.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- DataTables CSS and JS -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+
+<style>
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #f18a3d;
+}
+
+.user-avatar-placeholder {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #2a2a2a;
+    border: 2px solid #444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+}
+
+.user-avatar-placeholder svg {
+    color: #666;
+}
+
+.user-friendly-name {
+    font-weight: 600;
+    color: #f18a3d;
+}
+
+.user-username {
+    color: #aaa;
+    font-family: monospace;
+}
+
+.user-email {
+    color: #7cb3f1;
+    text-decoration: none;
+}
+
+.user-email:hover {
+    text-decoration: underline;
+}
+
+.user-plays {
+    font-weight: 600;
+    color: #4CAF50;
+    font-size: 1.1em;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 600;
+}
+
+.status-badge.active {
+    background: rgba(76, 175, 80, 0.2);
+    color: #4CAF50;
+    border: 1px solid rgba(76, 175, 80, 0.4);
+}
+
+.status-badge.inactive {
+    background: rgba(158, 158, 158, 0.2);
+    color: #9e9e9e;
+    border: 1px solid rgba(158, 158, 158, 0.4);
+}
+
+/* DataTables styling overrides */
+#usersTable tbody tr:hover {
+    background-color: rgba(241, 138, 61, 0.1) !important;
+}
+</style>
+
+<script>
+$(document).ready(function() {
+    $('#usersTable').DataTable({
+        pageLength: 25,
+        order: [[5, 'desc']], // Sort by Total Plays descending
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+        columnDefs: [
+            { orderable: false, targets: [1] } // Disable sorting on Avatar column
+        ],
+        language: {
+            search: "Search users:",
+            lengthMenu: "Show _MENU_ users",
+            info: "Showing _START_ to _END_ of _TOTAL_ users",
+            infoEmpty: "No users available",
+            infoFiltered: "(filtered from _MAX_ total users)"
+        }
+    });
+});
+</script>
+{% endblock %}
