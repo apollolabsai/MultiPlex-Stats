@@ -756,6 +756,10 @@ class AnalyticsService:
                             if user_thumb:
                                 thumb_url = f"{server_ip}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
 
+                            # Count shared libraries from the shared_libraries list
+                            shared_libs = user.get('shared_libraries', [])
+                            library_count = len(shared_libs) if shared_libs else 0
+
                             users_by_name[friendly_name] = {
                                 'user_id': user.get('user_id'),
                                 'friendly_name': friendly_name,
@@ -765,6 +769,7 @@ class AnalyticsService:
                                 'last_play': None,  # Unix timestamp of most recent play
                                 'user_thumb': thumb_url,
                                 'is_active': user.get('is_active', 1),
+                                'library_count': library_count,
                             }
             except Exception as e:
                 print(f"Error fetching users from {server_config.name}: {e}")
@@ -791,6 +796,7 @@ class AnalyticsService:
                                     'last_play': None,
                                     'user_thumb': '',
                                     'is_active': 1,
+                                    'library_count': 0,
                                 }
                 except Exception as e:
                     print(f"Error fetching library stats (section {section_id}) from {server_config.name}: {e}")
