@@ -749,16 +749,16 @@ class AnalyticsService:
                         if not friendly_name:
                             continue
 
+                        # Count shared libraries from the shared_libraries list
+                        shared_libs = user.get('shared_libraries', [])
+                        library_count = len(shared_libs) if shared_libs else 0
+
                         if friendly_name not in users_by_name:
                             # Build user thumb URL
                             user_thumb = user.get('user_thumb', '')
                             thumb_url = ''
                             if user_thumb:
                                 thumb_url = f"{server_ip}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
-
-                            # Count shared libraries from the shared_libraries list
-                            shared_libs = user.get('shared_libraries', [])
-                            library_count = len(shared_libs) if shared_libs else 0
 
                             users_by_name[friendly_name] = {
                                 'user_id': user.get('user_id'),
@@ -771,6 +771,9 @@ class AnalyticsService:
                                 'is_active': user.get('is_active', 1),
                                 'library_count': library_count,
                             }
+                        else:
+                            # User already exists from another server, add library count
+                            users_by_name[friendly_name]['library_count'] += library_count
             except Exception as e:
                 print(f"Error fetching users from {server_config.name}: {e}")
 
