@@ -753,6 +753,10 @@ class AnalyticsService:
                         shared_libs = user.get('shared_libraries', [])
                         library_count = len(shared_libs) if shared_libs else 0
 
+                        # Debug: print shared_libraries for troubleshooting
+                        if friendly_name.lower() == 'ashgle':
+                            print(f"DEBUG [{server_config.name}] User '{friendly_name}': shared_libraries = {shared_libs}, count = {library_count}")
+
                         if friendly_name not in users_by_name:
                             # Build user thumb URL
                             user_thumb = user.get('user_thumb', '')
