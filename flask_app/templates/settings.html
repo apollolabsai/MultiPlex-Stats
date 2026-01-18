@@ -97,139 +97,141 @@
         </div>
     </div>
 
-    <div class="settings-section">
-        <h2 class="section-title">
-            <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <line x1="3" y1="9" x2="21" y2="9"></line>
-                <line x1="9" y1="21" x2="9" y2="9"></line>
-            </svg>
-            Viewing History Data
-        </h2>
+    <div class="settings-right-column">
+        <div class="settings-section">
+            <h2 class="section-title">
+                <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="3" y1="9" x2="21" y2="9"></line>
+                    <line x1="9" y1="21" x2="9" y2="9"></line>
+                </svg>
+                Viewing History Data
+            </h2>
 
-        <div class="form-card">
-            <p class="info-text">
-                Load viewing history from Tautulli into a local database for fast display in the dashboard.
-                This replaces any existing history data and enables the Viewing History table.
-            </p>
+            <div class="form-card">
+                <p class="info-text">
+                    Load viewing history from Tautulli into a local database for fast display in the dashboard.
+                    This replaces any existing history data and enables the Viewing History table.
+                </p>
 
-            <!-- Current Status -->
-            <div class="history-status" id="history-status">
-                {% if history_stats.total_records > 0 %}
-                <div class="status-info">
-                    <div class="status-row">
-                        <span class="status-label">Records in database:</span>
-                        <span class="status-value">{{ "{:,}".format(history_stats.total_records) }}</span>
-                    </div>
-                    <div class="status-row">
-                        <span class="status-label">Date range:</span>
-                        <span class="status-value">{{ history_stats.oldest_date }} to {{ history_stats.newest_date }}</span>
-                    </div>
-                    <div class="status-row">
-                        <span class="status-label">Unique users:</span>
-                        <span class="status-value">{{ history_stats.unique_users }}</span>
-                    </div>
-                    {% if sync_status.last_sync_date %}
-                    <div class="status-row">
-                        <span class="status-label">Last synced:</span>
-                        <span class="status-value">{{ sync_status.last_sync_date }}</span>
-                    </div>
-                    {% endif %}
-                </div>
-                {% else %}
-                <p class="info-message">No viewing history loaded. Use the form below to load history data.</p>
-                {% endif %}
-            </div>
-
-            <!-- Sync Progress (shown when running) -->
-            <div class="sync-progress" id="sync-progress" style="display: none;">
-                <div class="progress-header">
-                    <span class="progress-title">Loading history...</span>
-                    <span class="progress-server" id="progress-server"></span>
-                </div>
-                <div class="progress-bar-container large">
-                    <div class="progress-bar-fill orange" id="progress-bar" style="width: 0%;"></div>
-                </div>
-                <div class="progress-stats">
-                    <span id="progress-fetched">0</span> / <span id="progress-total">?</span> records
-                    (<span id="progress-inserted">0</span> new, <span id="progress-skipped">0</span> duplicates)
-                </div>
-            </div>
-
-            <!-- Load History Form -->
-            <form method="POST" action="{{ url_for('settings.start_history_backfill') }}" id="backfill-form">
-                <div class="form-group">
-                    <label for="backfill_days">Days of History to Load</label>
-                    <input type="number" id="backfill_days" name="backfill_days"
-                           value="{{ settings.history_backfill_days if settings else 60 }}" min="1" max="3650">
-                    <small>Loading more days takes longer but provides more data for the Viewing History table</small>
-                </div>
-
-                <button type="submit" class="btn btn-primary" id="backfill-btn">
+                <!-- Current Status -->
+                <div class="history-status" id="history-status">
                     {% if history_stats.total_records > 0 %}
-                    Reload History Data
+                    <div class="status-info">
+                        <div class="status-row">
+                            <span class="status-label">Records in database:</span>
+                            <span class="status-value">{{ "{:,}".format(history_stats.total_records) }}</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Date range:</span>
+                            <span class="status-value">{{ history_stats.oldest_date }} to {{ history_stats.newest_date }}</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Unique users:</span>
+                            <span class="status-value">{{ history_stats.unique_users }}</span>
+                        </div>
+                        {% if sync_status.last_sync_date %}
+                        <div class="status-row">
+                            <span class="status-label">Last synced:</span>
+                            <span class="status-value">{{ sync_status.last_sync_date }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
                     {% else %}
-                    Load History Data
+                    <p class="info-message">No viewing history loaded. Use the form below to load history data.</p>
                     {% endif %}
-                </button>
-                <small class="form-note">This will replace any existing history data</small>
-            </form>
+                </div>
+
+                <!-- Sync Progress (shown when running) -->
+                <div class="sync-progress" id="sync-progress" style="display: none;">
+                    <div class="progress-header">
+                        <span class="progress-title">Loading history...</span>
+                        <span class="progress-server" id="progress-server"></span>
+                    </div>
+                    <div class="progress-bar-container large">
+                        <div class="progress-bar-fill orange" id="progress-bar" style="width: 0%;"></div>
+                    </div>
+                    <div class="progress-stats">
+                        <span id="progress-fetched">0</span> / <span id="progress-total">?</span> records
+                        (<span id="progress-inserted">0</span> new, <span id="progress-skipped">0</span> duplicates)
+                    </div>
+                </div>
+
+                <!-- Load History Form -->
+                <form method="POST" action="{{ url_for('settings.start_history_backfill') }}" id="backfill-form">
+                    <div class="form-group">
+                        <label for="backfill_days">Days of History to Load</label>
+                        <input type="number" id="backfill_days" name="backfill_days"
+                               value="{{ settings.history_backfill_days if settings else 60 }}" min="1" max="3650">
+                        <small>Loading more days takes longer but provides more data for the Viewing History table</small>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="backfill-btn">
+                        {% if history_stats.total_records > 0 %}
+                        Reload History Data
+                        {% else %}
+                        Load History Data
+                        {% endif %}
+                    </button>
+                    <small class="form-note">This will replace any existing history data</small>
+                </form>
+            </div>
         </div>
-    </div>
 
-    <div class="settings-section">
-        <h2 class="section-title">
-            <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="20" x2="18" y2="10"></line>
-                <line x1="12" y1="20" x2="12" y2="4"></line>
-                <line x1="6" y1="20" x2="6" y2="14"></line>
-            </svg>
-            Analytics Settings
-        </h2>
+        <div class="settings-section">
+            <h2 class="section-title">
+                <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                Analytics Settings
+            </h2>
 
-        <div class="form-card">
-            <form method="POST" action="{{ url_for('settings.update_analytics_settings') }}">
-                <div class="form-group">
-                    <label for="daily_trend_days">Daily Trend Days</label>
-                    <input type="number" id="daily_trend_days" name="daily_trend_days"
-                           value="{{ settings.daily_trend_days if settings else 60 }}" min="1" max="365">
-                    <small>Number of days to show in daily chart</small>
-                </div>
+            <div class="form-card">
+                <form method="POST" action="{{ url_for('settings.update_analytics_settings') }}">
+                    <div class="form-group">
+                        <label for="daily_trend_days">Daily Trend Days</label>
+                        <input type="number" id="daily_trend_days" name="daily_trend_days"
+                               value="{{ settings.daily_trend_days if settings else 60 }}" min="1" max="365">
+                        <small>Number of days to show in daily chart</small>
+                    </div>
 
-                <div class="form-group">
-                    <label for="monthly_trend_months">Monthly Trend Months</label>
-                    <input type="number" id="monthly_trend_months" name="monthly_trend_months"
-                           value="{{ settings.monthly_trend_months if settings else 60 }}" min="1" max="120">
-                    <small>Number of months to show in monthly chart</small>
-                </div>
+                    <div class="form-group">
+                        <label for="monthly_trend_months">Monthly Trend Months</label>
+                        <input type="number" id="monthly_trend_months" name="monthly_trend_months"
+                               value="{{ settings.monthly_trend_months if settings else 60 }}" min="1" max="120">
+                        <small>Number of months to show in monthly chart</small>
+                    </div>
 
-                <div class="form-group">
-                    <label for="history_days">History Days</label>
-                    <input type="number" id="history_days" name="history_days"
-                           value="{{ settings.history_days if settings else 60 }}" min="1" max="365">
-                    <small>Days of history for user activity and top content charts</small>
-                </div>
+                    <div class="form-group">
+                        <label for="history_days">History Days</label>
+                        <input type="number" id="history_days" name="history_days"
+                               value="{{ settings.history_days if settings else 60 }}" min="1" max="365">
+                        <small>Days of history for user activity and top content charts</small>
+                    </div>
 
-                <div class="form-group">
-                    <label for="top_movies">Top Movies Count</label>
-                    <input type="number" id="top_movies" name="top_movies"
-                           value="{{ settings.top_movies if settings else 30 }}" min="1" max="100">
-                </div>
+                    <div class="form-group">
+                        <label for="top_movies">Top Movies Count</label>
+                        <input type="number" id="top_movies" name="top_movies"
+                               value="{{ settings.top_movies if settings else 30 }}" min="1" max="100">
+                    </div>
 
-                <div class="form-group">
-                    <label for="top_tv_shows">Top TV Shows Count</label>
-                    <input type="number" id="top_tv_shows" name="top_tv_shows"
-                           value="{{ settings.top_tv_shows if settings else 30 }}" min="1" max="100">
-                </div>
+                    <div class="form-group">
+                        <label for="top_tv_shows">Top TV Shows Count</label>
+                        <input type="number" id="top_tv_shows" name="top_tv_shows"
+                               value="{{ settings.top_tv_shows if settings else 30 }}" min="1" max="100">
+                    </div>
 
-                <div class="form-group">
-                    <label for="top_users">Top Users Count</label>
-                    <input type="number" id="top_users" name="top_users"
-                           value="{{ settings.top_users if settings else 20 }}" min="1" max="100">
-                </div>
+                    <div class="form-group">
+                        <label for="top_users">Top Users Count</label>
+                        <input type="number" id="top_users" name="top_users"
+                               value="{{ settings.top_users if settings else 20 }}" min="1" max="100">
+                    </div>
 
-                <button type="submit" class="btn btn-primary">Save Analytics Settings</button>
-            </form>
+                    <button type="submit" class="btn btn-primary">Save Analytics Settings</button>
+                </form>
+            </div>
         </div>
     </div>
 </div>
