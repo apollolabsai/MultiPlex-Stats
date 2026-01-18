@@ -45,6 +45,7 @@
                     <th style="color:#f18a3d; text-align:left;">Email</th>
                     <th style="color:#f18a3d; text-align:right;">Total Plays</th>
                     <th style="color:#f18a3d; text-align:left;">Last Played</th>
+                    <th style="color:#f18a3d; text-align:center;">Libraries</th>
                     <th style="color:#f18a3d; text-align:center;">Status</th>
                 </tr>
             </thead>
@@ -98,6 +99,9 @@
                         {% else %}
                         <span style="color: #666;">Never</span>
                         {% endif %}
+                    </td>
+                    <td style="text-align: center;">
+                        <span class="library-count">{{ user.library_count }}</span>
                     </td>
                     <td style="text-align: center;">
                         {% if user.is_active == 1 %}
@@ -182,6 +186,11 @@
     font-style: italic;
 }
 
+.library-count {
+    color: #7cb3f1;
+    font-weight: 600;
+}
+
 .status-badge {
     display: inline-block;
     padding: 4px 10px;
@@ -217,6 +226,7 @@ $(document).ready(function() {
         columnDefs: [
             { orderable: false, targets: [1] }, // Disable sorting on Avatar column
             { type: 'date', targets: [6] } // Date sorting for Last Played column
+            // Libraries column is at index 7, Status at index 8
         ],
         language: {
             search: "Search users:",
