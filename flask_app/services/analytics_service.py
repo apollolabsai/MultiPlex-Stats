@@ -812,6 +812,11 @@ class AnalyticsService:
         # Create a lookup dictionary keyed by username
         last_play_by_user = {row.user: row.last_play for row in last_plays if row.user}
 
+        # Get the oldest date in ViewingHistory to use as "before" date for users with no plays
+        oldest_history = ViewingHistory.query.with_entities(
+            func.min(ViewingHistory.started)
+        ).scalar()
+
         # Update users with last play dates
         # Match by username (ViewingHistory.user) OR friendly_name as fallback
         for friendly_name, user_data in users_by_name.items():
@@ -821,6 +826,9 @@ class AnalyticsService:
                 user_data['last_play'] = last_play_by_user[username]
             elif friendly_name in last_play_by_user:
                 user_data['last_play'] = last_play_by_user[friendly_name]
+            elif oldest_history:
+                # User has no plays in history - mark with "before" prefix
+                user_data['last_play_before'] = oldest_history
 
         # Convert to list and sort by total plays descending
         all_users = list(users_by_name.values())

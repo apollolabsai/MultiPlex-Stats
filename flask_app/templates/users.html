@@ -91,6 +91,10 @@
                         <span class="last-play-date" data-timestamp="{{ user.last_play }}">
                             {{ user.last_play | timestamp_to_date }}
                         </span>
+                        {% elif user.last_play_before %}
+                        <span class="last-play-before" data-timestamp="{{ user.last_play_before }}">
+                            &lt;{{ user.last_play_before | timestamp_to_date }}
+                        </span>
                         {% else %}
                         <span style="color: #666;">Never</span>
                         {% endif %}
@@ -171,6 +175,11 @@
 
 .last-play-date {
     color: #aaa;
+}
+
+.last-play-before {
+    color: #666;
+    font-style: italic;
 }
 
 .status-badge {
