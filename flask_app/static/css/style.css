@@ -215,6 +215,13 @@ h1.settings-title {
     margin-bottom: 20px;
 }
 
+.grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
 /* Buttons */
 .btn {
     padding: 12px 24px;
@@ -796,6 +803,10 @@ footer {
     }
 
     .grid-2 {
+        grid-template-columns: 1fr;
+    }
+
+    .grid-3 {
         grid-template-columns: 1fr;
     }
 

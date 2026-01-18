@@ -16,7 +16,7 @@ from multiplex_stats.data_processing import (
 from multiplex_stats.visualization import (
     create_daily_bar_chart, create_monthly_bar_chart,
     create_user_bar_chart, create_movie_bar_chart, create_tv_bar_chart,
-    create_category_pie_chart, create_server_pie_chart
+    create_category_pie_chart, create_server_pie_chart, create_platform_pie_chart
 )
 from flask_app.services.config_service import ConfigService
 from flask_app.services.history_sync_service import HistorySyncService
@@ -104,6 +104,7 @@ class AnalyticsService:
             server_b_config.name if server_b_config else None,
             settings.history_days
         )
+        fig_platform = create_platform_pie_chart(df_history, settings.history_days)
 
         # 5. Convert charts to HTML (for embedding in Jinja templates)
         charts_html = {
@@ -113,7 +114,8 @@ class AnalyticsService:
             'movies': fig_movies.to_html(full_html=False, include_plotlyjs=False),
             'tv': fig_tv.to_html(full_html=False, include_plotlyjs=False),
             'category': fig_category.to_html(full_html=False, include_plotlyjs=False),
-            'server': fig_server.to_html(full_html=False, include_plotlyjs=False)
+            'server': fig_server.to_html(full_html=False, include_plotlyjs=False),
+            'platform': fig_platform.to_html(full_html=False, include_plotlyjs=False)
         }
 
         # 6. Cache chart HTML to disk
