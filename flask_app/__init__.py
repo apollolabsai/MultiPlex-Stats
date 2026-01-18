@@ -2,7 +2,8 @@
 Flask application factory.
 """
 import os
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from flask import Flask
 
 
@@ -10,15 +11,24 @@ def create_app(config_name='development'):
     """Create and configure the Flask application."""
     app = Flask(__name__, instance_relative_config=True)
 
+    # Get timezone from TZ environment variable, default to PST
+    tz_name = os.environ.get('TZ', 'America/Los_Angeles')
+    try:
+        app_timezone = ZoneInfo(tz_name)
+    except Exception:
+        app_timezone = ZoneInfo('America/Los_Angeles')
+
     # Register custom Jinja filters
     @app.template_filter('timestamp_to_date')
     def timestamp_to_date(timestamp):
-        """Convert Unix timestamp to readable date string."""
+        """Convert Unix timestamp to readable date string in configured timezone."""
         if timestamp is None:
             return 'Never'
         try:
-            dt = datetime.fromtimestamp(int(timestamp))
-            return dt.strftime('%Y-%m-%d')
+            # Convert timestamp to UTC datetime, then to configured timezone
+            dt_utc = datetime.fromtimestamp(int(timestamp), tz=timezone.utc)
+            dt_local = dt_utc.astimezone(app_timezone)
+            return dt_local.strftime('%Y-%m-%d')
         except (ValueError, TypeError, OSError):
             return 'Unknown'
 
