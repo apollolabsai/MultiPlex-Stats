@@ -2,6 +2,7 @@
 Flask application factory.
 """
 import os
+import subprocess
 from datetime import datetime, timezone
 from flask import Flask
 from multiplex_stats.timezone_utils import get_local_timezone
@@ -45,6 +46,38 @@ def create_app(config_name='development'):
     def inject_timezone_name():
         """Expose the configured timezone name to templates."""
         return {'timezone_name': getattr(app_timezone, 'key', 'Local')}
+
+    @app.context_processor
+    def inject_git_info():
+        """Expose git commit info to templates."""
+        try:
+            # Get commit hash and timestamp
+            commit_hash = subprocess.check_output(
+                ['git', 'rev-parse', '--short', 'HEAD'],
+                cwd=os.path.dirname(os.path.dirname(__file__)),
+                stderr=subprocess.DEVNULL
+            ).decode('utf-8').strip()
+
+            commit_timestamp = subprocess.check_output(
+                ['git', 'log', '-1', '--format=%ct'],
+                cwd=os.path.dirname(os.path.dirname(__file__)),
+                stderr=subprocess.DEVNULL
+            ).decode('utf-8').strip()
+
+            # Convert to PST/PDT
+            pst_tz = get_local_timezone()
+            commit_dt = datetime.fromtimestamp(int(commit_timestamp), tz=timezone.utc).astimezone(pst_tz)
+            commit_date_str = commit_dt.strftime('%Y-%m-%d %I:%M %p')
+
+            return {
+                'git_commit_hash': commit_hash,
+                'git_commit_date': commit_date_str
+            }
+        except Exception:
+            return {
+                'git_commit_hash': 'unknown',
+                'git_commit_date': 'unknown'
+            }
 
     # Load configuration
     if config_name == 'production':
