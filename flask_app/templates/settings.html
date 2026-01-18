@@ -97,14 +97,17 @@
             <div class="env-example">
                 <h4>Example docker-compose.yml:</h4>
                 <pre><code>environment:
-  - TAUTULLI_A_NAME=MyServer
-  - TAUTULLI_A_IP=192.168.1.100:8181
-  - TAUTULLI_A_APIKEY=your_api_key_here
-  - TAUTULLI_A_SSL=false
+  - TAUTULLI_SERVER_A_NAME=MyServer
+  - TAUTULLI_SERVER_A_IP=192.168.1.100:8181
+  - TAUTULLI_SERVER_A_KEY=your_api_key_here
+  # - TAUTULLI_SERVER_A_SSL=false
+  # - TAUTULLI_SERVER_A_VERIFY_SSL=false
   # Optional second server:
-  - TAUTULLI_B_NAME=Server2
-  - TAUTULLI_B_IP=192.168.1.101:8181
-  - TAUTULLI_B_APIKEY=another_api_key</code></pre>
+  # - TAUTULLI_SERVER_B_NAME=Server2
+  # - TAUTULLI_SERVER_B_IP=192.168.1.101:8181
+  # - TAUTULLI_SERVER_B_KEY=another_api_key
+  # - TAUTULLI_SERVER_B_SSL=false
+  # - TAUTULLI_SERVER_B_VERIFY_SSL=false</code></pre>
             </div>
         </div>
     </div>

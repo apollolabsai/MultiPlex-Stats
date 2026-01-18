@@ -61,17 +61,17 @@ services:
       - PUID=1000
       - PGID=1000
       # Primary server (required)
-      - TAUTULLI_A_NAME=MyServer
-      - TAUTULLI_A_IP=192.168.1.100:8181
-      - TAUTULLI_A_APIKEY=your_api_key_here
-      # - TAUTULLI_A_SSL=false
-      # - TAUTULLI_A_VERIFY_SSL=false
+      - TAUTULLI_SERVER_A_NAME=MyServer
+      - TAUTULLI_SERVER_A_IP=192.168.1.100:8181
+      - TAUTULLI_SERVER_A_KEY=your_api_key_here
+      # - TAUTULLI_SERVER_A_SSL=false
+      # - TAUTULLI_SERVER_A_VERIFY_SSL=false
       # Optional second server
-      # - TAUTULLI_B_NAME=Server2
-      # - TAUTULLI_B_IP=192.168.1.101:8181
-      # - TAUTULLI_B_APIKEY=another_api_key
-      # - TAUTULLI_B_SSL=false
-      # - TAUTULLI_B_VERIFY_SSL=false
+      # - TAUTULLI_SERVER_B_NAME=Server2
+      # - TAUTULLI_SERVER_B_IP=192.168.1.101:8181
+      # - TAUTULLI_SERVER_B_KEY=another_api_key
+      # - TAUTULLI_SERVER_B_SSL=false
+      # - TAUTULLI_SERVER_B_VERIFY_SSL=false
       # Timezone (optional, defaults to America/Los_Angeles)
       # - TZ=America/New_York
     restart: unless-stopped
