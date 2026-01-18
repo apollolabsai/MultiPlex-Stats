@@ -223,12 +223,15 @@
         </svg>
         Distribution
     </h2>
-    <div class="grid-2">
+    <div class="grid-3">
         <div class="chart-container">
             {{ charts.category | safe }}
         </div>
         <div class="chart-container">
             {{ charts.server | safe }}
+        </div>
+        <div class="chart-container">
+            {{ charts.platform | safe }}
         </div>
     </div>
 </div>

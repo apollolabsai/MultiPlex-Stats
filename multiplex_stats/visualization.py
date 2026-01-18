@@ -434,6 +434,56 @@ def create_all_time_bar_chart(
     return fig
 
 
+def create_platform_pie_chart(
+    df: pd.DataFrame,
+    history_days: int,
+    theme: Optional[PlotTheme] = None
+) -> go.Figure:
+    """
+    Create a pie chart for platform distribution.
+
+    Args:
+        df: DataFrame with platform data (must have 'platform' column)
+        history_days: Number of days included in the data
+        theme: Optional plot theme configuration
+
+    Returns:
+        Plotly figure object
+    """
+    if theme is None:
+        theme = PlotTheme()
+
+    # Group by platform and count
+    df_platform = df.groupby('platform').size().reset_index(name='Count')
+    df_platform = df_platform.sort_values('Count', ascending=False)
+
+    # Use a color sequence for multiple platforms
+    fig = px.pie(
+        df_platform,
+        values='Count',
+        names='platform',
+        color_discrete_sequence=px.colors.qualitative.Set2,
+        title=f'Platform Distribution - {history_days} days'
+    )
+
+    fig.update_traces(
+        texttemplate='%{percent:.1%}',
+        textposition='inside',
+        textfont_size=16
+    )
+
+    # Apply theme
+    fig.update_layout(
+        plot_bgcolor=theme.plot_bgcolor,
+        paper_bgcolor=theme.paper_bgcolor,
+        title={'text': f'Platform Distribution - {history_days} days', 'font': {'color': theme.title_color}},
+        legend=dict(font=dict(color=theme.text_color)),
+        height=400
+    )
+
+    return fig
+
+
 def create_activity_pie_chart(
     df_aggregated: pd.DataFrame,
     theme: Optional[PlotTheme] = None
