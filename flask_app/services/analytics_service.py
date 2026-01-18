@@ -718,6 +718,8 @@ class AnalyticsService:
         """
         Get all users from all configured servers with their statistics.
 
+        Fetches user info from get_users API and play counts from get_library_user_stats.
+
         Returns:
             List of dictionaries containing user information from all servers
         """
@@ -729,73 +731,75 @@ class AnalyticsService:
         if not server_a_config:
             return []
 
-        all_users = []
-        seen_user_ids = set()  # Track user_ids to avoid duplicates across servers
+        # Dictionary to aggregate user data by friendly_name
+        users_by_name: Dict[str, Dict[str, Any]] = {}
 
-        # Fetch users from Server A
-        try:
-            client_a = TautulliClient(server_a_config)
-            users_response = client_a.get_users()
-
-            if users_response and 'response' in users_response and 'data' in users_response['response']:
-                users = users_response['response']['data']
-                for user in users:
-                    user_id = user.get('user_id')
-                    if user_id and user_id not in seen_user_ids:
-                        seen_user_ids.add(user_id)
-
-                        # Build user thumb URL
-                        user_thumb = user.get('user_thumb', '')
-                        thumb_url = ''
-                        if user_thumb:
-                            thumb_url = f"{server_a_config.ip_address}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
-
-                        all_users.append({
-                            'user_id': user_id,
-                            'friendly_name': user.get('friendly_name', ''),
-                            'username': user.get('username', ''),
-                            'email': user.get('email', ''),
-                            'total_plays': user.get('plays', 0),
-                            'user_thumb': thumb_url,
-                            'is_active': user.get('is_active', 1),
-                            'server': server_a_config.name
-                        })
-        except Exception as e:
-            print(f"Error fetching users from {server_a_config.name}: {e}")
-
-        # Fetch users from Server B if configured
-        if server_b_config:
+        def process_server(client: TautulliClient, server_config, server_ip: str):
+            """Process users and play counts from a single server."""
+            # First, get user list for metadata (username, email, thumb, etc.)
             try:
-                client_b = TautulliClient(server_b_config)
-                users_response = client_b.get_users()
-
+                users_response = client.get_users()
                 if users_response and 'response' in users_response and 'data' in users_response['response']:
-                    users = users_response['response']['data']
-                    for user in users:
-                        user_id = user.get('user_id')
-                        if user_id and user_id not in seen_user_ids:
-                            seen_user_ids.add(user_id)
+                    for user in users_response['response']['data']:
+                        friendly_name = user.get('friendly_name', '')
+                        if not friendly_name:
+                            continue
 
+                        if friendly_name not in users_by_name:
                             # Build user thumb URL
                             user_thumb = user.get('user_thumb', '')
                             thumb_url = ''
                             if user_thumb:
-                                thumb_url = f"{server_b_config.ip_address}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
+                                thumb_url = f"{server_ip}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
 
-                            all_users.append({
-                                'user_id': user_id,
-                                'friendly_name': user.get('friendly_name', ''),
+                            users_by_name[friendly_name] = {
+                                'user_id': user.get('user_id'),
+                                'friendly_name': friendly_name,
                                 'username': user.get('username', ''),
                                 'email': user.get('email', ''),
-                                'total_plays': user.get('plays', 0),
+                                'total_plays': 0,
                                 'user_thumb': thumb_url,
                                 'is_active': user.get('is_active', 1),
-                                'server': server_b_config.name
-                            })
+                            }
             except Exception as e:
-                print(f"Error fetching users from {server_b_config.name}: {e}")
+                print(f"Error fetching users from {server_config.name}: {e}")
 
-        # Sort by total plays descending
+            # Now get play counts from library stats (Movies = section 1, TV = section 2)
+            for section_id in [1, 2]:
+                try:
+                    stats_response = client.get_library_user_stats(section_id=section_id)
+                    if stats_response and 'response' in stats_response and 'data' in stats_response['response']:
+                        for stat in stats_response['response']['data']:
+                            friendly_name = stat.get('friendly_name', '')
+                            plays = stat.get('total_plays', 0)
+
+                            if friendly_name in users_by_name:
+                                users_by_name[friendly_name]['total_plays'] += plays
+                            elif friendly_name:
+                                # User exists in library stats but not in users list
+                                users_by_name[friendly_name] = {
+                                    'user_id': stat.get('user_id'),
+                                    'friendly_name': friendly_name,
+                                    'username': '',
+                                    'email': '',
+                                    'total_plays': plays,
+                                    'user_thumb': '',
+                                    'is_active': 1,
+                                }
+                except Exception as e:
+                    print(f"Error fetching library stats (section {section_id}) from {server_config.name}: {e}")
+
+        # Process Server A
+        client_a = TautulliClient(server_a_config)
+        process_server(client_a, server_a_config, server_a_config.ip_address)
+
+        # Process Server B if configured
+        if server_b_config:
+            client_b = TautulliClient(server_b_config)
+            process_server(client_b, server_b_config, server_b_config.ip_address)
+
+        # Convert to list and sort by total plays descending
+        all_users = list(users_by_name.values())
         all_users.sort(key=lambda x: x.get('total_plays', 0), reverse=True)
 
         return all_users
