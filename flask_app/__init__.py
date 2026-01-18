@@ -3,20 +3,16 @@ Flask application factory.
 """
 import os
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 from flask import Flask
+from multiplex_stats.timezone_utils import get_local_timezone
 
 
 def create_app(config_name='development'):
     """Create and configure the Flask application."""
     app = Flask(__name__, instance_relative_config=True)
 
-    # Get timezone from TZ environment variable, default to PST
-    tz_name = os.environ.get('TZ', 'America/Los_Angeles')
-    try:
-        app_timezone = ZoneInfo(tz_name)
-    except Exception:
-        app_timezone = ZoneInfo('America/Los_Angeles')
+    # Get timezone from TZ environment variable, default to America/Los_Angeles
+    app_timezone = get_local_timezone()
 
     # Register custom Jinja filters
     @app.template_filter('timestamp_to_date')
@@ -31,6 +27,24 @@ def create_app(config_name='development'):
             return dt_local.strftime('%Y-%m-%d')
         except (ValueError, TypeError, OSError):
             return 'Unknown'
+
+    @app.template_filter('datetime_to_local')
+    def datetime_to_local(value, fmt='%Y-%m-%d %H:%M:%S'):
+        """Format a datetime value in the configured timezone."""
+        if value is None:
+            return 'Unknown'
+        try:
+            dt = value
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(app_timezone).strftime(fmt)
+        except (ValueError, TypeError, OSError):
+            return 'Unknown'
+
+    @app.context_processor
+    def inject_timezone_name():
+        """Expose the configured timezone name to templates."""
+        return {'timezone_name': getattr(app_timezone, 'key', 'Local')}
 
     # Load configuration
     if config_name == 'production':

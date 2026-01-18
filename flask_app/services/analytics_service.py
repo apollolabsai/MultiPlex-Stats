@@ -13,6 +13,7 @@ from multiplex_stats.data_processing import (
     aggregate_user_stats, aggregate_movie_stats, aggregate_tv_stats,
     filter_history_by_date
 )
+from multiplex_stats.timezone_utils import get_local_timezone
 from multiplex_stats.visualization import (
     create_daily_bar_chart, create_monthly_bar_chart,
     create_user_bar_chart, create_movie_bar_chart, create_tv_bar_chart,
@@ -143,7 +144,7 @@ class AnalyticsService:
             'server_b_name': server_b_config.name if server_b_config else None,
             'server_b_plays': server_b_plays,
             'history_days': settings.history_days,
-            'generated_at': datetime.now().isoformat()
+            'generated_at': datetime.now(get_local_timezone()).isoformat()
         }
 
         return {

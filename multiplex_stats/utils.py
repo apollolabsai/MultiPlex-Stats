@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import datetime
 from typing import Optional
 
+from multiplex_stats.timezone_utils import get_local_timezone
 
 def format_dataframe_for_display(
     df: pd.DataFrame,
@@ -38,7 +39,7 @@ def format_dataframe_for_display(
     # Filter by date if specified
     if num_days is not None:
         output_df['date_pt'] = pd.to_datetime(output_df['date_pt'])
-        cutoff_date = datetime.now() - pd.Timedelta(days=num_days)
+        cutoff_date = datetime.now(get_local_timezone()).replace(tzinfo=None) - pd.Timedelta(days=num_days)
         output_df = output_df[output_df['date_pt'] >= cutoff_date]
         output_df['date_pt'] = output_df['date_pt'].dt.strftime('%Y-%m-%d')
 

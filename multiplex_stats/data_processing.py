@@ -7,6 +7,7 @@ import numpy as np
 from datetime import datetime, timezone
 from typing import Any
 
+from multiplex_stats.timezone_utils import get_local_timezone
 
 def process_daily_data(
     data_a: dict[str, Any],
@@ -224,10 +225,11 @@ def process_history_data(
     df_combined['date'] = pd.to_datetime(df_combined['date'], unit='s')
 
     # Convert to Pacific Time
+    local_tz = get_local_timezone()
     df_combined['date_pst'] = (
         df_combined['date']
         .dt.tz_localize(timezone.utc)
-        .dt.tz_convert('America/Los_Angeles')
+        .dt.tz_convert(local_tz)
     )
 
     # Extract date and time strings
@@ -453,7 +455,7 @@ def filter_history_by_date(df: pd.DataFrame, num_days: int) -> pd.DataFrame:
     df = df.copy()
     df['date_pt'] = pd.to_datetime(df['date_pt'])
 
-    cutoff_date = datetime.now() - pd.Timedelta(days=num_days)
+    cutoff_date = datetime.now(get_local_timezone()).replace(tzinfo=None) - pd.Timedelta(days=num_days)
     df_filtered = df[df['date_pt'] >= cutoff_date]
 
     df_filtered['date_pt'] = df_filtered['date_pt'].dt.strftime('%Y-%m-%d')

@@ -138,7 +138,7 @@
                             <span class="status-value">{{ "{:,}".format(history_stats.total_records) }}</span>
                         </div>
                         <div class="status-row">
-                            <span class="status-label">Date range:</span>
+                            <span class="status-label">Date range ({{ timezone_name }}):</span>
                             <span class="status-value">{{ history_stats.oldest_date }} to {{ history_stats.newest_date }}</span>
                         </div>
                         <div class="status-row">
@@ -147,7 +147,7 @@
                         </div>
                         {% if sync_status.last_sync_date %}
                         <div class="status-row">
-                            <span class="status-label">Last synced:</span>
+                            <span class="status-label">Last synced ({{ timezone_name }}):</span>
                             <span class="status-value">{{ sync_status.last_sync_date }}</span>
                         </div>
                         {% endif %}

@@ -2,12 +2,12 @@
 Main application routes for dashboard and analytics execution.
 """
 import json
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from datetime import datetime, timezone
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_app.models import db, AnalyticsRun
 from flask_app.services.analytics_service import AnalyticsService
 from flask_app.services.config_service import ConfigService
+from multiplex_stats.timezone_utils import get_local_timezone
 
 main_bp = Blueprint('main', __name__)
 
@@ -81,7 +81,7 @@ def dashboard():
         return redirect(url_for('main.index'))
 
     # Convert completed_at from UTC to Pacific Time
-    completed_at_pt = last_run.completed_at.replace(tzinfo=ZoneInfo('UTC')).astimezone(ZoneInfo('America/Los_Angeles'))
+    completed_at_pt = last_run.completed_at.replace(tzinfo=timezone.utc).astimezone(get_local_timezone())
 
     # Load cached chart HTML and table data from service
     service = AnalyticsService()

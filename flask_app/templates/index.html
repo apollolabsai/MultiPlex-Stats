@@ -59,9 +59,9 @@
                 <span class="badge badge-info">⟳ Running</span>
             {% endif %}
         </p>
-        <p><strong>Started:</strong> {{ last_run.started_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        <p><strong>Started ({{ timezone_name }}):</strong> {{ last_run.started_at | datetime_to_local }}</p>
         {% if last_run.completed_at %}
-        <p><strong>Completed:</strong> {{ last_run.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        <p><strong>Completed ({{ timezone_name }}):</strong> {{ last_run.completed_at | datetime_to_local }}</p>
         {% endif %}
 
         {% if last_run.status == 'success' %}

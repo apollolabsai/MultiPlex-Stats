@@ -124,8 +124,8 @@ class ViewingHistory(db.Model):
     geo_country = db.Column(db.String(100), nullable=True)
 
     # Derived fields (calculated on insert)
-    date_played = db.Column(db.Date, nullable=True, index=True)  # Date in PT timezone
-    time_played = db.Column(db.String(20), nullable=True)  # Time string in PT
+    date_played = db.Column(db.Date, nullable=True, index=True)  # Date in configured timezone
+    time_played = db.Column(db.String(20), nullable=True)  # Time string in configured timezone
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

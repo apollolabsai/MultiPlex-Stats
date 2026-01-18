@@ -2,13 +2,13 @@
 Service for syncing viewing history from Tautulli to local database.
 Supports both full backfill and incremental sync.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
-import pytz
 
 from flask_app.models import db, ViewingHistory, HistorySyncStatus, ServerConfig
 from flask_app.services.config_service import ConfigService
 from multiplex_stats.api_client import TautulliClient
+from multiplex_stats.timezone_utils import get_local_timezone
 
 
 class HistorySyncService:
@@ -17,7 +17,7 @@ class HistorySyncService:
     PAGE_SIZE = 1000  # Records per API request
 
     def __init__(self):
-        self.pt_tz = pytz.timezone('America/Los_Angeles')
+        self.local_tz = get_local_timezone()
 
     def get_or_create_status(self) -> HistorySyncStatus:
         """Get or create the singleton sync status record."""
@@ -31,6 +31,13 @@ class HistorySyncService:
     def get_sync_status(self) -> dict:
         """Get current sync status for polling."""
         status = self.get_or_create_status()
+        last_sync_date = None
+        if status.last_sync_date:
+            last_sync_date = (
+                status.last_sync_date.replace(tzinfo=timezone.utc)
+                .astimezone(self.local_tz)
+                .isoformat()
+            )
         return {
             'status': status.status,
             'sync_type': status.sync_type,
@@ -40,7 +47,7 @@ class HistorySyncService:
             'records_skipped': status.records_skipped,
             'current_server': status.current_server,
             'error_message': status.error_message,
-            'last_sync_date': status.last_sync_date.isoformat() if status.last_sync_date else None,
+            'last_sync_date': last_sync_date,
             'last_sync_record_count': status.last_sync_record_count,
             'total_records_in_db': ViewingHistory.query.count()
         }
@@ -78,7 +85,7 @@ class HistorySyncService:
         db.session.commit()
 
         # Calculate after date
-        after_date = datetime.now() - timedelta(days=days)
+        after_date = datetime.now(self.local_tz) - timedelta(days=days)
         after_str = after_date.strftime("%Y-%m-%d")
 
         try:
@@ -115,7 +122,11 @@ class HistorySyncService:
 
         # Use the most recent record's date as the after parameter
         # Subtract 1 day to ensure we don't miss any records due to timezone differences
-        latest_date = datetime.fromtimestamp(latest_record.started) - timedelta(days=1)
+        latest_date = (
+            datetime.fromtimestamp(latest_record.started, tz=timezone.utc)
+            .astimezone(self.local_tz)
+            - timedelta(days=1)
+        )
         after_str = latest_date.strftime("%Y-%m-%d")
 
         # Reset status for incremental sync
@@ -255,10 +266,9 @@ class HistorySyncService:
         time_played = None
         if started_ts:
             try:
-                utc_dt = datetime.utcfromtimestamp(started_ts)
-                pt_dt = utc_dt.replace(tzinfo=pytz.UTC).astimezone(self.pt_tz)
-                date_played = pt_dt.date()
-                time_played = pt_dt.strftime('%-I:%M%p').lower()
+                local_dt = datetime.fromtimestamp(started_ts, tz=timezone.utc).astimezone(self.local_tz)
+                date_played = local_dt.date()
+                time_played = local_dt.strftime('%-I:%M%p').lower()
             except (ValueError, TypeError):
                 pass
 
@@ -326,9 +336,16 @@ class HistorySyncService:
         newest = ViewingHistory.query.order_by(ViewingHistory.started.desc()).first()
         unique_users = db.session.query(ViewingHistory.user).distinct().count()
 
+        oldest_date = None
+        newest_date = None
+        if oldest and oldest.started:
+            oldest_date = datetime.fromtimestamp(oldest.started, tz=timezone.utc).astimezone(self.local_tz).strftime('%Y-%m-%d')
+        if newest and newest.started:
+            newest_date = datetime.fromtimestamp(newest.started, tz=timezone.utc).astimezone(self.local_tz).strftime('%Y-%m-%d')
+
         return {
             'total_records': count,
-            'oldest_date': datetime.fromtimestamp(oldest.started).strftime('%Y-%m-%d') if oldest and oldest.started else None,
-            'newest_date': datetime.fromtimestamp(newest.started).strftime('%Y-%m-%d') if newest and newest.started else None,
+            'oldest_date': oldest_date,
+            'newest_date': newest_date,
             'unique_users': unique_users
         }
