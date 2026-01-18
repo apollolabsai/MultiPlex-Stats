@@ -718,12 +718,14 @@ class AnalyticsService:
         """
         Get all users from all configured servers with their statistics.
 
-        Fetches user info from get_users API and play counts from get_library_user_stats.
+        Fetches user info from get_users API, play counts from get_library_user_stats,
+        and last play dates from the local ViewingHistory database.
 
         Returns:
             List of dictionaries containing user information from all servers
         """
         from multiplex_stats import TautulliClient
+        from sqlalchemy import func
 
         # Load server configurations
         server_a_config, server_b_config = ConfigService.get_server_configs()
@@ -773,14 +775,9 @@ class AnalyticsService:
                         for stat in stats_response['response']['data']:
                             friendly_name = stat.get('friendly_name', '')
                             plays = stat.get('total_plays', 0)
-                            last_play = stat.get('last_play', None)
 
                             if friendly_name in users_by_name:
                                 users_by_name[friendly_name]['total_plays'] += plays
-                                # Keep the most recent last_play across all libraries
-                                current_last = users_by_name[friendly_name].get('last_play')
-                                if last_play and (current_last is None or last_play > current_last):
-                                    users_by_name[friendly_name]['last_play'] = last_play
                             elif friendly_name:
                                 # User exists in library stats but not in users list
                                 users_by_name[friendly_name] = {
@@ -789,7 +786,7 @@ class AnalyticsService:
                                     'username': '',
                                     'email': '',
                                     'total_plays': plays,
-                                    'last_play': last_play,
+                                    'last_play': None,
                                     'user_thumb': '',
                                     'is_active': 1,
                                 }
@@ -804,6 +801,21 @@ class AnalyticsService:
         if server_b_config:
             client_b = TautulliClient(server_b_config)
             process_server(client_b, server_b_config, server_b_config.ip_address)
+
+        # Get last play dates from ViewingHistory database
+        # Query for max(started) grouped by user
+        last_plays = ViewingHistory.query.with_entities(
+            ViewingHistory.user,
+            func.max(ViewingHistory.started).label('last_play')
+        ).group_by(ViewingHistory.user).all()
+
+        # Create a lookup dictionary
+        last_play_by_user = {row.user: row.last_play for row in last_plays if row.user}
+
+        # Update users with last play dates
+        for friendly_name, user_data in users_by_name.items():
+            if friendly_name in last_play_by_user:
+                user_data['last_play'] = last_play_by_user[friendly_name]
 
         # Convert to list and sort by total plays descending
         all_users = list(users_by_name.values())
