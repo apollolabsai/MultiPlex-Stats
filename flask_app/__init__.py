@@ -49,6 +49,7 @@ def create_app(config_name='development'):
     # Cache build info from environment (injected at build time).
     commit_hash = os.environ.get('GIT_COMMIT_HASH', 'unknown')
     commit_date_raw = os.environ.get('GIT_COMMIT_DATE', 'unknown')
+    git_branch = os.environ.get('GIT_BRANCH', 'unknown')
     commit_date_str = commit_date_raw
     if commit_date_raw not in ('', 'unknown'):
         try:
@@ -60,13 +61,15 @@ def create_app(config_name='development'):
 
     app.config['GIT_COMMIT_HASH'] = commit_hash
     app.config['GIT_COMMIT_DATE'] = commit_date_str
+    app.config['GIT_BRANCH'] = git_branch
 
     @app.context_processor
     def inject_git_info():
         """Expose cached git commit info to templates."""
         return {
             'git_commit_hash': app.config.get('GIT_COMMIT_HASH', 'unknown'),
-            'git_commit_date': app.config.get('GIT_COMMIT_DATE', 'unknown')
+            'git_commit_date': app.config.get('GIT_COMMIT_DATE', 'unknown'),
+            'git_branch': app.config.get('GIT_BRANCH', 'unknown')
         }
 
     # Load configuration

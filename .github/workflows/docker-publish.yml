@@ -37,6 +37,7 @@ jobs:
         run: |
           echo "commit_hash=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           echo "commit_date=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
+          echo "git_branch=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -76,6 +77,7 @@ jobs:
           build-args: |
             GIT_COMMIT_HASH=${{ steps.build_meta.outputs.commit_hash }}
             GIT_COMMIT_DATE=${{ steps.build_meta.outputs.commit_date }}
+            GIT_BRANCH=${{ steps.build_meta.outputs.git_branch }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
