@@ -803,18 +803,23 @@ class AnalyticsService:
             process_server(client_b, server_b_config, server_b_config.ip_address)
 
         # Get last play dates from ViewingHistory database
-        # Query for max(started) grouped by user
+        # Query for max(started) grouped by user (username field in ViewingHistory)
         last_plays = ViewingHistory.query.with_entities(
             ViewingHistory.user,
             func.max(ViewingHistory.started).label('last_play')
         ).group_by(ViewingHistory.user).all()
 
-        # Create a lookup dictionary
+        # Create a lookup dictionary keyed by username
         last_play_by_user = {row.user: row.last_play for row in last_plays if row.user}
 
         # Update users with last play dates
+        # Match by username (ViewingHistory.user) OR friendly_name as fallback
         for friendly_name, user_data in users_by_name.items():
-            if friendly_name in last_play_by_user:
+            username = user_data.get('username', '')
+            # Try username first, then friendly_name as fallback
+            if username and username in last_play_by_user:
+                user_data['last_play'] = last_play_by_user[username]
+            elif friendly_name in last_play_by_user:
                 user_data['last_play'] = last_play_by_user[friendly_name]
 
         # Convert to list and sort by total plays descending
