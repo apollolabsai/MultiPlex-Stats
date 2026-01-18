@@ -44,6 +44,7 @@
                     <th style="color:#f18a3d; text-align:left;">Username</th>
                     <th style="color:#f18a3d; text-align:left;">Email</th>
                     <th style="color:#f18a3d; text-align:right;">Total Plays</th>
+                    <th style="color:#f18a3d; text-align:left;">Last Played</th>
                     <th style="color:#f18a3d; text-align:center;">Status</th>
                 </tr>
             </thead>
@@ -84,6 +85,15 @@
                     </td>
                     <td style="text-align: right;">
                         <span class="user-plays">{{ "{:,}".format(user.total_plays) }}</span>
+                    </td>
+                    <td>
+                        {% if user.last_play %}
+                        <span class="last-play-date" data-timestamp="{{ user.last_play }}">
+                            {{ user.last_play | timestamp_to_date }}
+                        </span>
+                        {% else %}
+                        <span style="color: #666;">Never</span>
+                        {% endif %}
                     </td>
                     <td style="text-align: center;">
                         {% if user.is_active == 1 %}
@@ -159,6 +169,10 @@
     font-size: 1.1em;
 }
 
+.last-play-date {
+    color: #aaa;
+}
+
 .status-badge {
     display: inline-block;
     padding: 4px 10px;
@@ -192,7 +206,8 @@ $(document).ready(function() {
         order: [[5, 'desc']], // Sort by Total Plays descending
         lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
         columnDefs: [
-            { orderable: false, targets: [1] } // Disable sorting on Avatar column
+            { orderable: false, targets: [1] }, // Disable sorting on Avatar column
+            { type: 'date', targets: [6] } // Date sorting for Last Played column
         ],
         language: {
             search: "Search users:",

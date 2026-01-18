@@ -2,12 +2,25 @@
 Flask application factory.
 """
 import os
+from datetime import datetime
 from flask import Flask
 
 
 def create_app(config_name='development'):
     """Create and configure the Flask application."""
     app = Flask(__name__, instance_relative_config=True)
+
+    # Register custom Jinja filters
+    @app.template_filter('timestamp_to_date')
+    def timestamp_to_date(timestamp):
+        """Convert Unix timestamp to readable date string."""
+        if timestamp is None:
+            return 'Never'
+        try:
+            dt = datetime.fromtimestamp(int(timestamp))
+            return dt.strftime('%Y-%m-%d')
+        except (ValueError, TypeError, OSError):
+            return 'Unknown'
 
     # Load configuration
     if config_name == 'production':
