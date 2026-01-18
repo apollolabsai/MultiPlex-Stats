@@ -2,7 +2,6 @@
 Flask application factory.
 """
 import os
-import subprocess
 from datetime import datetime, timezone
 from flask import Flask
 from multiplex_stats.timezone_utils import get_local_timezone
@@ -47,37 +46,28 @@ def create_app(config_name='development'):
         """Expose the configured timezone name to templates."""
         return {'timezone_name': getattr(app_timezone, 'key', 'Local')}
 
+    # Cache build info from environment (injected at build time).
+    commit_hash = os.environ.get('GIT_COMMIT_HASH', 'unknown')
+    commit_date_raw = os.environ.get('GIT_COMMIT_DATE', 'unknown')
+    commit_date_str = commit_date_raw
+    if commit_date_raw not in ('', 'unknown'):
+        try:
+            commit_ts = int(commit_date_raw)
+            commit_dt = datetime.fromtimestamp(commit_ts, tz=timezone.utc).astimezone(app_timezone)
+            commit_date_str = commit_dt.strftime('%Y-%m-%d %I:%M %p')
+        except (ValueError, OSError):
+            commit_date_str = commit_date_raw
+
+    app.config['GIT_COMMIT_HASH'] = commit_hash
+    app.config['GIT_COMMIT_DATE'] = commit_date_str
+
     @app.context_processor
     def inject_git_info():
-        """Expose git commit info to templates."""
-        try:
-            # Get commit hash and timestamp
-            commit_hash = subprocess.check_output(
-                ['git', 'rev-parse', '--short', 'HEAD'],
-                cwd=os.path.dirname(os.path.dirname(__file__)),
-                stderr=subprocess.DEVNULL
-            ).decode('utf-8').strip()
-
-            commit_timestamp = subprocess.check_output(
-                ['git', 'log', '-1', '--format=%ct'],
-                cwd=os.path.dirname(os.path.dirname(__file__)),
-                stderr=subprocess.DEVNULL
-            ).decode('utf-8').strip()
-
-            # Convert to PST/PDT
-            pst_tz = get_local_timezone()
-            commit_dt = datetime.fromtimestamp(int(commit_timestamp), tz=timezone.utc).astimezone(pst_tz)
-            commit_date_str = commit_dt.strftime('%Y-%m-%d %I:%M %p')
-
-            return {
-                'git_commit_hash': commit_hash,
-                'git_commit_date': commit_date_str
-            }
-        except Exception:
-            return {
-                'git_commit_hash': 'unknown',
-                'git_commit_date': 'unknown'
-            }
+        """Expose cached git commit info to templates."""
+        return {
+            'git_commit_hash': app.config.get('GIT_COMMIT_HASH', 'unknown'),
+            'git_commit_date': app.config.get('GIT_COMMIT_DATE', 'unknown')
+        }
 
     # Load configuration
     if config_name == 'production':

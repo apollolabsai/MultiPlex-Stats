@@ -32,6 +32,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Compute build metadata
+        id: build_meta
+        run: |
+          echo "commit_hash=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "commit_date=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -67,6 +73,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_COMMIT_HASH=${{ steps.build_meta.outputs.commit_hash }}
+            GIT_COMMIT_DATE=${{ steps.build_meta.outputs.commit_date }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
