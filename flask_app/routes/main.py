@@ -207,6 +207,60 @@ def api_distribution_charts():
         return jsonify({'error': str(e)}), 500
 
 
+@main_bp.route('/api/user-chart')
+def api_user_chart():
+    """Return user activity chart HTML for the requested day range."""
+    if not ConfigService.has_valid_config():
+        return jsonify({'error': 'No server configuration found.'}), 400
+
+    days = request.args.get('days', type=int)
+    if not days or days < 1 or days > 3650:
+        return jsonify({'error': 'Invalid day range. Use 1-3650.'}), 400
+
+    try:
+        service = AnalyticsService()
+        result = service.get_user_chart_html(days=days)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@main_bp.route('/api/movie-chart')
+def api_movie_chart():
+    """Return top movies chart HTML for the requested day range."""
+    if not ConfigService.has_valid_config():
+        return jsonify({'error': 'No server configuration found.'}), 400
+
+    days = request.args.get('days', type=int)
+    if not days or days < 1 or days > 3650:
+        return jsonify({'error': 'Invalid day range. Use 1-3650.'}), 400
+
+    try:
+        service = AnalyticsService()
+        result = service.get_movie_chart_html(days=days)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@main_bp.route('/api/tv-chart')
+def api_tv_chart():
+    """Return top TV shows chart HTML for the requested day range."""
+    if not ConfigService.has_valid_config():
+        return jsonify({'error': 'No server configuration found.'}), 400
+
+    days = request.args.get('days', type=int)
+    if not days or days < 1 or days > 3650:
+        return jsonify({'error': 'Invalid day range. Use 1-3650.'}), 400
+
+    try:
+        service = AnalyticsService()
+        result = service.get_tv_chart_html(days=days)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @main_bp.route('/users')
 def users():
     """Display all users from configured servers."""

@@ -280,7 +280,23 @@
         </svg>
         User Activity
     </h2>
-    <div class="chart-container">
+    <div class="chart-controls">
+        <div class="chart-controls-label">User range</div>
+        <form class="chart-controls-form" id="user-range-form">
+            <div class="chart-controls-group">
+                <button type="button" data-days="7" class="range-pill {% if summary.user_chart_days == 7 %}active{% endif %}">7d</button>
+                <button type="button" data-days="30" class="range-pill {% if summary.user_chart_days == 30 %}active{% endif %}">30d</button>
+                <button type="button" data-days="60" class="range-pill {% if summary.user_chart_days == 60 %}active{% endif %}">60d</button>
+                <button type="button" data-days="90" class="range-pill {% if summary.user_chart_days == 90 %}active{% endif %}">90d</button>
+                <div class="range-custom">
+                    <input type="number" name="user_days_custom" min="1" max="3650" placeholder="Custom days"
+                           value="{% if summary.user_chart_days not in [7, 30, 60, 90] %}{{ summary.user_chart_days }}{% endif %}">
+                    <button type="button" class="range-pill range-apply-user">Apply</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="chart-container" id="user-chart-container">
         {{ charts.users | safe }}
     </div>
 </div>
@@ -297,10 +313,42 @@
         </svg>
         Top Content
     </h2>
-    <div class="chart-container">
+    <div class="chart-controls">
+        <div class="chart-controls-label">Movies range</div>
+        <form class="chart-controls-form" id="movie-range-form">
+            <div class="chart-controls-group">
+                <button type="button" data-days="7" class="range-pill {% if summary.movie_chart_days == 7 %}active{% endif %}">7d</button>
+                <button type="button" data-days="30" class="range-pill {% if summary.movie_chart_days == 30 %}active{% endif %}">30d</button>
+                <button type="button" data-days="60" class="range-pill {% if summary.movie_chart_days == 60 %}active{% endif %}">60d</button>
+                <button type="button" data-days="90" class="range-pill {% if summary.movie_chart_days == 90 %}active{% endif %}">90d</button>
+                <div class="range-custom">
+                    <input type="number" name="movie_days_custom" min="1" max="3650" placeholder="Custom days"
+                           value="{% if summary.movie_chart_days not in [7, 30, 60, 90] %}{{ summary.movie_chart_days }}{% endif %}">
+                    <button type="button" class="range-pill range-apply-movie">Apply</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="chart-container" id="movie-chart-container">
         {{ charts.movies | safe }}
     </div>
-    <div class="chart-container">
+    <div class="chart-controls">
+        <div class="chart-controls-label">TV range</div>
+        <form class="chart-controls-form" id="tv-range-form">
+            <div class="chart-controls-group">
+                <button type="button" data-days="7" class="range-pill {% if summary.tv_chart_days == 7 %}active{% endif %}">7d</button>
+                <button type="button" data-days="30" class="range-pill {% if summary.tv_chart_days == 30 %}active{% endif %}">30d</button>
+                <button type="button" data-days="60" class="range-pill {% if summary.tv_chart_days == 60 %}active{% endif %}">60d</button>
+                <button type="button" data-days="90" class="range-pill {% if summary.tv_chart_days == 90 %}active{% endif %}">90d</button>
+                <div class="range-custom">
+                    <input type="number" name="tv_days_custom" min="1" max="3650" placeholder="Custom days"
+                           value="{% if summary.tv_chart_days not in [7, 30, 60, 90] %}{{ summary.tv_chart_days }}{% endif %}">
+                    <button type="button" class="range-pill range-apply-tv">Apply</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="chart-container" id="tv-chart-container">
         {{ charts.tv | safe }}
     </div>
 </div>
@@ -823,6 +871,213 @@ $(document).ready(function() {
                 return;
             }
             fetchDistributionCharts(value);
+        });
+    }
+
+    function setActiveUserRange(days) {
+        var buttons = document.querySelectorAll('#user-range-form .range-pill[data-days]');
+        var customInput = document.querySelector('#user-range-form input[name="user_days_custom"]');
+        var matched = false;
+
+        buttons.forEach(function(button) {
+            var value = parseInt(button.getAttribute('data-days'), 10);
+            var isActive = value === days;
+            button.classList.toggle('active', isActive);
+            matched = matched || isActive;
+        });
+
+        if (customInput) {
+            customInput.value = matched ? '' : days;
+        }
+    }
+
+    function fetchUserChart(days) {
+        var container = document.getElementById('user-chart-container');
+        if (!container || !days) {
+            return;
+        }
+
+        container.classList.add('is-loading');
+
+        fetch('{{ url_for("main.api_user_chart") }}?days=' + encodeURIComponent(days))
+            .then(function(response) {
+                if (!response.ok) {
+                    return response.json().then(function(payload) {
+                        throw new Error(payload.error || 'Failed to load chart.');
+                    });
+                }
+                return response.json();
+            })
+            .then(function(payload) {
+                container.innerHTML = payload.html;
+                executeInlineScripts(container);
+                setActiveUserRange(payload.user_chart_days);
+            })
+            .catch(function(error) {
+                alert(error.message || 'Unable to update the user chart.');
+            })
+            .finally(function() {
+                container.classList.remove('is-loading');
+            });
+    }
+
+    document.querySelectorAll('#user-range-form .range-pill[data-days]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var value = parseInt(button.getAttribute('data-days'), 10);
+            if (value) {
+                fetchUserChart(value);
+            }
+        });
+    });
+
+    var userApplyButton = document.querySelector('#user-range-form .range-custom .range-apply-user');
+    if (userApplyButton) {
+        userApplyButton.addEventListener('click', function() {
+            var customInput = document.querySelector('#user-range-form input[name="user_days_custom"]');
+            var value = customInput ? parseInt(customInput.value, 10) : null;
+            if (!value || value < 1 || value > 3650) {
+                alert('Please enter a valid number of days (1-3650).');
+                return;
+            }
+            fetchUserChart(value);
+        });
+    }
+
+    function setActiveMovieRange(days) {
+        var buttons = document.querySelectorAll('#movie-range-form .range-pill[data-days]');
+        var customInput = document.querySelector('#movie-range-form input[name="movie_days_custom"]');
+        var matched = false;
+
+        buttons.forEach(function(button) {
+            var value = parseInt(button.getAttribute('data-days'), 10);
+            var isActive = value === days;
+            button.classList.toggle('active', isActive);
+            matched = matched || isActive;
+        });
+
+        if (customInput) {
+            customInput.value = matched ? '' : days;
+        }
+    }
+
+    function fetchMovieChart(days) {
+        var container = document.getElementById('movie-chart-container');
+        if (!container || !days) {
+            return;
+        }
+
+        container.classList.add('is-loading');
+
+        fetch('{{ url_for("main.api_movie_chart") }}?days=' + encodeURIComponent(days))
+            .then(function(response) {
+                if (!response.ok) {
+                    return response.json().then(function(payload) {
+                        throw new Error(payload.error || 'Failed to load chart.');
+                    });
+                }
+                return response.json();
+            })
+            .then(function(payload) {
+                container.innerHTML = payload.html;
+                executeInlineScripts(container);
+                setActiveMovieRange(payload.movie_chart_days);
+            })
+            .catch(function(error) {
+                alert(error.message || 'Unable to update the movie chart.');
+            })
+            .finally(function() {
+                container.classList.remove('is-loading');
+            });
+    }
+
+    document.querySelectorAll('#movie-range-form .range-pill[data-days]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var value = parseInt(button.getAttribute('data-days'), 10);
+            if (value) {
+                fetchMovieChart(value);
+            }
+        });
+    });
+
+    var movieApplyButton = document.querySelector('#movie-range-form .range-custom .range-apply-movie');
+    if (movieApplyButton) {
+        movieApplyButton.addEventListener('click', function() {
+            var customInput = document.querySelector('#movie-range-form input[name="movie_days_custom"]');
+            var value = customInput ? parseInt(customInput.value, 10) : null;
+            if (!value || value < 1 || value > 3650) {
+                alert('Please enter a valid number of days (1-3650).');
+                return;
+            }
+            fetchMovieChart(value);
+        });
+    }
+
+    function setActiveTvRange(days) {
+        var buttons = document.querySelectorAll('#tv-range-form .range-pill[data-days]');
+        var customInput = document.querySelector('#tv-range-form input[name="tv_days_custom"]');
+        var matched = false;
+
+        buttons.forEach(function(button) {
+            var value = parseInt(button.getAttribute('data-days'), 10);
+            var isActive = value === days;
+            button.classList.toggle('active', isActive);
+            matched = matched || isActive;
+        });
+
+        if (customInput) {
+            customInput.value = matched ? '' : days;
+        }
+    }
+
+    function fetchTvChart(days) {
+        var container = document.getElementById('tv-chart-container');
+        if (!container || !days) {
+            return;
+        }
+
+        container.classList.add('is-loading');
+
+        fetch('{{ url_for("main.api_tv_chart") }}?days=' + encodeURIComponent(days))
+            .then(function(response) {
+                if (!response.ok) {
+                    return response.json().then(function(payload) {
+                        throw new Error(payload.error || 'Failed to load chart.');
+                    });
+                }
+                return response.json();
+            })
+            .then(function(payload) {
+                container.innerHTML = payload.html;
+                executeInlineScripts(container);
+                setActiveTvRange(payload.tv_chart_days);
+            })
+            .catch(function(error) {
+                alert(error.message || 'Unable to update the TV chart.');
+            })
+            .finally(function() {
+                container.classList.remove('is-loading');
+            });
+    }
+
+    document.querySelectorAll('#tv-range-form .range-pill[data-days]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var value = parseInt(button.getAttribute('data-days'), 10);
+            if (value) {
+                fetchTvChart(value);
+            }
+        });
+    });
+
+    var tvApplyButton = document.querySelector('#tv-range-form .range-custom .range-apply-tv');
+    if (tvApplyButton) {
+        tvApplyButton.addEventListener('click', function() {
+            var customInput = document.querySelector('#tv-range-form input[name="tv_days_custom"]');
+            var value = customInput ? parseInt(customInput.value, 10) : null;
+            if (!value || value < 1 || value > 3650) {
+                alert('Please enter a valid number of days (1-3650).');
+                return;
+            }
+            fetchTvChart(value);
         });
     }
 });

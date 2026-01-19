@@ -154,6 +154,9 @@ class AnalyticsService:
             'daily_trend_days': daily_trend_days,
             'monthly_trend_months': settings.monthly_trend_months,
             'distribution_days': settings.history_days,
+            'user_chart_days': settings.history_days,
+            'movie_chart_days': settings.history_days,
+            'tv_chart_days': settings.history_days,
             'history_days': settings.history_days,
             'generated_at': datetime.now(get_local_timezone()).isoformat()
         }
@@ -286,6 +289,114 @@ class AnalyticsService:
             'server': fig_server.to_html(full_html=False, include_plotlyjs=False),
             'platform': fig_platform.to_html(full_html=False, include_plotlyjs=False),
             'distribution_days': dist_days
+        }
+
+    def get_user_chart_html(self, days: int | None = None) -> Dict[str, Any]:
+        """
+        Generate the user activity chart HTML for a specific day range.
+
+        Args:
+            days: Optional override for user chart range.
+
+        Returns:
+            Dictionary with chart HTML and the day range used.
+        """
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        settings = ConfigService.get_analytics_settings()
+
+        if not server_a_config:
+            raise ValueError("No server configuration found. Please configure at least one server.")
+
+        history_days = days or settings.history_days
+
+        client_a = TautulliClient(server_a_config)
+        client_b = TautulliClient(server_b_config) if server_b_config else None
+
+        history_data_a = client_a.get_history(days=history_days)
+        history_data_b = client_b.get_history(days=history_days) if client_b else None
+        df_history = process_history_data(
+            history_data_a, history_data_b,
+            server_a_config.name, server_b_config.name if server_b_config else None
+        )
+
+        df_users = aggregate_user_stats(df_history, top_n=settings.top_users)
+        fig_users = create_user_bar_chart(df_users, history_days)
+
+        return {
+            'html': fig_users.to_html(full_html=False, include_plotlyjs=False),
+            'user_chart_days': history_days
+        }
+
+    def get_movie_chart_html(self, days: int | None = None) -> Dict[str, Any]:
+        """
+        Generate the top movies chart HTML for a specific day range.
+
+        Args:
+            days: Optional override for movie chart range.
+
+        Returns:
+            Dictionary with chart HTML and the day range used.
+        """
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        settings = ConfigService.get_analytics_settings()
+
+        if not server_a_config:
+            raise ValueError("No server configuration found. Please configure at least one server.")
+
+        history_days = days or settings.history_days
+
+        client_a = TautulliClient(server_a_config)
+        client_b = TautulliClient(server_b_config) if server_b_config else None
+
+        history_data_a = client_a.get_history(days=history_days)
+        history_data_b = client_b.get_history(days=history_days) if client_b else None
+        df_history = process_history_data(
+            history_data_a, history_data_b,
+            server_a_config.name, server_b_config.name if server_b_config else None
+        )
+
+        df_movies = aggregate_movie_stats(df_history, top_n=settings.top_movies)
+        fig_movies = create_movie_bar_chart(df_movies, history_days)
+
+        return {
+            'html': fig_movies.to_html(full_html=False, include_plotlyjs=False),
+            'movie_chart_days': history_days
+        }
+
+    def get_tv_chart_html(self, days: int | None = None) -> Dict[str, Any]:
+        """
+        Generate the top TV shows chart HTML for a specific day range.
+
+        Args:
+            days: Optional override for TV chart range.
+
+        Returns:
+            Dictionary with chart HTML and the day range used.
+        """
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        settings = ConfigService.get_analytics_settings()
+
+        if not server_a_config:
+            raise ValueError("No server configuration found. Please configure at least one server.")
+
+        history_days = days or settings.history_days
+
+        client_a = TautulliClient(server_a_config)
+        client_b = TautulliClient(server_b_config) if server_b_config else None
+
+        history_data_a = client_a.get_history(days=history_days)
+        history_data_b = client_b.get_history(days=history_days) if client_b else None
+        df_history = process_history_data(
+            history_data_a, history_data_b,
+            server_a_config.name, server_b_config.name if server_b_config else None
+        )
+
+        df_tv = aggregate_tv_stats(df_history, top_n=settings.top_tv_shows)
+        fig_tv = create_tv_bar_chart(df_tv, history_days)
+
+        return {
+            'html': fig_tv.to_html(full_html=False, include_plotlyjs=False),
+            'tv_chart_days': history_days
         }
 
     def _get_user_thumb_map(self) -> dict:
