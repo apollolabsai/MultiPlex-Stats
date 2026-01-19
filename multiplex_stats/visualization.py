@@ -171,6 +171,7 @@ def create_user_bar_chart(
         textfont_size=18,
         marker_line_color='rgba(0,0,0,0)'
     )
+    fig.update_layout(coloraxis_showscale=False)
 
     # Apply theme
     layout_config = theme.get_layout_config(
@@ -218,6 +219,7 @@ def create_movie_bar_chart(
         textfont_size=18,
         marker_line_color='rgba(0,0,0,0)'
     )
+    fig.update_layout(coloraxis_showscale=False)
 
     # Apply theme
     layout_config = theme.get_layout_config(
@@ -265,6 +267,7 @@ def create_tv_bar_chart(
         textfont_size=18,
         marker_line_color='rgba(0,0,0,0)'
     )
+    fig.update_layout(coloraxis_showscale=False)
 
     # Apply theme
     layout_config = theme.get_layout_config(
