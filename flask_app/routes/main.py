@@ -171,6 +171,24 @@ def api_daily_chart():
         return jsonify({'error': str(e)}), 500
 
 
+@main_bp.route('/api/monthly-chart')
+def api_monthly_chart():
+    """Return monthly chart HTML for the requested month range."""
+    if not ConfigService.has_valid_config():
+        return jsonify({'error': 'No server configuration found.'}), 400
+
+    months = request.args.get('months', type=int)
+    if not months or months < 1 or months > 120:
+        return jsonify({'error': 'Invalid month range. Use 1-120.'}), 400
+
+    try:
+        service = AnalyticsService()
+        result = service.get_monthly_chart_html(monthly_trend_months=months)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @main_bp.route('/users')
 def users():
     """Display all users from configured servers."""

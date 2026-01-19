@@ -145,6 +145,7 @@ class AnalyticsService:
             'server_b_name': server_b_config.name if server_b_config else None,
             'server_b_plays': server_b_plays,
             'daily_trend_days': daily_trend_days,
+            'monthly_trend_months': settings.monthly_trend_months,
             'history_days': settings.history_days,
             'generated_at': datetime.now(get_local_timezone()).isoformat()
         }
@@ -190,6 +191,43 @@ class AnalyticsService:
         return {
             'html': fig_daily.to_html(full_html=False, include_plotlyjs=False),
             'daily_trend_days': daily_days
+        }
+
+    def get_monthly_chart_html(self, monthly_trend_months: int | None = None) -> Dict[str, Any]:
+        """
+        Generate the monthly play count chart HTML for a specific month range.
+
+        Args:
+            monthly_trend_months: Optional override for monthly trend range.
+
+        Returns:
+            Dictionary with chart HTML and the month range used.
+        """
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        settings = ConfigService.get_analytics_settings()
+
+        if not server_a_config:
+            raise ValueError("No server configuration found. Please configure at least one server.")
+
+        monthly_months = monthly_trend_months or settings.monthly_trend_months
+
+        client_a = TautulliClient(server_a_config)
+        client_b = TautulliClient(server_b_config) if server_b_config else None
+
+        monthly_data_a = client_a.get_plays_per_month(time_range=monthly_months)
+        monthly_data_b = client_b.get_plays_per_month(time_range=monthly_months) if client_b else None
+        df_monthly = process_monthly_data(
+            monthly_data_a, monthly_data_b,
+            server_a_config.name, server_b_config.name if server_b_config else None
+        )
+
+        fig_monthly = create_monthly_bar_chart(
+            df_monthly, server_a_config.name, server_b_config.name if server_b_config else None
+        )
+
+        return {
+            'html': fig_monthly.to_html(full_html=False, include_plotlyjs=False),
+            'monthly_trend_months': monthly_months
         }
 
     def _get_user_thumb_map(self) -> dict:

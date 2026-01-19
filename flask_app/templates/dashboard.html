@@ -214,7 +214,23 @@
     <div class="chart-container" id="daily-chart-container">
         {{ charts.daily | safe }}
     </div>
-    <div class="chart-container">
+    <div class="chart-controls">
+        <div class="chart-controls-label">Monthly range</div>
+        <form class="chart-controls-form" id="monthly-range-form">
+            <div class="chart-controls-group">
+                <button type="button" data-months="12" class="range-pill {% if summary.monthly_trend_months == 12 %}active{% endif %}">1y</button>
+                <button type="button" data-months="24" class="range-pill {% if summary.monthly_trend_months == 24 %}active{% endif %}">2y</button>
+                <button type="button" data-months="60" class="range-pill {% if summary.monthly_trend_months == 60 %}active{% endif %}">5y</button>
+                <button type="button" data-months="120" class="range-pill {% if summary.monthly_trend_months == 120 %}active{% endif %}">10y</button>
+                <div class="range-custom">
+                    <input type="number" name="monthly_trend_months_custom" min="1" max="120" placeholder="Custom months"
+                           value="{% if summary.monthly_trend_months not in [12, 24, 60, 120] %}{{ summary.monthly_trend_months }}{% endif %}">
+                    <button type="button" class="range-pill range-apply-monthly">Apply</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="chart-container" id="monthly-chart-container">
         {{ charts.monthly | safe }}
     </div>
 </div>
@@ -642,6 +658,75 @@ $(document).ready(function() {
                 return;
             }
             fetchDailyChart(value);
+        });
+    }
+
+    function setActiveMonthlyRange(months) {
+        var buttons = document.querySelectorAll('.range-pill[data-months]');
+        var customInput = document.querySelector('.range-custom input[name="monthly_trend_months_custom"]');
+        var matched = false;
+
+        buttons.forEach(function(button) {
+            var value = parseInt(button.getAttribute('data-months'), 10);
+            var isActive = value === months;
+            button.classList.toggle('active', isActive);
+            matched = matched || isActive;
+        });
+
+        if (customInput) {
+            customInput.value = matched ? '' : months;
+        }
+    }
+
+    function fetchMonthlyChart(months) {
+        var container = document.getElementById('monthly-chart-container');
+        if (!container || !months) {
+            return;
+        }
+
+        container.classList.add('is-loading');
+
+        fetch('{{ url_for("main.api_monthly_chart") }}?months=' + encodeURIComponent(months))
+            .then(function(response) {
+                if (!response.ok) {
+                    return response.json().then(function(payload) {
+                        throw new Error(payload.error || 'Failed to load chart.');
+                    });
+                }
+                return response.json();
+            })
+            .then(function(payload) {
+                container.innerHTML = payload.html;
+                executeInlineScripts(container);
+                setActiveMonthlyRange(payload.monthly_trend_months);
+            })
+            .catch(function(error) {
+                alert(error.message || 'Unable to update the monthly chart.');
+            })
+            .finally(function() {
+                container.classList.remove('is-loading');
+            });
+    }
+
+    document.querySelectorAll('.range-pill[data-months]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var value = parseInt(button.getAttribute('data-months'), 10);
+            if (value) {
+                fetchMonthlyChart(value);
+            }
+        });
+    });
+
+    var monthlyApplyButton = document.querySelector('.range-custom .range-apply-monthly');
+    if (monthlyApplyButton) {
+        monthlyApplyButton.addEventListener('click', function() {
+            var customInput = document.querySelector('.range-custom input[name="monthly_trend_months_custom"]');
+            var value = customInput ? parseInt(customInput.value, 10) : null;
+            if (!value || value < 1 || value > 120) {
+                alert('Please enter a valid number of months (1-120).');
+                return;
+            }
+            fetchMonthlyChart(value);
         });
     }
 });
