@@ -206,13 +206,6 @@
             <div class="form-card">
                 <form method="POST" action="{{ url_for('settings.update_analytics_settings') }}">
                     <div class="form-group">
-                        <label for="history_days">History Days</label>
-                        <input type="number" id="history_days" name="history_days"
-                               value="{{ settings.history_days if settings else 60 }}" min="1" max="365">
-                        <small>Days of history for user activity and top content charts</small>
-                    </div>
-
-                    <div class="form-group">
                         <label for="top_movies">Top Movies Count</label>
                         <input type="number" id="top_movies" name="top_movies"
                                value="{{ settings.top_movies if settings else 30 }}" min="1" max="100">
