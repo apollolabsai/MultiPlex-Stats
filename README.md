@@ -127,9 +127,6 @@ After the initial load, new records are automatically appended when you refresh 
 
 Customize your charts and analysis periods:
 
-- **Daily Trend Days** - Days shown in the daily activity chart
-- **Monthly Trend Months** - Months shown in the monthly chart
-- **History Days** - Days used for user activity and top content charts
 - **Top Movies/TV Shows/Users** - Number of items to display in rankings
 
 ---
@@ -146,7 +143,7 @@ Use the "Refresh Analytics" button on the dashboard to update with the latest da
 
 ## Privacy and Security
 
-- All data stays on your machine (no external services)
+- All data stays on your machine (no external services other than IP GEO lookup of viewing sessions)
 - API keys are stored in a local SQLite database
 - No telemetry or tracking
 
