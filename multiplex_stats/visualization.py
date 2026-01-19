@@ -179,6 +179,7 @@ def create_user_bar_chart(
         height=700
     )
     layout_config['xaxis']['tickfont']['size'] = 15
+    layout_config['xaxis']['title'] = dict(text='', font=dict(color='white'))
     fig.update_layout(**layout_config)
 
     return fig
@@ -227,6 +228,7 @@ def create_movie_bar_chart(
         height=700
     )
     layout_config['xaxis']['tickfont']['size'] = 15
+    layout_config['xaxis']['title'] = dict(text='', font=dict(color='white'))
     fig.update_layout(**layout_config)
 
     return fig
@@ -275,6 +277,7 @@ def create_tv_bar_chart(
         height=700
     )
     layout_config['xaxis']['tickfont']['size'] = 15
+    layout_config['xaxis']['title'] = dict(text='', font=dict(color='white'))
     fig.update_layout(**layout_config)
 
     return fig
