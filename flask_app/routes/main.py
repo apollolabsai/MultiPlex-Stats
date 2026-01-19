@@ -153,6 +153,24 @@ def api_viewing_history():
     return jsonify(result)
 
 
+@main_bp.route('/api/daily-chart')
+def api_daily_chart():
+    """Return daily chart HTML for the requested day range."""
+    if not ConfigService.has_valid_config():
+        return jsonify({'error': 'No server configuration found.'}), 400
+
+    days = request.args.get('days', type=int)
+    if not days or days < 1 or days > 3650:
+        return jsonify({'error': 'Invalid day range. Use 1-3650.'}), 400
+
+    try:
+        service = AnalyticsService()
+        result = service.get_daily_chart_html(daily_trend_days=days)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @main_bp.route('/users')
 def users():
     """Display all users from configured servers."""

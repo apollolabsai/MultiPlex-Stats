@@ -155,6 +155,43 @@ class AnalyticsService:
             'summary': summary
         }
 
+    def get_daily_chart_html(self, daily_trend_days: int | None = None) -> Dict[str, Any]:
+        """
+        Generate the daily play count chart HTML for a specific day range.
+
+        Args:
+            daily_trend_days: Optional override for daily trend range.
+
+        Returns:
+            Dictionary with chart HTML and the day range used.
+        """
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        settings = ConfigService.get_analytics_settings()
+
+        if not server_a_config:
+            raise ValueError("No server configuration found. Please configure at least one server.")
+
+        daily_days = daily_trend_days or settings.daily_trend_days
+
+        client_a = TautulliClient(server_a_config)
+        client_b = TautulliClient(server_b_config) if server_b_config else None
+
+        daily_data_a = client_a.get_plays_by_date(time_range=daily_days)
+        daily_data_b = client_b.get_plays_by_date(time_range=daily_days) if client_b else None
+        df_daily = process_daily_data(
+            daily_data_a, daily_data_b,
+            server_a_config.name, server_b_config.name if server_b_config else None
+        )
+
+        fig_daily = create_daily_bar_chart(
+            df_daily, server_a_config.name, server_b_config.name if server_b_config else None
+        )
+
+        return {
+            'html': fig_daily.to_html(full_html=False, include_plotlyjs=False),
+            'daily_trend_days': daily_days
+        }
+
     def _get_user_thumb_map(self) -> dict:
         """
         Get mapping of user_id to user_thumb (avatar URL) from all servers.
