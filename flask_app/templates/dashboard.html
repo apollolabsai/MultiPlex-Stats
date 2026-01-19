@@ -413,6 +413,10 @@
                     <span class="geo-label">Country</span>
                     <span class="geo-value" id="geo-modal-country">Unknown</span>
                 </div>
+                <div class="geo-row">
+                    <span class="geo-label">ISP</span>
+                    <span class="geo-value" id="geo-modal-isp">Unknown</span>
+                </div>
             </div>
         </div>
     </div>
@@ -823,6 +827,7 @@ $(document).ready(function() {
         document.getElementById('geo-modal-city').textContent = data.city || 'Unknown';
         document.getElementById('geo-modal-region').textContent = data.region || 'Unknown';
         document.getElementById('geo-modal-country').textContent = data.country || 'Unknown';
+        document.getElementById('geo-modal-isp').textContent = data.isp || 'Unknown';
 
         modal.classList.add('is-open');
         modal.setAttribute('aria-hidden', 'false');
@@ -845,7 +850,8 @@ $(document).ready(function() {
             location: 'Loading...',
             city: 'Loading...',
             region: 'Loading...',
-            country: 'Loading...'
+            country: 'Loading...',
+            isp: 'Loading...'
         });
 
         fetch('{{ url_for("main.api_ip_lookup") }}?ip=' + encodeURIComponent(ip))
@@ -863,7 +869,8 @@ $(document).ready(function() {
                     location: payload.location || 'Unknown',
                     city: payload.city || 'Unknown',
                     region: payload.region || 'Unknown',
-                    country: payload.country || 'Unknown'
+                    country: payload.country || 'Unknown',
+                    isp: payload.isp || 'Unknown'
                 });
             })
             .catch(function(error) {
@@ -872,7 +879,8 @@ $(document).ready(function() {
                     location: 'Unknown',
                     city: 'Unknown',
                     region: 'Unknown',
-                    country: 'Unknown'
+                    country: 'Unknown',
+                    isp: 'Unknown'
                 });
                 alert(error.message || 'Unable to lookup IP location.');
             });

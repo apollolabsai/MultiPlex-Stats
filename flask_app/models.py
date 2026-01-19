@@ -139,6 +139,7 @@ class IPGeolocation(db.Model):
     city = db.Column(db.String(100), nullable=True)
     region = db.Column(db.String(100), nullable=True)
     country = db.Column(db.String(100), nullable=True)
+    isp = db.Column(db.String(200), nullable=True)
     lookup_date = db.Column(db.DateTime, default=datetime.utcnow)
 
 

@@ -242,7 +242,8 @@ def api_ip_lookup():
             'location': location_value,
             'city': geo_data.get('city') or '',
             'region': geo_data.get('region') or '',
-            'country': geo_data.get('country') or ''
+            'country': geo_data.get('country') or '',
+            'isp': geo_data.get('isp') or ''
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500

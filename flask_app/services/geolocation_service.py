@@ -11,7 +11,7 @@ class GeolocationService:
 
     def __init__(self):
         # ip-api.com - free tier: 45 requests/minute, HTTP only
-        self.api_url = "http://ip-api.com/json/{ip}?fields=status,message,country,regionName,city"
+        self.api_url = "http://ip-api.com/json/{ip}?fields=status,message,country,regionName,city,isp"
 
     def lookup_ip(self, ip_address):
         """
@@ -22,15 +22,15 @@ class GeolocationService:
             ip_address: IP address to lookup
 
         Returns:
-            dict with keys: city, region, country (all may be None)
+            dict with keys: city, region, country, isp (all may be None)
         """
         normalized_ip = self._normalize_ip(ip_address)
         if not normalized_ip:
-            return {'city': None, 'region': None, 'country': None}
+            return {'city': None, 'region': None, 'country': None, 'isp': None}
 
         # Check if it's a private IP (don't lookup)
         if self._is_private_ip(normalized_ip):
-            return {'city': 'Local', 'region': None, 'country': None}
+            return {'city': 'Local', 'region': None, 'country': None, 'isp': 'Local Network'}
 
         # Check cache first
         cached = IPGeolocation.query.filter_by(ip_address=normalized_ip).first()
@@ -38,7 +38,8 @@ class GeolocationService:
             return {
                 'city': cached.city,
                 'region': cached.region,
-                'country': cached.country
+                'country': cached.country,
+                'isp': cached.isp
             }
 
         # Perform API lookup
@@ -53,40 +54,43 @@ class GeolocationService:
 
                 # Check for API error response
                 if data.get('status') == 'fail':
-                    return {'city': None, 'region': None, 'country': None}
+                    return {'city': None, 'region': None, 'country': None, 'isp': None}
 
                 # Extract location data (ip-api.com field names)
                 city = data.get('city')
                 region = data.get('regionName')
                 country = data.get('country')
+                isp = data.get('isp')
 
                 # Cache the result
                 geo_record = IPGeolocation(
                     ip_address=normalized_ip,
                     city=city,
                     region=region,
-                    country=country
+                    country=country,
+                    isp=isp
                 )
                 db.session.add(geo_record)
                 db.session.commit()
 
-                return {'city': city, 'region': region, 'country': country}
+                return {'city': city, 'region': region, 'country': country, 'isp': isp}
             else:
                 # API error - cache as unknown to prevent repeated failed requests
                 geo_record = IPGeolocation(
                     ip_address=normalized_ip,
                     city=None,
                     region=None,
-                    country=None
+                    country=None,
+                    isp=None
                 )
                 db.session.add(geo_record)
                 db.session.commit()
-                return {'city': None, 'region': None, 'country': None}
+                return {'city': None, 'region': None, 'country': None, 'isp': None}
 
         except Exception as e:
             print(f"Error looking up IP {normalized_ip}: {e}")
             # Don't cache failures - allow retry later
-            return {'city': None, 'region': None, 'country': None}
+            return {'city': None, 'region': None, 'country': None, 'isp': None}
 
     def _normalize_ip(self, ip_address):
         """Normalize IP string for caching and lookup."""
