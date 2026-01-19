@@ -189,6 +189,24 @@ def api_monthly_chart():
         return jsonify({'error': str(e)}), 500
 
 
+@main_bp.route('/api/distribution-charts')
+def api_distribution_charts():
+    """Return distribution chart HTML for the requested day range."""
+    if not ConfigService.has_valid_config():
+        return jsonify({'error': 'No server configuration found.'}), 400
+
+    days = request.args.get('days', type=int)
+    if not days or days < 1 or days > 3650:
+        return jsonify({'error': 'Invalid day range. Use 1-3650.'}), 400
+
+    try:
+        service = AnalyticsService()
+        result = service.get_distribution_charts_html(days=days)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @main_bp.route('/users')
 def users():
     """Display all users from configured servers."""

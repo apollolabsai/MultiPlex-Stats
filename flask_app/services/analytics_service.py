@@ -59,7 +59,7 @@ class AnalyticsService:
         client_b = TautulliClient(server_b_config) if server_b_config else None
 
         # 3. Fetch and process data (following run_analytics.py logic)
-        # Daily data
+        # Daily data (for daily chart)
         daily_data_a = client_a.get_plays_by_date(time_range=daily_trend_days)
         daily_data_b = client_b.get_plays_by_date(time_range=daily_trend_days) if client_b else None
         df_daily = process_daily_data(
@@ -100,9 +100,16 @@ class AnalyticsService:
         fig_users = create_user_bar_chart(df_users, settings.history_days)
         fig_movies = create_movie_bar_chart(df_movies, settings.history_days)
         fig_tv = create_tv_bar_chart(df_tv, settings.history_days)
-        fig_category = create_category_pie_chart(df_daily, settings.history_days)
+        # Distribution charts (use history_days range)
+        dist_daily_a = client_a.get_plays_by_date(time_range=settings.history_days)
+        dist_daily_b = client_b.get_plays_by_date(time_range=settings.history_days) if client_b else None
+        df_daily_dist = process_daily_data(
+            dist_daily_a, dist_daily_b,
+            server_a_config.name, server_b_config.name if server_b_config else None
+        )
+        fig_category = create_category_pie_chart(df_daily_dist, settings.history_days)
         fig_server = create_server_pie_chart(
-            df_daily, server_a_config.name,
+            df_daily_dist, server_a_config.name,
             server_b_config.name if server_b_config else None,
             settings.history_days
         )
@@ -146,6 +153,7 @@ class AnalyticsService:
             'server_b_plays': server_b_plays,
             'daily_trend_days': daily_trend_days,
             'monthly_trend_months': settings.monthly_trend_months,
+            'distribution_days': settings.history_days,
             'history_days': settings.history_days,
             'generated_at': datetime.now(get_local_timezone()).isoformat()
         }
@@ -228,6 +236,56 @@ class AnalyticsService:
         return {
             'html': fig_monthly.to_html(full_html=False, include_plotlyjs=False),
             'monthly_trend_months': monthly_months
+        }
+
+    def get_distribution_charts_html(self, days: int | None = None) -> Dict[str, Any]:
+        """
+        Generate distribution charts (category, server, platform) for a day range.
+
+        Args:
+            days: Optional override for distribution range.
+
+        Returns:
+            Dictionary with chart HTML for distribution and the day range used.
+        """
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        settings = ConfigService.get_analytics_settings()
+
+        if not server_a_config:
+            raise ValueError("No server configuration found. Please configure at least one server.")
+
+        dist_days = days or settings.history_days
+
+        client_a = TautulliClient(server_a_config)
+        client_b = TautulliClient(server_b_config) if server_b_config else None
+
+        dist_daily_a = client_a.get_plays_by_date(time_range=dist_days)
+        dist_daily_b = client_b.get_plays_by_date(time_range=dist_days) if client_b else None
+        df_daily_dist = process_daily_data(
+            dist_daily_a, dist_daily_b,
+            server_a_config.name, server_b_config.name if server_b_config else None
+        )
+
+        history_data_a = client_a.get_history(days=dist_days)
+        history_data_b = client_b.get_history(days=dist_days) if client_b else None
+        df_history = process_history_data(
+            history_data_a, history_data_b,
+            server_a_config.name, server_b_config.name if server_b_config else None
+        )
+
+        fig_category = create_category_pie_chart(df_daily_dist, dist_days)
+        fig_server = create_server_pie_chart(
+            df_daily_dist, server_a_config.name,
+            server_b_config.name if server_b_config else None,
+            dist_days
+        )
+        fig_platform = create_platform_pie_chart(df_history, dist_days)
+
+        return {
+            'category': fig_category.to_html(full_html=False, include_plotlyjs=False),
+            'server': fig_server.to_html(full_html=False, include_plotlyjs=False),
+            'platform': fig_platform.to_html(full_html=False, include_plotlyjs=False),
+            'distribution_days': dist_days
         }
 
     def _get_user_thumb_map(self) -> dict:

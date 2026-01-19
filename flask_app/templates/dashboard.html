@@ -243,14 +243,30 @@
         </svg>
         Distribution
     </h2>
+    <div class="chart-controls">
+        <div class="chart-controls-label">Distribution range</div>
+        <form class="chart-controls-form" id="distribution-range-form">
+            <div class="chart-controls-group">
+                <button type="button" data-days="7" class="range-pill {% if summary.distribution_days == 7 %}active{% endif %}">7d</button>
+                <button type="button" data-days="30" class="range-pill {% if summary.distribution_days == 30 %}active{% endif %}">30d</button>
+                <button type="button" data-days="60" class="range-pill {% if summary.distribution_days == 60 %}active{% endif %}">60d</button>
+                <button type="button" data-days="90" class="range-pill {% if summary.distribution_days == 90 %}active{% endif %}">90d</button>
+                <div class="range-custom">
+                    <input type="number" name="distribution_days_custom" min="1" max="3650" placeholder="Custom days"
+                           value="{% if summary.distribution_days not in [7, 30, 60, 90] %}{{ summary.distribution_days }}{% endif %}">
+                    <button type="button" class="range-pill range-apply-distribution">Apply</button>
+                </div>
+            </div>
+        </form>
+    </div>
     <div class="grid-3">
-        <div class="chart-container">
+        <div class="chart-container" id="distribution-category-container">
             {{ charts.category | safe }}
         </div>
-        <div class="chart-container">
+        <div class="chart-container" id="distribution-server-container">
             {{ charts.server | safe }}
         </div>
-        <div class="chart-container">
+        <div class="chart-container" id="distribution-platform-container">
             {{ charts.platform | safe }}
         </div>
     </div>
@@ -593,8 +609,8 @@ $(document).ready(function() {
     }
 
     function setActiveDailyRange(days) {
-        var buttons = document.querySelectorAll('.range-pill[data-days]');
-        var customInput = document.querySelector('.range-custom input[name="daily_trend_days_custom"]');
+        var buttons = document.querySelectorAll('#daily-range-form .range-pill[data-days]');
+        var customInput = document.querySelector('#daily-range-form input[name="daily_trend_days_custom"]');
         var matched = false;
 
         buttons.forEach(function(button) {
@@ -639,7 +655,7 @@ $(document).ready(function() {
             });
     }
 
-    document.querySelectorAll('.range-pill[data-days]').forEach(function(button) {
+    document.querySelectorAll('#daily-range-form .range-pill[data-days]').forEach(function(button) {
         button.addEventListener('click', function() {
             var value = parseInt(button.getAttribute('data-days'), 10);
             if (value) {
@@ -648,10 +664,10 @@ $(document).ready(function() {
         });
     });
 
-    var applyButton = document.querySelector('.range-custom .range-apply');
+    var applyButton = document.querySelector('#daily-range-form .range-custom .range-apply');
     if (applyButton) {
         applyButton.addEventListener('click', function() {
-            var customInput = document.querySelector('.range-custom input[name="daily_trend_days_custom"]');
+            var customInput = document.querySelector('#daily-range-form input[name="daily_trend_days_custom"]');
             var value = customInput ? parseInt(customInput.value, 10) : null;
             if (!value || value < 1 || value > 3650) {
                 alert('Please enter a valid number of days (1-3650).');
@@ -717,16 +733,96 @@ $(document).ready(function() {
         });
     });
 
-    var monthlyApplyButton = document.querySelector('.range-custom .range-apply-monthly');
+    var monthlyApplyButton = document.querySelector('#monthly-range-form .range-custom .range-apply-monthly');
     if (monthlyApplyButton) {
         monthlyApplyButton.addEventListener('click', function() {
-            var customInput = document.querySelector('.range-custom input[name="monthly_trend_months_custom"]');
+            var customInput = document.querySelector('#monthly-range-form input[name="monthly_trend_months_custom"]');
             var value = customInput ? parseInt(customInput.value, 10) : null;
             if (!value || value < 1 || value > 120) {
                 alert('Please enter a valid number of months (1-120).');
                 return;
             }
             fetchMonthlyChart(value);
+        });
+    }
+
+    function setActiveDistributionRange(days) {
+        var buttons = document.querySelectorAll('#distribution-range-form .range-pill[data-days]');
+        var customInput = document.querySelector('#distribution-range-form input[name="distribution_days_custom"]');
+        var matched = false;
+
+        buttons.forEach(function(button) {
+            var value = parseInt(button.getAttribute('data-days'), 10);
+            var isActive = value === days;
+            button.classList.toggle('active', isActive);
+            matched = matched || isActive;
+        });
+
+        if (customInput) {
+            customInput.value = matched ? '' : days;
+        }
+    }
+
+    function fetchDistributionCharts(days) {
+        var categoryContainer = document.getElementById('distribution-category-container');
+        var serverContainer = document.getElementById('distribution-server-container');
+        var platformContainer = document.getElementById('distribution-platform-container');
+
+        if (!categoryContainer || !serverContainer || !platformContainer || !days) {
+            return;
+        }
+
+        categoryContainer.classList.add('is-loading');
+        serverContainer.classList.add('is-loading');
+        platformContainer.classList.add('is-loading');
+
+        fetch('{{ url_for("main.api_distribution_charts") }}?days=' + encodeURIComponent(days))
+            .then(function(response) {
+                if (!response.ok) {
+                    return response.json().then(function(payload) {
+                        throw new Error(payload.error || 'Failed to load charts.');
+                    });
+                }
+                return response.json();
+            })
+            .then(function(payload) {
+                categoryContainer.innerHTML = payload.category;
+                serverContainer.innerHTML = payload.server;
+                platformContainer.innerHTML = payload.platform;
+                executeInlineScripts(categoryContainer);
+                executeInlineScripts(serverContainer);
+                executeInlineScripts(platformContainer);
+                setActiveDistributionRange(payload.distribution_days);
+            })
+            .catch(function(error) {
+                alert(error.message || 'Unable to update the distribution charts.');
+            })
+            .finally(function() {
+                categoryContainer.classList.remove('is-loading');
+                serverContainer.classList.remove('is-loading');
+                platformContainer.classList.remove('is-loading');
+            });
+    }
+
+    document.querySelectorAll('#distribution-range-form .range-pill[data-days]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var value = parseInt(button.getAttribute('data-days'), 10);
+            if (value) {
+                fetchDistributionCharts(value);
+            }
+        });
+    });
+
+    var distributionApplyButton = document.querySelector('#distribution-range-form .range-custom .range-apply-distribution');
+    if (distributionApplyButton) {
+        distributionApplyButton.addEventListener('click', function() {
+            var customInput = document.querySelector('#distribution-range-form input[name="distribution_days_custom"]');
+            var value = customInput ? parseInt(customInput.value, 10) : null;
+            if (!value || value < 1 || value > 3650) {
+                alert('Please enter a valid number of days (1-3650).');
+                return;
+            }
+            fetchDistributionCharts(value);
         });
     }
 });
