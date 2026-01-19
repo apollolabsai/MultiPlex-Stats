@@ -1,0 +1,90 @@
+# Changelog
+All notable changes to this project will be documented in this file.
+
+The format is based on Keep a Changelog, and this project adheres to
+semantic versioning.
+
+## [Main branch updates — last 7 days]
+- **Summary:** Dashboard now supports per-chart time range controls with fast in-place updates; settings no longer include daily/monthly/history range inputs; chart styling and labeling were refined (commas, gradients, legends, axis titles); build footer metadata and Docker build metadata were added; Users/Viewing History pages gained richer data, pagination, and visual tweaks; multiple UI polish passes and documentation updates landed.
+
+- 2026-01-18 (f101b20) Remove x-axis titles on bottom charts.
+- 2026-01-18 (bbb993f) Use orange gradient for user/movie/TV bars.
+- 2026-01-18 (5ce3376) Hide color scale on user/movie/TV charts.
+- 2026-01-18 (174d43f) Remove history days setting from UI.
+- 2026-01-18 (d8ec9e9) Add range controls for user/movie/TV charts.
+- 2026-01-18 (a541640) Add distribution range controls for pie charts.
+- 2026-01-18 (0e158b1) Remove daily/monthly trend settings from UI.
+- 2026-01-18 (d61b168) Format monthly chart labels with commas.
+- 2026-01-18 (ff6e00a) Add monthly chart range controls via AJAX.
+- 2026-01-18 (1fe98c0) Update daily chart via AJAX range controls.
+- 2026-01-18 (5710d70) Add daily range controls for analytics chart.
+- 2026-01-18 (ae8f9e8) Move branch tag to beginning of build info in footer.
+- 2026-01-18 (cdc7a2a) Include branch name in build footer.
+- 2026-01-18 (d2db815) Inject build metadata into Docker images.
+- 2026-01-18 (ae4e54e) Add git build info to footer.
+- 2026-01-18 (76d9c40) Fix TZ-aware datetime handling and UI labels.
+- 2026-01-18 (e308853) Fix environment variable names in documentation.
+- 2026-01-18 (2a000a6) Add clean reset/reinstall instructions to README.
+- 2026-01-18 (1433c4f) Update settings page: default history to 365 days, rename section to Import Viewing History.
+- 2026-01-17 (595b872) Update viewing history description to clarify incremental sync.
+- 2026-01-17 (4b98e23) Add "Optional:" prefix to environment import section heading.
+- 2026-01-17 (8c5dae7) Update settings page import section for Docker environment variables.
+- 2026-01-17 (6d15c09) Remove debug logging for shared_libraries.
+- 2026-01-17 (048c3d8) Add debug logging for shared_libraries troubleshooting.
+- 2026-01-17 (816ed0b) Aggregate library count across multiple servers.
+- 2026-01-17 (c36105c) Add library count column to Users page.
+- 2026-01-17 (a104228) Improve settings page layout and update Run Analytics icon.
+- 2026-01-17 (c424dd0) Update section icons and reorder settings page layout.
+- 2026-01-17 (6666742) Add platform distribution pie chart to dashboard.
+- 2026-01-17 (0b87443) Show "before" date for users with no plays in synced history.
+- 2026-01-17 (4348e61) Fix Last Played lookup to match by username instead of friendly_name.
+- 2026-01-17 (7a61e89) Fix Last Played date on Users page by querying ViewingHistory database.
+- 2026-01-17 (bd2ad4d) Use TZ environment variable for timestamp display, default to PST.
+- 2026-01-17 (5f03db5) Add Last Played date to Users page.
+- 2026-01-17 (a2820fe) Fix Users page to fetch play counts from library stats.
+- 2026-01-17 (f0e7d26) Add Users page with user directory from Tautulli.
+- 2026-01-17 (3bb73f7) Add server-side pagination to viewing history table.
+- 2026-01-17 (5b9b18d) Fix ValueError when season/episode fields are empty strings.
+- 2026-01-17 (ed87e71) Add Viewing History sync with local database caching.
+- 2026-01-17 (80320a2) Add debug logging for history_table_days filtering.
+- 2026-01-17 (bc98c48) Preload poster thumbnails in background after page load.
+- 2026-01-17 (33e8a39) Add dev branch to Docker build trigger.
+- 2026-01-17 (8503361) Increase default history length from 4000 to 25000.
+- 2026-01-13 (6215656) Update README documentation.
+- 2026-01-13 (38e437b) Update documentation images and cleanup.
+- 2026-01-13 (5cfa683) Update distribution pie chart colors.
+- 2026-01-13 (b389efb) Improve Currently Streaming clapperboard icon design.
+- 2026-01-13 (af0ab35) Replace all remaining emoji icons with SVG icons.
+- 2026-01-13 (8409fbc) Update Currently Streaming icon to open clapperboard design.
+- 2026-01-13 (3f43d62) Replace Top Content emoji with SVG trophy icon.
+- 2026-01-13 (2a109e7) Replace Distribution emoji with SVG pie chart icon.
+- 2026-01-13 (b44d258) Replace Currently Streaming emoji with SVG clapperboard icon.
+- 2026-01-13 (b923871) Replace Viewing History emoji with SVG table icon.
+- 2026-01-13 (0cd7de2) Replace User Activity emoji with SVG user icon.
+- 2026-01-13 (906b96e) Replace refresh button emoji with SVG circular arrow icon.
+- 2026-01-13 (3e18011) Replace Activity Trends emoji with SVG pulse icon.
+- 2026-01-13 (7331505) Change Activity Trends icon to wavy pulse line.
+- 2026-01-13 (7fa7c7c) Replace Activity Trends emoji with bar chart icon.
+- 2026-01-12 (bd6485a) Use orange progress bars in viewing history table.
+- 2026-01-12 (7e2c9ab) Add orange progress bar to Currently Streaming table.
+- 2026-01-12 (413d20f) Fix pie chart layout issue in Distribution section.
+- 2026-01-12 (87f3e86) Update Currently Streaming table to match viewing history format.
+- 2026-01-12 (30bbf59) Make server badges dynamic based on Server A/B instead of hardcoded names.
+- 2026-01-12 (95ef956) Add colored server badges to viewing history table.
+- 2026-01-12 (abf25f5) Fix timezone for dashboard Generated timestamp.
+- 2026-01-12 (4d1ecdd) Update Settings page title: remove icon and make text orange.
+- 2026-01-12 (6af52f4) Update button styles: replace gradients with outlined style.
+- 2026-01-12 (35cfcb7) Update visual theme: black backgrounds and lighter grey borders.
+- 2026-01-12 (7156826) Sort viewing history table by date and time with most recent first.
+- 2026-01-12 (3ef0c61) Darken viewing history table background for better contrast.
+- 2026-01-12 (e5cadcd) Add color-coded quality badges for viewing history.
+- 2026-01-12 (43bca52) Fix Series .lower() error in data_processing.py.
+- 2026-01-12 (c4b0ff2) Add detailed error traceback logging for debugging.
+- 2026-01-12 (083be60) Fix Series .lower() error by extracting raw values before string conversion.
+- 2026-01-11 (48f603b) Fix 'Series' object has no attribute 'lower' error.
+- 2026-01-11 (0119036) Add product field under platform in viewing history table.
+- 2026-01-11 (a845d1c) Change Quality column to show transcode decision.
+- 2026-01-11 (d2e3bff) Remove user avatar icon from viewing history table.
+- 2026-01-11 (f26dd9b) Change time format to 12-hour format with AM/PM.
+- 2026-01-11 (6cee364) Fix invalid literal error when converting empty strings to int.
+- 2026-01-11 (41e74e2) Redesign viewing history table with Tautulli-style interface.
