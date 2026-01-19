@@ -160,7 +160,7 @@ def create_user_bar_chart(
         y='count',
         x='user',
         color='count',
-        color_continuous_scale='oryel',
+        color_continuous_scale=['#ff9800', '#ed542b'],
         text='count',
         title=f'Number of Plays by User - {history_days} days'
     )
@@ -208,7 +208,7 @@ def create_movie_bar_chart(
         y='count',
         x='full_title',
         color='count',
-        color_continuous_scale='oryel',
+        color_continuous_scale=['#ff9800', '#ed542b'],
         text='count',
         title=f'Most Popular Movies - {history_days} days'
     )
@@ -256,7 +256,7 @@ def create_tv_bar_chart(
         y='count',
         x='grandparent_title',
         color='count',
-        color_continuous_scale='oryel',
+        color_continuous_scale=['#ff9800', '#ed542b'],
         text='count',
         title=f'Most Popular TV Shows - {history_days} days'
     )
