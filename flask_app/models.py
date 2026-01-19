@@ -130,6 +130,18 @@ class ViewingHistory(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class IPGeolocation(db.Model):
+    """Cache for IP geolocation lookups."""
+    __tablename__ = 'ip_geolocation'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ip_address = db.Column(db.String(50), nullable=False, unique=True, index=True)
+    city = db.Column(db.String(100), nullable=True)
+    region = db.Column(db.String(100), nullable=True)
+    country = db.Column(db.String(100), nullable=True)
+    lookup_date = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class HistorySyncStatus(db.Model):
     """Track history sync status for progress polling."""
     __tablename__ = 'history_sync_status'
