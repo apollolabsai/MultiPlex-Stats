@@ -2,7 +2,7 @@
 
 A web application for combining and visualizing statistics from multiple Tautulli/Plex servers in one unified dashboard.
 
-![MultiPlex Stats Dashboard](images/fullwebsite.png)
+![MultiPlex Stats Dashboard](images/MultiplexUI.png)
 
 ---
 
