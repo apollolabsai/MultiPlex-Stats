@@ -206,20 +206,6 @@
             <div class="form-card">
                 <form method="POST" action="{{ url_for('settings.update_analytics_settings') }}">
                     <div class="form-group">
-                        <label for="daily_trend_days">Daily Trend Days</label>
-                        <input type="number" id="daily_trend_days" name="daily_trend_days"
-                               value="{{ settings.daily_trend_days if settings else 60 }}" min="1" max="365">
-                        <small>Number of days to show in daily chart</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="monthly_trend_months">Monthly Trend Months</label>
-                        <input type="number" id="monthly_trend_months" name="monthly_trend_months"
-                               value="{{ settings.monthly_trend_months if settings else 60 }}" min="1" max="120">
-                        <small>Number of months to show in monthly chart</small>
-                    </div>
-
-                    <div class="form-group">
                         <label for="history_days">History Days</label>
                         <input type="number" id="history_days" name="history_days"
                                value="{{ settings.history_days if settings else 60 }}" min="1" max="365">
