@@ -126,6 +126,7 @@ def create_monthly_bar_chart(
     )
 
     fig.add_trace(annotations_trace.data[0])
+    fig.data[-1].update(texttemplate='%{text:,}')
     fig.update_traces(textfont_color='white')
 
     # Apply theme
