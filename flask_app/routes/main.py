@@ -207,6 +207,47 @@ def api_distribution_charts():
         return jsonify({'error': str(e)}), 500
 
 
+@main_bp.route('/api/ip-lookup')
+def api_ip_lookup():
+    """Lookup geo data for a single IP address and cache results."""
+    ip_address = request.args.get('ip', type=str)
+    if not ip_address:
+        return jsonify({'error': 'IP address is required.'}), 400
+
+    try:
+        from flask_app.services.geolocation_service import GeolocationService
+        from flask_app.models import ViewingHistory
+
+        geo_service = GeolocationService()
+        geo_data = geo_service.lookup_ip(ip_address)
+
+        # Find a location value from history if available.
+        location = (
+            ViewingHistory.query.with_entities(ViewingHistory.location)
+            .filter_by(ip_address=ip_address)
+            .first()
+        )
+        location_value = location[0] if location and location[0] else ''
+
+        # Update cached geo fields for this IP in viewing history.
+        ViewingHistory.query.filter_by(ip_address=ip_address).update({
+            'geo_city': geo_data.get('city'),
+            'geo_region': geo_data.get('region'),
+            'geo_country': geo_data.get('country')
+        })
+        db.session.commit()
+
+        return jsonify({
+            'ip': ip_address,
+            'location': location_value,
+            'city': geo_data.get('city') or '',
+            'region': geo_data.get('region') or '',
+            'country': geo_data.get('country') or ''
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @main_bp.route('/api/user-chart')
 def api_user_chart():
     """Return user activity chart HTML for the requested day range."""
