@@ -10,8 +10,7 @@ import pandas as pd
 from multiplex_stats import TautulliClient
 from multiplex_stats.data_processing import (
     process_daily_data, process_monthly_data, process_history_data,
-    aggregate_user_stats, aggregate_movie_stats, aggregate_tv_stats,
-    filter_history_by_date
+    aggregate_movie_stats, aggregate_tv_stats, filter_history_by_date
 )
 from multiplex_stats.timezone_utils import get_local_timezone
 from multiplex_stats.visualization import (
@@ -90,7 +89,6 @@ class AnalyticsService:
             sync_service.start_incremental_sync()
 
         # Aggregate stats (using filtered data)
-        df_users = aggregate_user_stats(df_history, top_n=settings.top_users)
         df_movies = aggregate_movie_stats(df_history, top_n=settings.top_movies)
         df_tv = aggregate_tv_stats(df_history, top_n=settings.top_tv_shows)
 
@@ -106,7 +104,13 @@ class AnalyticsService:
         charts_json = {
             'daily': get_daily_chart_data(df_daily, server_a_config.name, server_b_config.name if server_b_config else None),
             'monthly': get_monthly_chart_data(df_monthly, server_a_config.name, server_b_config.name if server_b_config else None),
-            'users': get_user_chart_data(df_users, settings.history_days),
+            'users': get_user_chart_data(
+                df_history,
+                server_a_config.name,
+                server_b_config.name if server_b_config else None,
+                settings.history_days,
+                top_n=settings.top_users
+            ),
             'movies': get_movie_chart_data(df_movies, settings.history_days),
             'tv': get_tv_chart_data(df_tv, settings.history_days),
             'category': get_category_pie_data(df_daily_dist, settings.history_days),
@@ -306,8 +310,13 @@ class AnalyticsService:
             server_a_config.name, server_b_config.name if server_b_config else None
         )
 
-        df_users = aggregate_user_stats(df_history, top_n=settings.top_users)
-        chart_data = get_user_chart_data(df_users, history_days)
+        chart_data = get_user_chart_data(
+            df_history,
+            server_a_config.name,
+            server_b_config.name if server_b_config else None,
+            history_days,
+            top_n=settings.top_users
+        )
 
         return {
             'chart_data': chart_data,

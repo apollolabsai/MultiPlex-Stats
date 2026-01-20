@@ -671,35 +671,83 @@ def get_monthly_chart_data(
     }
 
 
-def get_user_chart_data(df: pd.DataFrame, history_days: int) -> dict:
+def get_user_chart_data(
+    df: pd.DataFrame,
+    server_a_name: str,
+    server_b_name: Optional[str],
+    history_days: int,
+    top_n: Optional[int] = None
+) -> dict:
     """
-    Get data for user bar chart with gradient coloring.
+    Get data for user stacked bar chart with gradient coloring.
 
     Args:
-        df: DataFrame with aggregated user data (must have 'user', 'count' columns)
+        df: DataFrame with history data (must have 'user', 'Server', 'count' columns)
+        server_a_name: Name of server A
+        server_b_name: Name of server B (optional)
         history_days: Number of days included in the data
+        top_n: Optional limit to top N users
 
     Returns:
-        Dictionary with 'categories', 'data', 'title'
+        Dictionary with 'categories', 'series', 'title'
     """
-    users = df['user'].tolist()
-    counts = df['count'].tolist()
+    if df.empty:
+        return {
+            'categories': [],
+            'series': [],
+            'title': f'Number of Plays by User - {history_days} days'
+        }
 
-    # Calculate gradient colors based on count values
-    max_count = max(counts) if counts else 1
-    min_count = min(counts) if counts else 0
+    grouped = df.groupby(['user', 'Server'])['count'].sum().reset_index()
+    totals = grouped.groupby('user')['count'].sum().reset_index(name='total')
+    totals = totals.sort_values(by='total', ascending=False)
+    if top_n is not None:
+        totals = totals.head(top_n)
 
-    data_with_colors = []
-    for count in counts:
-        ratio = (count - min_count) / (max_count - min_count) if max_count > min_count else 0
-        data_with_colors.append({
-            'y': int(count),
-            'color': _interpolate_color('#ff9800', '#ed542b', ratio)
-        })
+    users = totals['user'].tolist()
+    if not users:
+        return {
+            'categories': [],
+            'series': [],
+            'title': f'Number of Plays by User - {history_days} days'
+        }
+
+    pivot = grouped.pivot(index='user', columns='Server', values='count').fillna(0)
+    pivot = pivot.reindex(users).fillna(0)
+
+    def build_gradient_series(server_name: str, low_color: str, high_color: str) -> dict:
+        counts = (
+            pivot[server_name].tolist()
+            if server_name in pivot.columns
+            else [0] * len(users)
+        )
+        max_count = max(counts) if counts else 1
+        min_count = min(counts) if counts else 0
+
+        data_with_colors = []
+        for count in counts:
+            ratio = (count - min_count) / (max_count - min_count) if max_count > min_count else 0
+            data_with_colors.append({
+                'y': int(count),
+                'color': _interpolate_color(low_color, high_color, ratio)
+            })
+
+        return {
+            'name': server_name,
+            'data': data_with_colors
+        }
+
+    series = [
+        build_gradient_series(server_a_name, '#e36414', '#2196f3')
+    ]
+    if server_b_name:
+        series.append(
+            build_gradient_series(server_b_name, '#ff9800', '#ed542b')
+        )
 
     return {
         'categories': users,
-        'data': data_with_colors,
+        'series': series,
         'title': f'Number of Plays by User - {history_days} days'
     }
 

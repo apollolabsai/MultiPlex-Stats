@@ -122,6 +122,66 @@ function renderGradientBarChart(containerId, chartData) {
 }
 
 /**
+ * Render a stacked bar chart with gradient colors (users by server)
+ */
+function renderUserStackedBarChart(containerId, chartData) {
+    Highcharts.chart(containerId, {
+        chart: {
+            type: 'bar',
+            height: 700
+        },
+        title: {
+            text: chartData.title
+        },
+        xAxis: {
+            categories: chartData.categories,
+            labels: {
+                style: {
+                    fontSize: '13px'
+                }
+            }
+        },
+        yAxis: {
+            min: 0,
+            title: {
+                text: ''
+            },
+            stackLabels: {
+                enabled: true,
+                style: {
+                    color: 'white',
+                    fontSize: '13px',
+                    fontWeight: 'bold',
+                    textOutline: 'none'
+                },
+                formatter: function() {
+                    return Highcharts.numberFormat(this.total, 0, '', ',');
+                }
+            }
+        },
+        legend: {
+            align: 'center',
+            verticalAlign: 'bottom',
+            layout: 'horizontal'
+        },
+        tooltip: {
+            headerFormat: '<b>{point.category}</b><br/>',
+            pointFormat: '{series.name}: {point.y:,.0f}<br/>Total: {point.stackTotal:,.0f}'
+        },
+        plotOptions: {
+            series: {
+                stacking: 'normal',
+                borderWidth: 0,
+                dataLabels: {
+                    enabled: false
+                }
+            }
+        },
+        series: chartData.series
+    });
+}
+
+/**
  * Render a pie chart with percentage labels
  */
 function renderPieChart(containerId, chartData) {

@@ -919,7 +919,7 @@ $(document).ready(function() {
         renderPieChart('distribution-platform-container', chartsJson.platform);
     }
     if (chartsJson.users) {
-        renderGradientBarChart('user-chart-container', chartsJson.users);
+        renderUserStackedBarChart('user-chart-container', chartsJson.users);
     }
     if (chartsJson.movies) {
         renderGradientBarChart('movie-chart-container', chartsJson.movies);
@@ -1112,7 +1112,7 @@ $(document).ready(function() {
                 return response.json();
             })
             .then(function(payload) {
-                renderGradientBarChart('user-chart-container', payload.chart_data);
+                renderUserStackedBarChart('user-chart-container', payload.chart_data);
                 setActiveRange('user-range-form', 'user_days_custom', payload.user_chart_days, [7, 30, 60, 90]);
             })
             .catch(function(error) {
