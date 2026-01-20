@@ -715,34 +715,24 @@ def get_user_chart_data(
     pivot = grouped.pivot(index='user', columns='Server', values='count').fillna(0)
     pivot = pivot.reindex(users).fillna(0)
 
-    def build_gradient_series(server_name: str, low_color: str, high_color: str) -> dict:
+    def build_series(server_name: str, color: str) -> dict:
         counts = (
             pivot[server_name].tolist()
             if server_name in pivot.columns
             else [0] * len(users)
         )
-        max_count = max(counts) if counts else 1
-        min_count = min(counts) if counts else 0
-
-        data_with_colors = []
-        for count in counts:
-            ratio = (count - min_count) / (max_count - min_count) if max_count > min_count else 0
-            data_with_colors.append({
-                'y': int(count),
-                'color': _interpolate_color(low_color, high_color, ratio)
-            })
-
         return {
             'name': server_name,
-            'data': data_with_colors
+            'data': [int(count) for count in counts],
+            'color': color
         }
 
     series = [
-        build_gradient_series(server_a_name, '#e36414', '#2196f3')
+        build_series(server_a_name, '#102baf')
     ]
     if server_b_name:
         series.append(
-            build_gradient_series(server_b_name, '#ff9800', '#ed542b')
+            build_series(server_b_name, '#e36414')
         )
 
     return {
