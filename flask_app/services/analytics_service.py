@@ -15,9 +15,9 @@ from multiplex_stats.data_processing import (
 )
 from multiplex_stats.timezone_utils import get_local_timezone
 from multiplex_stats.visualization import (
-    create_daily_bar_chart, create_monthly_bar_chart,
-    create_user_bar_chart, create_movie_bar_chart, create_tv_bar_chart,
-    create_category_pie_chart, create_server_pie_chart, create_platform_pie_chart
+    get_daily_chart_data, get_monthly_chart_data,
+    get_user_chart_data, get_movie_chart_data, get_tv_chart_data,
+    get_category_pie_data, get_server_pie_data, get_platform_pie_data
 )
 from flask_app.services.config_service import ConfigService
 from flask_app.services.history_sync_service import HistorySyncService
@@ -94,12 +94,7 @@ class AnalyticsService:
         df_movies = aggregate_movie_stats(df_history, top_n=settings.top_movies)
         df_tv = aggregate_tv_stats(df_history, top_n=settings.top_tv_shows)
 
-        # 4. Generate visualizations
-        fig_daily = create_daily_bar_chart(df_daily, server_a_config.name, server_b_config.name if server_b_config else None)
-        fig_monthly = create_monthly_bar_chart(df_monthly, server_a_config.name, server_b_config.name if server_b_config else None)
-        fig_users = create_user_bar_chart(df_users, settings.history_days)
-        fig_movies = create_movie_bar_chart(df_movies, settings.history_days)
-        fig_tv = create_tv_bar_chart(df_tv, settings.history_days)
+        # 4. Generate chart data (JSON for Highcharts)
         # Distribution charts (use history_days range)
         dist_daily_a = client_a.get_plays_by_date(time_range=settings.history_days)
         dist_daily_b = client_b.get_plays_by_date(time_range=settings.history_days) if client_b else None
@@ -107,30 +102,26 @@ class AnalyticsService:
             dist_daily_a, dist_daily_b,
             server_a_config.name, server_b_config.name if server_b_config else None
         )
-        fig_category = create_category_pie_chart(df_daily_dist, settings.history_days)
-        fig_server = create_server_pie_chart(
-            df_daily_dist, server_a_config.name,
-            server_b_config.name if server_b_config else None,
-            settings.history_days
-        )
-        fig_platform = create_platform_pie_chart(df_history, settings.history_days)
 
-        # 5. Convert charts to HTML (for embedding in Jinja templates)
-        charts_html = {
-            'daily': fig_daily.to_html(full_html=False, include_plotlyjs=False),
-            'monthly': fig_monthly.to_html(full_html=False, include_plotlyjs=False),
-            'users': fig_users.to_html(full_html=False, include_plotlyjs=False),
-            'movies': fig_movies.to_html(full_html=False, include_plotlyjs=False),
-            'tv': fig_tv.to_html(full_html=False, include_plotlyjs=False),
-            'category': fig_category.to_html(full_html=False, include_plotlyjs=False),
-            'server': fig_server.to_html(full_html=False, include_plotlyjs=False),
-            'platform': fig_platform.to_html(full_html=False, include_plotlyjs=False)
+        charts_json = {
+            'daily': get_daily_chart_data(df_daily, server_a_config.name, server_b_config.name if server_b_config else None),
+            'monthly': get_monthly_chart_data(df_monthly, server_a_config.name, server_b_config.name if server_b_config else None),
+            'users': get_user_chart_data(df_users, settings.history_days),
+            'movies': get_movie_chart_data(df_movies, settings.history_days),
+            'tv': get_tv_chart_data(df_tv, settings.history_days),
+            'category': get_category_pie_data(df_daily_dist, settings.history_days),
+            'server': get_server_pie_data(
+                df_daily_dist, server_a_config.name,
+                server_b_config.name if server_b_config else None,
+                settings.history_days
+            ),
+            'platform': get_platform_pie_data(df_history, settings.history_days)
         }
 
-        # 6. Cache chart HTML to disk
+        # 5. Cache chart JSON to disk
         cache_path = os.path.join(self.cache_dir, f'run_{run_id}_charts.json')
         with open(cache_path, 'w') as f:
-            json.dump(charts_html, f)
+            json.dump(charts_json, f)
 
         # 6b. Table data now comes from ViewingHistory database table (no caching needed)
 
@@ -167,15 +158,15 @@ class AnalyticsService:
             'summary': summary
         }
 
-    def get_daily_chart_html(self, daily_trend_days: int | None = None) -> Dict[str, Any]:
+    def get_daily_chart_json(self, daily_trend_days: int | None = None) -> Dict[str, Any]:
         """
-        Generate the daily play count chart HTML for a specific day range.
+        Generate the daily play count chart JSON for Highcharts.
 
         Args:
             daily_trend_days: Optional override for daily trend range.
 
         Returns:
-            Dictionary with chart HTML and the day range used.
+            Dictionary with chart data and the day range used.
         """
         server_a_config, server_b_config = ConfigService.get_server_configs()
         settings = ConfigService.get_analytics_settings()
@@ -195,24 +186,24 @@ class AnalyticsService:
             server_a_config.name, server_b_config.name if server_b_config else None
         )
 
-        fig_daily = create_daily_bar_chart(
+        chart_data = get_daily_chart_data(
             df_daily, server_a_config.name, server_b_config.name if server_b_config else None
         )
 
         return {
-            'html': fig_daily.to_html(full_html=False, include_plotlyjs=False),
+            'chart_data': chart_data,
             'daily_trend_days': daily_days
         }
 
-    def get_monthly_chart_html(self, monthly_trend_months: int | None = None) -> Dict[str, Any]:
+    def get_monthly_chart_json(self, monthly_trend_months: int | None = None) -> Dict[str, Any]:
         """
-        Generate the monthly play count chart HTML for a specific month range.
+        Generate the monthly play count chart JSON for Highcharts.
 
         Args:
             monthly_trend_months: Optional override for monthly trend range.
 
         Returns:
-            Dictionary with chart HTML and the month range used.
+            Dictionary with chart data and the month range used.
         """
         server_a_config, server_b_config = ConfigService.get_server_configs()
         settings = ConfigService.get_analytics_settings()
@@ -232,24 +223,24 @@ class AnalyticsService:
             server_a_config.name, server_b_config.name if server_b_config else None
         )
 
-        fig_monthly = create_monthly_bar_chart(
+        chart_data = get_monthly_chart_data(
             df_monthly, server_a_config.name, server_b_config.name if server_b_config else None
         )
 
         return {
-            'html': fig_monthly.to_html(full_html=False, include_plotlyjs=False),
+            'chart_data': chart_data,
             'monthly_trend_months': monthly_months
         }
 
-    def get_distribution_charts_html(self, days: int | None = None) -> Dict[str, Any]:
+    def get_distribution_charts_json(self, days: int | None = None) -> Dict[str, Any]:
         """
-        Generate distribution charts (category, server, platform) for a day range.
+        Generate distribution charts JSON (category, server, platform) for Highcharts.
 
         Args:
             days: Optional override for distribution range.
 
         Returns:
-            Dictionary with chart HTML for distribution and the day range used.
+            Dictionary with chart data for distribution and the day range used.
         """
         server_a_config, server_b_config = ConfigService.get_server_configs()
         settings = ConfigService.get_analytics_settings()
@@ -276,30 +267,26 @@ class AnalyticsService:
             server_a_config.name, server_b_config.name if server_b_config else None
         )
 
-        fig_category = create_category_pie_chart(df_daily_dist, dist_days)
-        fig_server = create_server_pie_chart(
-            df_daily_dist, server_a_config.name,
-            server_b_config.name if server_b_config else None,
-            dist_days
-        )
-        fig_platform = create_platform_pie_chart(df_history, dist_days)
-
         return {
-            'category': fig_category.to_html(full_html=False, include_plotlyjs=False),
-            'server': fig_server.to_html(full_html=False, include_plotlyjs=False),
-            'platform': fig_platform.to_html(full_html=False, include_plotlyjs=False),
+            'category': get_category_pie_data(df_daily_dist, dist_days),
+            'server': get_server_pie_data(
+                df_daily_dist, server_a_config.name,
+                server_b_config.name if server_b_config else None,
+                dist_days
+            ),
+            'platform': get_platform_pie_data(df_history, dist_days),
             'distribution_days': dist_days
         }
 
-    def get_user_chart_html(self, days: int | None = None) -> Dict[str, Any]:
+    def get_user_chart_json(self, days: int | None = None) -> Dict[str, Any]:
         """
-        Generate the user activity chart HTML for a specific day range.
+        Generate the user activity chart JSON for Highcharts.
 
         Args:
             days: Optional override for user chart range.
 
         Returns:
-            Dictionary with chart HTML and the day range used.
+            Dictionary with chart data and the day range used.
         """
         server_a_config, server_b_config = ConfigService.get_server_configs()
         settings = ConfigService.get_analytics_settings()
@@ -320,22 +307,22 @@ class AnalyticsService:
         )
 
         df_users = aggregate_user_stats(df_history, top_n=settings.top_users)
-        fig_users = create_user_bar_chart(df_users, history_days)
+        chart_data = get_user_chart_data(df_users, history_days)
 
         return {
-            'html': fig_users.to_html(full_html=False, include_plotlyjs=False),
+            'chart_data': chart_data,
             'user_chart_days': history_days
         }
 
-    def get_movie_chart_html(self, days: int | None = None) -> Dict[str, Any]:
+    def get_movie_chart_json(self, days: int | None = None) -> Dict[str, Any]:
         """
-        Generate the top movies chart HTML for a specific day range.
+        Generate the top movies chart JSON for Highcharts.
 
         Args:
             days: Optional override for movie chart range.
 
         Returns:
-            Dictionary with chart HTML and the day range used.
+            Dictionary with chart data and the day range used.
         """
         server_a_config, server_b_config = ConfigService.get_server_configs()
         settings = ConfigService.get_analytics_settings()
@@ -356,22 +343,22 @@ class AnalyticsService:
         )
 
         df_movies = aggregate_movie_stats(df_history, top_n=settings.top_movies)
-        fig_movies = create_movie_bar_chart(df_movies, history_days)
+        chart_data = get_movie_chart_data(df_movies, history_days)
 
         return {
-            'html': fig_movies.to_html(full_html=False, include_plotlyjs=False),
+            'chart_data': chart_data,
             'movie_chart_days': history_days
         }
 
-    def get_tv_chart_html(self, days: int | None = None) -> Dict[str, Any]:
+    def get_tv_chart_json(self, days: int | None = None) -> Dict[str, Any]:
         """
-        Generate the top TV shows chart HTML for a specific day range.
+        Generate the top TV shows chart JSON for Highcharts.
 
         Args:
             days: Optional override for TV chart range.
 
         Returns:
-            Dictionary with chart HTML and the day range used.
+            Dictionary with chart data and the day range used.
         """
         server_a_config, server_b_config = ConfigService.get_server_configs()
         settings = ConfigService.get_analytics_settings()
@@ -392,10 +379,10 @@ class AnalyticsService:
         )
 
         df_tv = aggregate_tv_stats(df_history, top_n=settings.top_tv_shows)
-        fig_tv = create_tv_bar_chart(df_tv, history_days)
+        chart_data = get_tv_chart_data(df_tv, history_days)
 
         return {
-            'html': fig_tv.to_html(full_html=False, include_plotlyjs=False),
+            'chart_data': chart_data,
             'tv_chart_days': history_days
         }
 

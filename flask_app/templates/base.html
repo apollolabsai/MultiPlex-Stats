@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}MultiPlex Stats{% endblock %}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
-    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+    <script src="{{ url_for('static', filename='js/highcharts-theme.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -39,7 +41,7 @@
     </div>
 
     <footer>
-        <p>MultiPlex Stats Web Interface | Powered by Flask & Plotly</p>
+        <p>MultiPlex Stats Web Interface | Powered by Flask & Highcharts</p>
         <p>Build: [{{ git_branch }}] {{ git_commit_hash }} ({{ git_commit_date }} {{ timezone_name }})</p>
     </footer>
 

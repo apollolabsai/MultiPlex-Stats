@@ -212,7 +212,7 @@
         </form>
     </div>
     <div class="chart-container" id="daily-chart-container">
-        {{ charts.daily | safe }}
+        <!-- Chart rendered by Highcharts -->
     </div>
     <div class="chart-controls">
         <div class="chart-controls-label">Monthly range</div>
@@ -231,7 +231,7 @@
         </form>
     </div>
     <div class="chart-container" id="monthly-chart-container">
-        {{ charts.monthly | safe }}
+        <!-- Chart rendered by Highcharts -->
     </div>
 </div>
 
@@ -261,13 +261,13 @@
     </div>
     <div class="grid-3">
         <div class="chart-container" id="distribution-category-container">
-            {{ charts.category | safe }}
+            <!-- Chart rendered by Highcharts -->
         </div>
         <div class="chart-container" id="distribution-server-container">
-            {{ charts.server | safe }}
+            <!-- Chart rendered by Highcharts -->
         </div>
         <div class="chart-container" id="distribution-platform-container">
-            {{ charts.platform | safe }}
+            <!-- Chart rendered by Highcharts -->
         </div>
     </div>
 </div>
@@ -297,7 +297,7 @@
         </form>
     </div>
     <div class="chart-container" id="user-chart-container">
-        {{ charts.users | safe }}
+        <!-- Chart rendered by Highcharts -->
     </div>
 </div>
 
@@ -330,7 +330,7 @@
         </form>
     </div>
     <div class="chart-container" id="movie-chart-container">
-        {{ charts.movies | safe }}
+        <!-- Chart rendered by Highcharts -->
     </div>
     <div class="chart-controls">
         <div class="chart-controls-label">TV range</div>
@@ -349,7 +349,7 @@
         </form>
     </div>
     <div class="chart-container" id="tv-chart-container">
-        {{ charts.tv | safe }}
+        <!-- Chart rendered by Highcharts -->
     </div>
 </div>
 
@@ -429,6 +429,8 @@
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<!-- Highcharts rendering functions -->
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
 
 <style>
 /* Poster preview on hover */
@@ -897,36 +899,36 @@ $(document).ready(function() {
         }
     });
 
-    function executeInlineScripts(container) {
-        var scripts = container.querySelectorAll('script');
-        scripts.forEach(function(script) {
-            if (script.src) {
-                var external = document.createElement('script');
-                external.src = script.src;
-                document.head.appendChild(external);
-            } else if (script.textContent) {
-                Function(script.textContent)();
-            }
-        });
+    // Initial chart data from server (rendered on page load)
+    var chartsJson = {{ charts_json | tojson | safe }};
+
+    // Render initial charts from cached data
+    if (chartsJson.daily) {
+        renderStackedBarChart('daily-chart-container', chartsJson.daily);
+    }
+    if (chartsJson.monthly) {
+        renderStackedBarChart('monthly-chart-container', chartsJson.monthly);
+    }
+    if (chartsJson.category) {
+        renderPieChart('distribution-category-container', chartsJson.category);
+    }
+    if (chartsJson.server) {
+        renderPieChart('distribution-server-container', chartsJson.server);
+    }
+    if (chartsJson.platform) {
+        renderPieChart('distribution-platform-container', chartsJson.platform);
+    }
+    if (chartsJson.users) {
+        renderGradientBarChart('user-chart-container', chartsJson.users);
+    }
+    if (chartsJson.movies) {
+        renderGradientBarChart('movie-chart-container', chartsJson.movies);
+    }
+    if (chartsJson.tv) {
+        renderGradientBarChart('tv-chart-container', chartsJson.tv);
     }
 
-    function setActiveDailyRange(days) {
-        var buttons = document.querySelectorAll('#daily-range-form .range-pill[data-days]');
-        var customInput = document.querySelector('#daily-range-form input[name="daily_trend_days_custom"]');
-        var matched = false;
-
-        buttons.forEach(function(button) {
-            var value = parseInt(button.getAttribute('data-days'), 10);
-            var isActive = value === days;
-            button.classList.toggle('active', isActive);
-            matched = matched || isActive;
-        });
-
-        if (customInput) {
-            customInput.value = matched ? '' : days;
-        }
-    }
-
+    // Daily chart range controls
     function fetchDailyChart(days) {
         var container = document.getElementById('daily-chart-container');
         if (!container || !days) {
@@ -945,9 +947,8 @@ $(document).ready(function() {
                 return response.json();
             })
             .then(function(payload) {
-                container.innerHTML = payload.html;
-                executeInlineScripts(container);
-                setActiveDailyRange(payload.daily_trend_days);
+                renderStackedBarChart('daily-chart-container', payload.chart_data);
+                setActiveRange('daily-range-form', 'daily_trend_days_custom', payload.daily_trend_days, [7, 30, 60, 90]);
             })
             .catch(function(error) {
                 alert(error.message || 'Unable to update the daily chart.');
@@ -979,23 +980,7 @@ $(document).ready(function() {
         });
     }
 
-    function setActiveMonthlyRange(months) {
-        var buttons = document.querySelectorAll('.range-pill[data-months]');
-        var customInput = document.querySelector('.range-custom input[name="monthly_trend_months_custom"]');
-        var matched = false;
-
-        buttons.forEach(function(button) {
-            var value = parseInt(button.getAttribute('data-months'), 10);
-            var isActive = value === months;
-            button.classList.toggle('active', isActive);
-            matched = matched || isActive;
-        });
-
-        if (customInput) {
-            customInput.value = matched ? '' : months;
-        }
-    }
-
+    // Monthly chart range controls
     function fetchMonthlyChart(months) {
         var container = document.getElementById('monthly-chart-container');
         if (!container || !months) {
@@ -1014,9 +999,8 @@ $(document).ready(function() {
                 return response.json();
             })
             .then(function(payload) {
-                container.innerHTML = payload.html;
-                executeInlineScripts(container);
-                setActiveMonthlyRange(payload.monthly_trend_months);
+                renderStackedBarChart('monthly-chart-container', payload.chart_data);
+                setActiveRange('monthly-range-form', 'monthly_trend_months_custom', payload.monthly_trend_months, [12, 24, 60, 120]);
             })
             .catch(function(error) {
                 alert(error.message || 'Unable to update the monthly chart.');
@@ -1048,23 +1032,7 @@ $(document).ready(function() {
         });
     }
 
-    function setActiveDistributionRange(days) {
-        var buttons = document.querySelectorAll('#distribution-range-form .range-pill[data-days]');
-        var customInput = document.querySelector('#distribution-range-form input[name="distribution_days_custom"]');
-        var matched = false;
-
-        buttons.forEach(function(button) {
-            var value = parseInt(button.getAttribute('data-days'), 10);
-            var isActive = value === days;
-            button.classList.toggle('active', isActive);
-            matched = matched || isActive;
-        });
-
-        if (customInput) {
-            customInput.value = matched ? '' : days;
-        }
-    }
-
+    // Distribution charts range controls
     function fetchDistributionCharts(days) {
         var categoryContainer = document.getElementById('distribution-category-container');
         var serverContainer = document.getElementById('distribution-server-container');
@@ -1088,13 +1056,10 @@ $(document).ready(function() {
                 return response.json();
             })
             .then(function(payload) {
-                categoryContainer.innerHTML = payload.category;
-                serverContainer.innerHTML = payload.server;
-                platformContainer.innerHTML = payload.platform;
-                executeInlineScripts(categoryContainer);
-                executeInlineScripts(serverContainer);
-                executeInlineScripts(platformContainer);
-                setActiveDistributionRange(payload.distribution_days);
+                renderPieChart('distribution-category-container', payload.category);
+                renderPieChart('distribution-server-container', payload.server);
+                renderPieChart('distribution-platform-container', payload.platform);
+                setActiveRange('distribution-range-form', 'distribution_days_custom', payload.distribution_days, [7, 30, 60, 90]);
             })
             .catch(function(error) {
                 alert(error.message || 'Unable to update the distribution charts.');
@@ -1128,23 +1093,7 @@ $(document).ready(function() {
         });
     }
 
-    function setActiveUserRange(days) {
-        var buttons = document.querySelectorAll('#user-range-form .range-pill[data-days]');
-        var customInput = document.querySelector('#user-range-form input[name="user_days_custom"]');
-        var matched = false;
-
-        buttons.forEach(function(button) {
-            var value = parseInt(button.getAttribute('data-days'), 10);
-            var isActive = value === days;
-            button.classList.toggle('active', isActive);
-            matched = matched || isActive;
-        });
-
-        if (customInput) {
-            customInput.value = matched ? '' : days;
-        }
-    }
-
+    // User chart range controls
     function fetchUserChart(days) {
         var container = document.getElementById('user-chart-container');
         if (!container || !days) {
@@ -1163,9 +1112,8 @@ $(document).ready(function() {
                 return response.json();
             })
             .then(function(payload) {
-                container.innerHTML = payload.html;
-                executeInlineScripts(container);
-                setActiveUserRange(payload.user_chart_days);
+                renderGradientBarChart('user-chart-container', payload.chart_data);
+                setActiveRange('user-range-form', 'user_days_custom', payload.user_chart_days, [7, 30, 60, 90]);
             })
             .catch(function(error) {
                 alert(error.message || 'Unable to update the user chart.');
@@ -1197,23 +1145,7 @@ $(document).ready(function() {
         });
     }
 
-    function setActiveMovieRange(days) {
-        var buttons = document.querySelectorAll('#movie-range-form .range-pill[data-days]');
-        var customInput = document.querySelector('#movie-range-form input[name="movie_days_custom"]');
-        var matched = false;
-
-        buttons.forEach(function(button) {
-            var value = parseInt(button.getAttribute('data-days'), 10);
-            var isActive = value === days;
-            button.classList.toggle('active', isActive);
-            matched = matched || isActive;
-        });
-
-        if (customInput) {
-            customInput.value = matched ? '' : days;
-        }
-    }
-
+    // Movie chart range controls
     function fetchMovieChart(days) {
         var container = document.getElementById('movie-chart-container');
         if (!container || !days) {
@@ -1232,9 +1164,8 @@ $(document).ready(function() {
                 return response.json();
             })
             .then(function(payload) {
-                container.innerHTML = payload.html;
-                executeInlineScripts(container);
-                setActiveMovieRange(payload.movie_chart_days);
+                renderGradientBarChart('movie-chart-container', payload.chart_data);
+                setActiveRange('movie-range-form', 'movie_days_custom', payload.movie_chart_days, [7, 30, 60, 90]);
             })
             .catch(function(error) {
                 alert(error.message || 'Unable to update the movie chart.');
@@ -1266,23 +1197,7 @@ $(document).ready(function() {
         });
     }
 
-    function setActiveTvRange(days) {
-        var buttons = document.querySelectorAll('#tv-range-form .range-pill[data-days]');
-        var customInput = document.querySelector('#tv-range-form input[name="tv_days_custom"]');
-        var matched = false;
-
-        buttons.forEach(function(button) {
-            var value = parseInt(button.getAttribute('data-days'), 10);
-            var isActive = value === days;
-            button.classList.toggle('active', isActive);
-            matched = matched || isActive;
-        });
-
-        if (customInput) {
-            customInput.value = matched ? '' : days;
-        }
-    }
-
+    // TV chart range controls
     function fetchTvChart(days) {
         var container = document.getElementById('tv-chart-container');
         if (!container || !days) {
@@ -1301,9 +1216,8 @@ $(document).ready(function() {
                 return response.json();
             })
             .then(function(payload) {
-                container.innerHTML = payload.html;
-                executeInlineScripts(container);
-                setActiveTvRange(payload.tv_chart_days);
+                renderGradientBarChart('tv-chart-container', payload.chart_data);
+                setActiveRange('tv-range-form', 'tv_days_custom', payload.tv_chart_days, [7, 30, 60, 90]);
             })
             .catch(function(error) {
                 alert(error.message || 'Unable to update the TV chart.');

@@ -95,9 +95,9 @@ def dashboard():
     # Convert completed_at from UTC to Pacific Time
     completed_at_pt = last_run.completed_at.replace(tzinfo=timezone.utc).astimezone(get_local_timezone())
 
-    # Load cached chart HTML and table data from service
+    # Load cached chart JSON and table data from service
     service = AnalyticsService()
-    charts = service.get_cached_charts(last_run.id)
+    charts_json = service.get_cached_charts(last_run.id)
     table_data = service.get_cached_table_data(last_run.id)
     summary = json.loads(last_run.summary_json)
 
@@ -105,7 +105,7 @@ def dashboard():
     current_activity = service.get_current_activity()
 
     return render_template('dashboard.html',
-                          charts=charts,
+                          charts_json=charts_json,
                           table_data=table_data,
                           summary=summary,
                           last_run=last_run,
@@ -155,7 +155,7 @@ def api_viewing_history():
 
 @main_bp.route('/api/daily-chart')
 def api_daily_chart():
-    """Return daily chart HTML for the requested day range."""
+    """Return daily chart JSON for the requested day range."""
     if not ConfigService.has_valid_config():
         return jsonify({'error': 'No server configuration found.'}), 400
 
@@ -165,7 +165,7 @@ def api_daily_chart():
 
     try:
         service = AnalyticsService()
-        result = service.get_daily_chart_html(daily_trend_days=days)
+        result = service.get_daily_chart_json(daily_trend_days=days)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -173,7 +173,7 @@ def api_daily_chart():
 
 @main_bp.route('/api/monthly-chart')
 def api_monthly_chart():
-    """Return monthly chart HTML for the requested month range."""
+    """Return monthly chart JSON for the requested month range."""
     if not ConfigService.has_valid_config():
         return jsonify({'error': 'No server configuration found.'}), 400
 
@@ -183,7 +183,7 @@ def api_monthly_chart():
 
     try:
         service = AnalyticsService()
-        result = service.get_monthly_chart_html(monthly_trend_months=months)
+        result = service.get_monthly_chart_json(monthly_trend_months=months)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -191,7 +191,7 @@ def api_monthly_chart():
 
 @main_bp.route('/api/distribution-charts')
 def api_distribution_charts():
-    """Return distribution chart HTML for the requested day range."""
+    """Return distribution chart JSON for the requested day range."""
     if not ConfigService.has_valid_config():
         return jsonify({'error': 'No server configuration found.'}), 400
 
@@ -201,7 +201,7 @@ def api_distribution_charts():
 
     try:
         service = AnalyticsService()
-        result = service.get_distribution_charts_html(days=days)
+        result = service.get_distribution_charts_json(days=days)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -251,7 +251,7 @@ def api_ip_lookup():
 
 @main_bp.route('/api/user-chart')
 def api_user_chart():
-    """Return user activity chart HTML for the requested day range."""
+    """Return user activity chart JSON for the requested day range."""
     if not ConfigService.has_valid_config():
         return jsonify({'error': 'No server configuration found.'}), 400
 
@@ -261,7 +261,7 @@ def api_user_chart():
 
     try:
         service = AnalyticsService()
-        result = service.get_user_chart_html(days=days)
+        result = service.get_user_chart_json(days=days)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -269,7 +269,7 @@ def api_user_chart():
 
 @main_bp.route('/api/movie-chart')
 def api_movie_chart():
-    """Return top movies chart HTML for the requested day range."""
+    """Return top movies chart JSON for the requested day range."""
     if not ConfigService.has_valid_config():
         return jsonify({'error': 'No server configuration found.'}), 400
 
@@ -279,7 +279,7 @@ def api_movie_chart():
 
     try:
         service = AnalyticsService()
-        result = service.get_movie_chart_html(days=days)
+        result = service.get_movie_chart_json(days=days)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -287,7 +287,7 @@ def api_movie_chart():
 
 @main_bp.route('/api/tv-chart')
 def api_tv_chart():
-    """Return top TV shows chart HTML for the requested day range."""
+    """Return top TV shows chart JSON for the requested day range."""
     if not ConfigService.has_valid_config():
         return jsonify({'error': 'No server configuration found.'}), 400
 
@@ -297,7 +297,7 @@ def api_tv_chart():
 
     try:
         service = AnalyticsService()
-        result = service.get_tv_chart_html(days=days)
+        result = service.get_tv_chart_json(days=days)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
