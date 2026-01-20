@@ -32,10 +32,10 @@ class ServerConfig:
 class MediaColors:
     """Color configuration for visualizations."""
 
-    server_a_tv: str = '#758bfd'
-    server_a_movies: str = '#aeb8fe'
-    server_b_tv: str = '#ff7900'
-    server_b_movies: str = '#ffb600'
+    server_a_tv: str = '#102baf'
+    server_a_movies: str = '#2196f3'
+    server_b_tv: str = '#e36414'
+    server_b_movies: str = '#f18a3d'
 
     def get_color_map(self, server_a_name: str, server_b_name: str | None) -> dict[str, str]:
         """Get color mapping dictionary for one or two servers."""
