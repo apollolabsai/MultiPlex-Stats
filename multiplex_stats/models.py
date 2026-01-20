@@ -50,6 +50,3 @@ class MediaColors:
             })
 
         return color_map
-
-
-@dataclass
