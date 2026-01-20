@@ -369,7 +369,7 @@ def create_server_pie_chart(
     df_server['Percentage'] = df_server['Count'] / df_server['Count'].sum() * 100
 
     custom_colors = {
-        server_a_name: '#102baf',
+        server_a_name: '#E6B413',
     }
     if server_b_name:
         custom_colors[server_b_name] = '#e36414'
@@ -728,7 +728,7 @@ def get_user_chart_data(
         }
 
     series = [
-        build_series(server_a_name, '#102baf')
+        build_series(server_a_name, '#E6B413')
     ]
     if server_b_name:
         series.append(
@@ -859,7 +859,7 @@ def get_server_pie_data(
     """
     df_server = df.groupby(['Server'])['Count'].sum().reset_index()
 
-    custom_colors = {server_a_name: '#102baf'}
+    custom_colors = {server_a_name: '#E6B413'}
     if server_b_name:
         custom_colors[server_b_name] = '#e36414'
 
