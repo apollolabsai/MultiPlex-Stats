@@ -53,7 +53,7 @@ function renderStackedBarChart(containerId, chartData) {
             layout: 'horizontal'
         },
         tooltip: {
-            headerFormat: '<b>{point.x}</b><br/>',
+            headerFormat: '<b>{point.category}</b><br/>',
             pointFormat: '{series.name}: {point.y:,.0f}<br/>Total: {point.stackTotal:,.0f}'
         },
         plotOptions: {
