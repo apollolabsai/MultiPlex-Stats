@@ -9,7 +9,7 @@ A web application for combining and visualizing statistics from multiple Tautull
 ## Features
 
 - **Web Interface** - Configure servers and view analytics directly in your browser
-- **Interactive Charts** - Plotly visualizations with hover details
+- **Interactive Charts** - Highcharts visualizations with hover details
 - **Multi-Server Support** - Combine statistics from up to 2 Tautulli servers
 - **User Analytics** - Track your most active users and viewing patterns
 - **Content Insights** - Discover your most popular movies and TV shows
@@ -165,5 +165,5 @@ This project is open source and available under the MIT License.
 ## Acknowledgments
 
 - **Tautulli** - Plex monitoring tool that provides the API
-- **Plotly** - Interactive charting library
+- **Highcharts** - Interactive charting library
 - **Flask** - Web framework

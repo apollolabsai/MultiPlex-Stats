@@ -34,10 +34,9 @@ class AnalyticsService:
         """
         Execute full analytics pipeline using database config.
 
-        This method replicates the logic in run_analytics.py but:
+        This method executes the full analytics pipeline but:
         1. Loads config from database instead of config.ini
-        2. Returns chart HTML strings instead of writing dashboard.html
-        3. Caches results for display in web UI
+        2. Caches results for display in the web UI
 
         Args:
             run_id: Database ID of AnalyticsRun record
@@ -57,7 +56,7 @@ class AnalyticsService:
         client_a = TautulliClient(server_a_config)
         client_b = TautulliClient(server_b_config) if server_b_config else None
 
-        # 3. Fetch and process data (following run_analytics.py logic)
+        # 3. Fetch and process data
         # Daily data (for daily chart)
         daily_data_a = client_a.get_plays_by_date(time_range=daily_trend_days)
         daily_data_b = client_b.get_plays_by_date(time_range=daily_trend_days) if client_b else None

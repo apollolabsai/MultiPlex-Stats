@@ -3,7 +3,6 @@ Data models and configuration classes for Tautulli analytics.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -54,31 +53,3 @@ class MediaColors:
 
 
 @dataclass
-class PlotTheme:
-    """Theme configuration for plots."""
-
-    plot_bgcolor: str = '#000000'
-    paper_bgcolor: str = '#000000'
-    title_color: str = 'white'
-    text_color: str = 'white'
-    grid_color: str = 'grey'
-    default_height: int = 600
-
-    def get_layout_config(self, title: str, height: Optional[int] = None) -> dict:
-        """Get layout configuration dictionary for plotly figures."""
-        return {
-            'plot_bgcolor': self.plot_bgcolor,
-            'paper_bgcolor': self.paper_bgcolor,
-            'title': {'text': title, 'font': {'color': self.title_color}},
-            'xaxis': dict(
-                tickfont=dict(color=self.text_color),
-                title=dict(font=dict(color=self.text_color))
-            ),
-            'yaxis': dict(
-                tickfont=dict(color=self.text_color),
-                title=dict(font=dict(color=self.text_color)),
-                gridcolor=self.grid_color
-            ),
-            'legend': dict(font=dict(color=self.text_color)),
-            'height': height or self.default_height
-        }
