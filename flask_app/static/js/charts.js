@@ -25,7 +25,7 @@ function renderStackedBarChart(containerId, chartData) {
             labels: {
                 rotation: -45,
                 style: {
-                    fontSize: '11px'
+                    fontSize: '13px'
                 }
             }
         },
