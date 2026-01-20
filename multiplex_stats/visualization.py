@@ -312,7 +312,7 @@ def create_category_pie_chart(
 
     custom_colors = {
         'TV': '#e36414',
-        'Movies': '#f18a3d',
+        'Movies': '#e6b413',
     }
 
     fig = px.pie(
@@ -823,7 +823,7 @@ def get_category_pie_data(df: pd.DataFrame, history_days: int) -> dict:
     ]
     df_category = df_filtered.groupby(['Category'])['Count'].sum().reset_index()
 
-    custom_colors = {'TV': '#e36414', 'Movies': '#f18a3d'}
+    custom_colors = {'TV': '#e36414', 'Movies': '#e6b413'}
 
     data = []
     for _, row in df_category.iterrows():
