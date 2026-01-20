@@ -134,7 +134,8 @@ function renderPieChart(containerId, chartData) {
             text: chartData.title
         },
         tooltip: {
-            pointFormat: '<b>{point.percentage:.1f}%</b> ({point.y:,.0f} plays)'
+            headerFormat: '<span style="font-size:11px">{series.name}</span><br>',
+            pointFormat: '<span style="color:{point.color}">{point.name}</span>: <b>{point.percentage:.1f}%</b> ({point.y:,.0f} plays)'
         },
         accessibility: {
             point: {
@@ -145,23 +146,24 @@ function renderPieChart(containerId, chartData) {
             pie: {
                 allowPointSelect: true,
                 cursor: 'pointer',
+                borderWidth: 0,
+                borderRadius: 5,
                 dataLabels: [{
                     enabled: true,
-                    distance: 20,
+                    distance: 15,
                     format: '{point.name}'
                 }, {
                     enabled: true,
-                    distance: -40,
+                    distance: '-30%',
+                    filter: {
+                        property: 'percentage',
+                        operator: '>',
+                        value: 5
+                    },
                     format: '{point.percentage:.1f}%',
                     style: {
-                        fontSize: '1.2em',
-                        textOutline: 'none',
-                        opacity: 0.7
-                    },
-                    filter: {
-                        operator: '>',
-                        property: 'percentage',
-                        value: 10
+                        fontSize: '0.9em',
+                        textOutline: 'none'
                     }
                 }]
             }
