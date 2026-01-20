@@ -2,6 +2,11 @@
  * Highcharts rendering functions for MultiPlex Stats
  */
 
+function getDynamicBarHeight(count, minHeight, rowHeight, padding) {
+    var items = Math.max(count || 0, 0);
+    return Math.max(minHeight, items * rowHeight + padding);
+}
+
 /**
  * Render a stacked bar chart (daily/monthly)
  */
@@ -68,10 +73,11 @@ function renderStackedBarChart(containerId, chartData) {
  * Render a bar chart with gradient coloring (user/movie/tv)
  */
 function renderGradientBarChart(containerId, chartData) {
+    var height = getDynamicBarHeight(chartData.categories ? chartData.categories.length : 0, 700, 28, 220);
     Highcharts.chart(containerId, {
         chart: {
             type: 'bar',
-            height: 700
+            height: height
         },
         title: {
             text: chartData.title
@@ -125,10 +131,11 @@ function renderGradientBarChart(containerId, chartData) {
  * Render a stacked bar chart with gradient colors (users by server)
  */
 function renderUserStackedBarChart(containerId, chartData) {
+    var height = getDynamicBarHeight(chartData.categories ? chartData.categories.length : 0, 700, 28, 220);
     Highcharts.chart(containerId, {
         chart: {
             type: 'bar',
-            height: 700
+            height: height
         },
         title: {
             text: chartData.title
