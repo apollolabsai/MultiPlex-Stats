@@ -32,8 +32,8 @@ class ServerConfig:
 class MediaColors:
     """Color configuration for visualizations."""
 
-    server_a_tv: str = '#FFB20F'
-    server_a_movies: str = '#FFE548'
+    server_a_tv: str = '#102baf'
+    server_a_movies: str = '#2196f3'
     server_b_tv: str = '#e36414'
     server_b_movies: str = '#f18a3d'
 
