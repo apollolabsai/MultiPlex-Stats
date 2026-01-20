@@ -93,7 +93,7 @@ body {
 .alert-info {
     background: rgba(33, 150, 243, 0.2);
     border: 1px solid rgba(33, 150, 243, 0.5);
-    color: #2196f3;
+    color: #FFE548;
 }
 
 .alert-close {
@@ -360,7 +360,7 @@ h1.settings-title {
 
 .badge-info {
     background: rgba(33, 150, 243, 0.2);
-    color: #2196f3;
+    color: #FFE548;
 }
 
 .error-message {
@@ -522,7 +522,7 @@ h1.settings-title {
     border: 1px solid rgba(33, 150, 243, 0.3);
     padding: 15px;
     border-radius: 8px;
-    color: #2196f3;
+    color: #FFE548;
     margin-bottom: 20px;
 }
 
@@ -640,7 +640,7 @@ h1.settings-title {
 
 .quality-badge.direct-stream {
     background: rgba(33, 150, 243, 0.2);
-    color: #2196f3;
+    color: #FFE548;
     border: 1px solid rgba(33, 150, 243, 0.4);
 }
 
@@ -654,7 +654,7 @@ h1.settings-title {
 
 .server-badge.server-a {
     background: rgba(33, 150, 243, 0.2);
-    color: #2196f3;
+    color: #FFE548;
     border: 1px solid rgba(33, 150, 243, 0.4);
 }
 

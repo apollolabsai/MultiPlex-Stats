@@ -56,8 +56,8 @@ Highcharts.setOptions({
 
 // Color constants matching current scheme
 var CHART_COLORS = {
-    SERVER_A_TV: '#102baf',
-    SERVER_A_MOVIES: '#2196f3',
+    SERVER_A_TV: '#FFB20F',
+    SERVER_A_MOVIES: '#FFE548',
     SERVER_B_TV: '#e36414',
     SERVER_B_MOVIES: '#f18a3d',
     PIE_YELLOW: '#FCE762',
