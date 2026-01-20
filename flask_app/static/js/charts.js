@@ -73,7 +73,7 @@ function renderStackedBarChart(containerId, chartData) {
  * Render a bar chart with gradient coloring (user/movie/tv)
  */
 function renderGradientBarChart(containerId, chartData) {
-    var height = getDynamicBarHeight(chartData.categories ? chartData.categories.length : 0, 700, 28, 220);
+    var height = getDynamicBarHeight(chartData.categories ? chartData.categories.length : 0, 700, 22, 220);
     Highcharts.chart(containerId, {
         chart: {
             type: 'bar',
@@ -131,7 +131,7 @@ function renderGradientBarChart(containerId, chartData) {
  * Render a stacked bar chart with gradient colors (users by server)
  */
 function renderUserStackedBarChart(containerId, chartData) {
-    var height = getDynamicBarHeight(chartData.categories ? chartData.categories.length : 0, 700, 28, 220);
+    var height = getDynamicBarHeight(chartData.categories ? chartData.categories.length : 0, 700, 22, 220);
     Highcharts.chart(containerId, {
         chart: {
             type: 'bar',
