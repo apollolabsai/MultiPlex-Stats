@@ -311,8 +311,8 @@ def create_category_pie_chart(
     df_category['Percentage'] = df_category['Count'] / df_category['Count'].sum() * 100
 
     custom_colors = {
-        'TV': '#FCE762',
-        'Movies': '#D35F3D',
+        'TV': '#e36414',
+        'Movies': '#f18a3d',
     }
 
     fig = px.pie(
@@ -369,10 +369,10 @@ def create_server_pie_chart(
     df_server['Percentage'] = df_server['Count'] / df_server['Count'].sum() * 100
 
     custom_colors = {
-        server_a_name: '#FCE762',
+        server_a_name: '#102baf',
     }
     if server_b_name:
-        custom_colors[server_b_name] = '#D35F3D'
+        custom_colors[server_b_name] = '#e36414'
 
     fig = px.pie(
         df_server,
@@ -785,7 +785,7 @@ def get_category_pie_data(df: pd.DataFrame, history_days: int) -> dict:
     ]
     df_category = df_filtered.groupby(['Category'])['Count'].sum().reset_index()
 
-    custom_colors = {'TV': '#FCE762', 'Movies': '#D35F3D'}
+    custom_colors = {'TV': '#e36414', 'Movies': '#f18a3d'}
 
     data = []
     for _, row in df_category.iterrows():
@@ -821,9 +821,9 @@ def get_server_pie_data(
     """
     df_server = df.groupby(['Server'])['Count'].sum().reset_index()
 
-    custom_colors = {server_a_name: '#FCE762'}
+    custom_colors = {server_a_name: '#102baf'}
     if server_b_name:
-        custom_colors[server_b_name] = '#D35F3D'
+        custom_colors[server_b_name] = '#e36414'
 
     data = []
     for _, row in df_server.iterrows():
