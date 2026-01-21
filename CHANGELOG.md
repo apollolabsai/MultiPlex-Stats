@@ -5,7 +5,28 @@ The format is based on Keep a Changelog, and this project adheres to
 semantic versioning.
 
 ## [Main branch updates — last 7 days]
-- **Summary:** Dashboard now supports per-chart time range controls with fast in-place updates; settings no longer include daily/monthly/history range inputs; chart styling and labeling were refined (commas, gradients, legends, axis titles); build footer metadata and Docker build metadata were added; Users/Viewing History pages gained richer data, pagination, and visual tweaks; multiple UI polish passes and documentation updates landed.
+- **Summary:** Charts migrated fully to Highcharts, with stacked user bars, dynamic bar chart sizing, tooltip/label fixes, and color refinements; legacy Plotly code was removed; empty-history messaging and settings CTA icon were improved; README visuals were refreshed.
+
+- 2026-01-20 (253fa41) Update README dashboard image.
+- 2026-01-19 (6aaf4c7) Fix syntax error: remove orphaned @dataclass decorator.
+- 2026-01-19 (f7887c9) Remove Plotly legacy code.
+- 2026-01-19 (6ca9cb1) Show category label in stacked bar tooltip.
+- 2026-01-19 (2908c93) Increase stacked chart x-axis label size.
+- 2026-01-19 (42dc98d) Adjust server A chart colors.
+- 2026-01-19 (267d1a6) Revert "Update palette for server A colors".
+- 2026-01-19 (6018249) Update palette for server A colors.
+- 2026-01-19 (35b341b) Adjust category pie movie color.
+- 2026-01-19 (7e0209e) Reduce bar chart row height.
+- 2026-01-19 (4a32974) Scale bar chart height by category count.
+- 2026-01-19 (a203561) Use solid colors for user stacked bars.
+- 2026-01-19 (d330a15) Stack user bar chart by server.
+- 2026-01-19 (86a3ef5) Update pie chart colors.
+- 2026-01-19 (9701970) Update stacked bar chart colors.
+- 2026-01-19 (df0c93d) Remove pie chart outline and improve styling.
+- 2026-01-19 (a4a1815) Improve pie chart styling with outer labels and percentage filters.
+- 2026-01-19 (366a53b) Migrate charts from Plotly to Highcharts.
+- 2026-01-19 (99f3cc3) Clarify empty history table message.
+- 2026-01-18 (a84bac2) Fix settings CTA icon asset path.
 
 - 2026-01-18 (f101b20) Remove x-axis titles on bottom charts.
 - 2026-01-18 (bbb993f) Use orange gradient for user/movie/TV bars.
