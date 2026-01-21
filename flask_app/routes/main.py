@@ -4,7 +4,7 @@ Main application routes for dashboard and analytics execution.
 import json
 from datetime import datetime, timezone
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
-from flask_app.models import db, AnalyticsRun
+from flask_app.models import db, AnalyticsRun, ViewingHistory
 from flask_app.services.analytics_service import AnalyticsService
 from flask_app.services.config_service import ConfigService
 from multiplex_stats.timezone_utils import get_local_timezone
@@ -307,6 +307,61 @@ def api_tv_chart():
 def viewing_history():
     """Display viewing history page with DataTables."""
     return render_template('viewing_history.html')
+
+
+@main_bp.route('/api/viewing-history-stats')
+def api_viewing_history_stats():
+    """Get statistics from the viewing history database table."""
+    from sqlalchemy import func, distinct
+    from datetime import datetime, timedelta
+
+    # Get total record count and date range
+    total_plays = ViewingHistory.query.count()
+
+    if total_plays == 0:
+        return jsonify({
+            'total_plays': 0,
+            'total_users': 0,
+            'servers': [],
+            'days_of_history': 0,
+            'oldest_date': None,
+            'newest_date': None
+        })
+
+    # Count distinct users
+    total_users = db.session.query(func.count(distinct(ViewingHistory.user))).scalar() or 0
+
+    # Get plays per server
+    server_stats = db.session.query(
+        ViewingHistory.server_name,
+        func.count(ViewingHistory.id).label('plays')
+    ).group_by(ViewingHistory.server_name).all()
+
+    servers = [{'name': s.server_name, 'plays': s.plays} for s in server_stats]
+
+    # Get date range from the 'started' timestamp
+    oldest = db.session.query(func.min(ViewingHistory.started)).scalar()
+    newest = db.session.query(func.max(ViewingHistory.started)).scalar()
+
+    days_of_history = 0
+    oldest_date = None
+    newest_date = None
+
+    if oldest and newest:
+        oldest_dt = datetime.fromtimestamp(oldest)
+        newest_dt = datetime.fromtimestamp(newest)
+        days_of_history = (newest_dt - oldest_dt).days + 1
+        oldest_date = oldest_dt.strftime('%Y-%m-%d')
+        newest_date = newest_dt.strftime('%Y-%m-%d')
+
+    return jsonify({
+        'total_plays': total_plays,
+        'total_users': total_users,
+        'servers': servers,
+        'days_of_history': days_of_history,
+        'oldest_date': oldest_date,
+        'newest_date': newest_date
+    })
 
 
 @main_bp.route('/users')

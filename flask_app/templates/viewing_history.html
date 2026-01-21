@@ -8,6 +8,22 @@
     <div class="subtitle">Complete playback records from all servers</div>
 </header>
 
+<div class="stats-grid" id="stats-grid">
+    <div class="stat-card">
+        <div class="stat-number" id="stat-total-plays">-</div>
+        <div class="stat-label">Total Plays</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number" id="stat-total-users">-</div>
+        <div class="stat-label">Active Users</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number" id="stat-days">-</div>
+        <div class="stat-label">Days of History</div>
+    </div>
+    <!-- Server-specific cards will be added dynamically -->
+</div>
+
 <div class="section">
     <div class="table-container">
         <table id="viewingHistoryTable" class="display" style="width:100%">
@@ -402,6 +418,39 @@ $(document).ready(function() {
             closeGeoModal();
         }
     });
+
+    // Fetch and display viewing history stats
+    function loadStats() {
+        fetch('{{ url_for("main.api_viewing_history_stats") }}')
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Failed to load stats');
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                // Update the stat cards
+                document.getElementById('stat-total-plays').textContent = data.total_plays.toLocaleString();
+                document.getElementById('stat-total-users').textContent = data.total_users.toLocaleString();
+                document.getElementById('stat-days').textContent = data.days_of_history.toLocaleString();
+
+                // Add server-specific cards dynamically
+                var statsGrid = document.getElementById('stats-grid');
+                data.servers.forEach(function(server) {
+                    var card = document.createElement('div');
+                    card.className = 'stat-card';
+                    card.innerHTML = '<div class="stat-number">' + server.plays.toLocaleString() + '</div>' +
+                                     '<div class="stat-label">' + server.name + ' Plays</div>';
+                    statsGrid.appendChild(card);
+                });
+            })
+            .catch(function(error) {
+                console.error('Error loading stats:', error);
+            });
+    }
+
+    // Load stats on page load
+    loadStats();
 });
 </script>
 {% endblock %}

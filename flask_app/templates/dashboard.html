@@ -161,31 +161,6 @@
     </div>
 </div>
 
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-number">{{ "{:,}".format(summary.total_plays) }}</div>
-        <div class="stat-label">Total Plays</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-number">{{ summary.total_users }}</div>
-        <div class="stat-label">Active Users</div>
-    </div>
-
-    {% if summary.server_a_name %}
-    <div class="stat-card">
-        <div class="stat-number">{{ "{:,}".format(summary.server_a_plays) }}</div>
-        <div class="stat-label">{{ summary.server_a_name }} Plays</div>
-    </div>
-    {% endif %}
-
-    {% if summary.server_b_name %}
-    <div class="stat-card">
-        <div class="stat-number">{{ "{:,}".format(summary.server_b_plays) }}</div>
-        <div class="stat-label">{{ summary.server_b_name }} Plays</div>
-    </div>
-    {% endif %}
-</div>
-
 <div class="section">
     <h2 class="section-title">
         <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
