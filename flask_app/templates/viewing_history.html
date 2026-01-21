@@ -4,8 +4,8 @@
 
 {% block content %}
 <header>
-    <h1 class="page-title">Viewing History</h1>
-    <div class="subtitle">Complete playback records from all servers</div>
+    <h1 class="settings-title">Viewing History</h1>
+    <div class="subtitle" id="history-subtitle">Complete playback records from all servers</div>
 </header>
 
 <div class="stats-grid" id="stats-grid">
@@ -16,10 +16,6 @@
     <div class="stat-card">
         <div class="stat-number" id="stat-total-users">-</div>
         <div class="stat-label">Active Users</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-number" id="stat-days">-</div>
-        <div class="stat-label">Days of History</div>
     </div>
     <!-- Server-specific cards will be added dynamically -->
 </div>
@@ -432,7 +428,17 @@ $(document).ready(function() {
                 // Update the stat cards
                 document.getElementById('stat-total-plays').textContent = data.total_plays.toLocaleString();
                 document.getElementById('stat-total-users').textContent = data.total_users.toLocaleString();
-                document.getElementById('stat-days').textContent = data.days_of_history.toLocaleString();
+
+                // Update subtitle with days and date range
+                if (data.days_of_history > 0 && data.oldest_date && data.newest_date) {
+                    var formatDate = function(dateStr) {
+                        var parts = dateStr.split('-');
+                        var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                        return months[parseInt(parts[1], 10) - 1] + ' ' + parseInt(parts[2], 10) + ', ' + parts[0];
+                    };
+                    var subtitle = data.days_of_history.toLocaleString() + ' Days | ' + formatDate(data.oldest_date) + ' - ' + formatDate(data.newest_date);
+                    document.getElementById('history-subtitle').textContent = subtitle;
+                }
 
                 // Add server-specific cards dynamically
                 var statsGrid = document.getElementById('stats-grid');
