@@ -303,6 +303,12 @@ def api_tv_chart():
         return jsonify({'error': str(e)}), 500
 
 
+@main_bp.route('/viewing-history')
+def viewing_history():
+    """Display viewing history page with DataTables."""
+    return render_template('viewing_history.html')
+
+
 @main_bp.route('/users')
 def users():
     """Display all users from configured servers."""
