@@ -339,20 +339,18 @@ def api_viewing_history_stats():
 
     servers = [{'name': s.server_name, 'plays': s.plays} for s in server_stats]
 
-    # Get date range from the 'started' timestamp
-    oldest = db.session.query(func.min(ViewingHistory.started)).scalar()
-    newest = db.session.query(func.max(ViewingHistory.started)).scalar()
+    # Get date range using configured timezone dates when available
+    oldest = db.session.query(func.min(ViewingHistory.date_played)).scalar()
+    newest = db.session.query(func.max(ViewingHistory.date_played)).scalar()
 
     days_of_history = 0
     oldest_date = None
     newest_date = None
 
     if oldest and newest:
-        oldest_dt = datetime.fromtimestamp(oldest)
-        newest_dt = datetime.fromtimestamp(newest)
-        days_of_history = (newest_dt - oldest_dt).days + 1
-        oldest_date = oldest_dt.strftime('%Y-%m-%d')
-        newest_date = newest_dt.strftime('%Y-%m-%d')
+        days_of_history = (newest - oldest).days + 1
+        oldest_date = oldest.strftime('%Y-%m-%d')
+        newest_date = newest.strftime('%Y-%m-%d')
 
     return jsonify({
         'total_plays': total_plays,

@@ -442,9 +442,12 @@ $(document).ready(function() {
 
                 // Add server-specific cards dynamically
                 var statsGrid = document.getElementById('stats-grid');
+                statsGrid.querySelectorAll('.server-stat-card').forEach(function(card) {
+                    card.remove();
+                });
                 data.servers.forEach(function(server) {
                     var card = document.createElement('div');
-                    card.className = 'stat-card';
+                    card.className = 'stat-card server-stat-card';
                     card.innerHTML = '<div class="stat-number">' + server.plays.toLocaleString() + '</div>' +
                                      '<div class="stat-label">' + server.name + ' Plays</div>';
                     statsGrid.appendChild(card);
