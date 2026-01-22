@@ -157,7 +157,7 @@ function renderUserStackedBarChart(containerId, chartData) {
                 enabled: true,
                 style: {
                     color: 'white',
-                    fontSize: '13px',
+                    fontSize: '16px',
                     fontWeight: 'bold',
                     textOutline: 'none'
                 },
