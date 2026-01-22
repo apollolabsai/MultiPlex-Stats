@@ -378,3 +378,77 @@ def get_platform_pie_data(df: pd.DataFrame, history_days: int) -> dict:
         'data': data,
         'title': f'Platform Distribution - {history_days} days'
     }
+
+
+def get_concurrent_streams_chart_data(
+    api_response_a: dict,
+    api_response_b: Optional[dict],
+    server_a_name: str,
+    server_b_name: Optional[str],
+    days: int
+) -> dict:
+    """
+    Get data for max concurrent streams area chart in Highcharts format.
+
+    Combines data from one or two servers, taking the max concurrent value
+    for each date across both servers.
+
+    Args:
+        api_response_a: Tautulli API response from server A
+        api_response_b: Optional Tautulli API response from server B
+        server_a_name: Name of server A
+        server_b_name: Name of server B (optional)
+        days: Number of days included in the data
+
+    Returns:
+        Dictionary with 'categories', 'data', 'title' for area chart
+    """
+    # Extract Max Concurrent Streams series from each server
+    def extract_max_series(response: dict) -> dict:
+        """Extract categories and max concurrent data from API response."""
+        if not response or 'response' not in response:
+            return {'categories': [], 'data': []}
+
+        data = response['response'].get('data', {})
+        categories = data.get('categories', [])
+        series_list = data.get('series', [])
+
+        # Find the "Max. Concurrent Streams" series
+        max_data = []
+        for series in series_list:
+            if series.get('name') == 'Max. Concurrent Streams':
+                max_data = series.get('data', [])
+                break
+
+        return {'categories': categories, 'data': max_data}
+
+    server_a_data = extract_max_series(api_response_a)
+
+    if api_response_b:
+        server_b_data = extract_max_series(api_response_b)
+
+        # Merge data from both servers, taking max for each date
+        all_dates = set(server_a_data['categories']) | set(server_b_data['categories'])
+        all_dates = sorted(all_dates)
+
+        # Create lookup dicts
+        a_lookup = dict(zip(server_a_data['categories'], server_a_data['data']))
+        b_lookup = dict(zip(server_b_data['categories'], server_b_data['data']))
+
+        merged_data = []
+        for date in all_dates:
+            val_a = a_lookup.get(date, 0)
+            val_b = b_lookup.get(date, 0)
+            merged_data.append(max(val_a, val_b))
+
+        categories = all_dates
+        data = merged_data
+    else:
+        categories = server_a_data['categories']
+        data = server_a_data['data']
+
+    return {
+        'categories': categories,
+        'data': [int(d) for d in data],
+        'title': f'Max Concurrent Streams - {days} days'
+    }

@@ -215,6 +215,24 @@
     <div class="chart-container" id="monthly-chart-container">
         <!-- Chart rendered by Highcharts -->
     </div>
+    <div class="chart-controls">
+        <div class="chart-controls-label">Concurrent streams range</div>
+        <form class="chart-controls-form" id="concurrent-range-form">
+            <div class="chart-controls-group">
+                <button type="button" data-days="7" class="range-pill">7d</button>
+                <button type="button" data-days="30" class="range-pill">30d</button>
+                <button type="button" data-days="60" class="range-pill active">60d</button>
+                <button type="button" data-days="90" class="range-pill">90d</button>
+                <div class="range-custom">
+                    <input type="number" name="concurrent_days_custom" min="1" max="3650" placeholder="Custom days">
+                    <button type="button" class="range-pill range-apply-concurrent">Apply</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="chart-container" id="concurrent-chart-container">
+        <!-- Chart rendered by Highcharts -->
+    </div>
 </div>
 
 <div class="section">
@@ -724,6 +742,61 @@ $(document).ready(function() {
             if (monthlyMonths) {
                 fetchMonthlyChart(monthlyMonths);
             }
+        });
+    }
+
+    // Concurrent streams chart range controls
+    function fetchConcurrentStreams(days) {
+        var container = document.getElementById('concurrent-chart-container');
+        if (!container || !days) {
+            return;
+        }
+
+        container.classList.add('is-loading');
+
+        fetch('{{ url_for("main.api_concurrent_streams") }}?days=' + encodeURIComponent(days))
+            .then(function(response) {
+                if (!response.ok) {
+                    return response.json().then(function(payload) {
+                        throw new Error(payload.error || 'Failed to load chart.');
+                    });
+                }
+                return response.json();
+            })
+            .then(function(payload) {
+                renderAreaChart('concurrent-chart-container', payload.chart_data);
+                setActiveRange('concurrent-range-form', 'concurrent_days_custom', payload.concurrent_streams_days, [7, 30, 60, 90]);
+            })
+            .catch(function(error) {
+                alert(error.message || 'Unable to update the concurrent streams chart.');
+            })
+            .finally(function() {
+                container.classList.remove('is-loading');
+            });
+    }
+
+    // Load initial concurrent streams chart (default 60 days)
+    fetchConcurrentStreams(60);
+
+    document.querySelectorAll('#concurrent-range-form .range-pill[data-days]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var value = parseInt(button.getAttribute('data-days'), 10);
+            if (value) {
+                fetchConcurrentStreams(value);
+            }
+        });
+    });
+
+    var concurrentApplyButton = document.querySelector('#concurrent-range-form .range-custom .range-apply-concurrent');
+    if (concurrentApplyButton) {
+        concurrentApplyButton.addEventListener('click', function() {
+            var customInput = document.querySelector('#concurrent-range-form input[name="concurrent_days_custom"]');
+            var value = customInput ? parseInt(customInput.value, 10) : null;
+            if (!value || value < 1 || value > 3650) {
+                alert('Please enter a valid number of days (1-3650).');
+                return;
+            }
+            fetchConcurrentStreams(value);
         });
     }
 

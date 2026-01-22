@@ -16,7 +16,8 @@ from multiplex_stats.timezone_utils import get_local_timezone
 from multiplex_stats.visualization import (
     get_daily_chart_data, get_monthly_chart_data,
     get_user_chart_data, get_movie_chart_data, get_tv_chart_data,
-    get_category_pie_data, get_server_pie_data, get_platform_pie_data
+    get_category_pie_data, get_server_pie_data, get_platform_pie_data,
+    get_concurrent_streams_chart_data
 )
 from flask_app.services.config_service import ConfigService
 from flask_app.services.history_sync_service import HistorySyncService
@@ -413,6 +414,42 @@ class AnalyticsService:
             'chart_data': chart_data,
             'tv_chart_days': history_days,
             'top_tv_shows': tv_count
+        }
+
+    def get_concurrent_streams_json(self, days: int | None = None) -> Dict[str, Any]:
+        """
+        Generate the concurrent streams area chart JSON for Highcharts.
+
+        Args:
+            days: Optional override for day range (default 60).
+
+        Returns:
+            Dictionary with chart data and the day range used.
+        """
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        settings = ConfigService.get_analytics_settings()
+
+        if not server_a_config:
+            raise ValueError("No server configuration found. Please configure at least one server.")
+
+        stream_days = days or 60  # Default to 60 days
+
+        client_a = TautulliClient(server_a_config)
+        client_b = TautulliClient(server_b_config) if server_b_config else None
+
+        streams_data_a = client_a.get_concurrent_streams_by_stream_type(time_range=stream_days)
+        streams_data_b = client_b.get_concurrent_streams_by_stream_type(time_range=stream_days) if client_b else None
+
+        chart_data = get_concurrent_streams_chart_data(
+            streams_data_a, streams_data_b,
+            server_a_config.name,
+            server_b_config.name if server_b_config else None,
+            stream_days
+        )
+
+        return {
+            'chart_data': chart_data,
+            'concurrent_streams_days': stream_days
         }
 
     def _get_user_thumb_map(self) -> dict:

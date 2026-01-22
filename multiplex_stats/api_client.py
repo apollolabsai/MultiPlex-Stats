@@ -177,3 +177,22 @@ class TautulliClient:
             API response containing current streaming activity
         """
         return self._make_request('get_activity')
+
+    def get_concurrent_streams_by_stream_type(
+        self,
+        time_range: int = 60
+    ) -> dict[str, Any]:
+        """
+        Get concurrent streams data by stream type.
+
+        Args:
+            time_range: Number of days to fetch (default: 60)
+
+        Returns:
+            API response containing concurrent streams data with categories
+            (dates) and series (Direct Play, Direct Stream, Transcode, Max)
+        """
+        return self._make_request(
+            'get_concurrent_streams_by_stream_type',
+            time_range=time_range
+        )

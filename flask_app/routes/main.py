@@ -225,6 +225,24 @@ def api_distribution_charts():
         return jsonify({'error': str(e)}), 500
 
 
+@main_bp.route('/api/concurrent-streams')
+def api_concurrent_streams():
+    """Return concurrent streams chart JSON for the requested day range."""
+    if not ConfigService.has_valid_config():
+        return jsonify({'error': 'No server configuration found.'}), 400
+
+    days = request.args.get('days', type=int)
+    if not days or days < 1 or days > 3650:
+        return jsonify({'error': 'Invalid day range. Use 1-3650.'}), 400
+
+    try:
+        service = AnalyticsService()
+        result = service.get_concurrent_streams_json(days=days)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @main_bp.route('/api/ip-lookup')
 def api_ip_lookup():
     """Lookup geo data for a single IP address and cache results."""

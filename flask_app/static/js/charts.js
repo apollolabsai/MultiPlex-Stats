@@ -244,6 +244,73 @@ function renderPieChart(containerId, chartData) {
 }
 
 /**
+ * Render an area chart with gradient fill (concurrent streams)
+ */
+function renderAreaChart(containerId, chartData) {
+    Highcharts.chart(containerId, {
+        chart: {
+            type: 'area',
+            height: 400
+        },
+        title: {
+            text: chartData.title
+        },
+        xAxis: {
+            categories: chartData.categories,
+            crosshair: true,
+            labels: {
+                rotation: -45,
+                style: {
+                    fontSize: '12px'
+                }
+            },
+            tickInterval: Math.ceil(chartData.categories.length / 15)
+        },
+        yAxis: {
+            min: 0,
+            title: {
+                text: 'Concurrent Streams'
+            },
+            allowDecimals: false
+        },
+        legend: {
+            enabled: false
+        },
+        tooltip: {
+            headerFormat: '<b>{point.category}</b><br/>',
+            pointFormat: 'Max Streams: <b>{point.y}</b>'
+        },
+        plotOptions: {
+            area: {
+                fillColor: {
+                    linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
+                    stops: [
+                        [0, 'rgba(227, 100, 20, 0.3)'],
+                        [1, 'rgba(255, 152, 0, 0.05)']
+                    ]
+                },
+                marker: {
+                    enabled: false,
+                    states: {
+                        hover: { enabled: true, radius: 4 }
+                    }
+                },
+                lineWidth: 2,
+                lineColor: '#e36414',
+                states: {
+                    hover: { lineWidth: 2 }
+                },
+                threshold: null
+            }
+        },
+        series: [{
+            name: 'Max Concurrent Streams',
+            data: chartData.data
+        }]
+    });
+}
+
+/**
  * Helper function to update chart controls active state
  * @param {string} formId - The form element ID
  * @param {string} customInputName - Name attribute of custom input field
