@@ -62,6 +62,15 @@ body {
     background: rgba(255, 255, 255, 0.1);
 }
 
+.nav-link.active {
+    color: #ed542b;
+}
+
+.nav-link.active:hover {
+    color: #ed542b;
+    background: rgba(237, 84, 43, 0.12);
+}
+
 /* Flash Messages */
 .flash-messages {
     max-width: 1800px;
