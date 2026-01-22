@@ -244,12 +244,11 @@ function renderPieChart(containerId, chartData) {
 }
 
 /**
- * Render an area chart with gradient fill (concurrent streams)
+ * Render an area chart with gradient fill and optional line overlays (concurrent streams)
  */
 function renderAreaChart(containerId, chartData) {
     Highcharts.chart(containerId, {
         chart: {
-            type: 'area',
             height: 400
         },
         title: {
@@ -274,21 +273,17 @@ function renderAreaChart(containerId, chartData) {
             allowDecimals: false
         },
         legend: {
-            enabled: false
+            enabled: chartData.series.length > 1,
+            align: 'center',
+            verticalAlign: 'bottom',
+            layout: 'horizontal'
         },
         tooltip: {
-            headerFormat: '<b>{point.category}</b><br/>',
-            pointFormat: 'Max Streams: <b>{point.y}</b>'
+            shared: true,
+            headerFormat: '<b>{point.category}</b><br/>'
         },
         plotOptions: {
             area: {
-                fillColor: {
-                    linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
-                    stops: [
-                        [0, 'rgba(227, 100, 20, 0.3)'],
-                        [1, 'rgba(255, 152, 0, 0.05)']
-                    ]
-                },
                 marker: {
                     enabled: false,
                     states: {
@@ -296,17 +291,24 @@ function renderAreaChart(containerId, chartData) {
                     }
                 },
                 lineWidth: 2,
-                lineColor: '#e36414',
                 states: {
                     hover: { lineWidth: 2 }
                 },
                 threshold: null
+            },
+            line: {
+                marker: {
+                    enabled: false,
+                    states: {
+                        hover: { enabled: true, radius: 4 }
+                    }
+                },
+                states: {
+                    hover: { lineWidth: 3 }
+                }
             }
         },
-        series: [{
-            name: 'Max Concurrent Streams',
-            data: chartData.data
-        }]
+        series: chartData.series
     });
 }
 

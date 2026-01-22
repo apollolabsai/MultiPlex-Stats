@@ -391,7 +391,8 @@ def get_concurrent_streams_chart_data(
     Get data for max concurrent streams area chart in Highcharts format.
 
     Combines data from one or two servers, summing the max concurrent values
-    for each date across both servers.
+    for each date across both servers. Also returns individual server data
+    for line overlays.
 
     Args:
         api_response_a: Tautulli API response from server A
@@ -401,7 +402,7 @@ def get_concurrent_streams_chart_data(
         days: Number of days included in the data
 
     Returns:
-        Dictionary with 'categories', 'data', 'title' for area chart
+        Dictionary with 'categories', 'series', 'title' for area chart
     """
     # Extract Max Concurrent Streams series from each server
     def extract_max_series(response: dict) -> dict:
@@ -435,20 +436,73 @@ def get_concurrent_streams_chart_data(
         a_lookup = dict(zip(server_a_data['categories'], server_a_data['data']))
         b_lookup = dict(zip(server_b_data['categories'], server_b_data['data']))
 
-        merged_data = []
+        total_data = []
+        server_a_aligned = []
+        server_b_aligned = []
         for date in all_dates:
             val_a = a_lookup.get(date, 0)
             val_b = b_lookup.get(date, 0)
-            merged_data.append(val_a + val_b)
+            total_data.append(int(val_a + val_b))
+            server_a_aligned.append(int(val_a))
+            server_b_aligned.append(int(val_b))
 
         categories = all_dates
-        data = merged_data
+
+        # Build series: total area + individual server lines
+        series = [
+            {
+                'name': 'Total',
+                'type': 'area',
+                'data': total_data,
+                'color': '#e36414',
+                'fillColor': {
+                    'linearGradient': {'x1': 0, 'y1': 0, 'x2': 0, 'y2': 1},
+                    'stops': [
+                        [0, 'rgba(227, 100, 20, 0.3)'],
+                        [1, 'rgba(255, 152, 0, 0.05)']
+                    ]
+                }
+            },
+            {
+                'name': server_a_name,
+                'type': 'line',
+                'data': server_a_aligned,
+                'color': '#E6B413',  # Yellow (matches Server A in other charts)
+                'lineWidth': 2,
+                'marker': {'enabled': False}
+            },
+            {
+                'name': server_b_name,
+                'type': 'line',
+                'data': server_b_aligned,
+                'color': '#ff7900',  # Orange (matches Server B in other charts)
+                'lineWidth': 2,
+                'marker': {'enabled': False}
+            }
+        ]
     else:
         categories = server_a_data['categories']
-        data = server_a_data['data']
+        data = [int(d) for d in server_a_data['data']]
+
+        # Single server - just the area chart
+        series = [
+            {
+                'name': 'Max Concurrent Streams',
+                'type': 'area',
+                'data': data,
+                'color': '#e36414',
+                'fillColor': {
+                    'linearGradient': {'x1': 0, 'y1': 0, 'x2': 0, 'y2': 1},
+                    'stops': [
+                        [0, 'rgba(227, 100, 20, 0.3)'],
+                        [1, 'rgba(255, 152, 0, 0.05)']
+                    ]
+                }
+            }
+        ]
 
     return {
         'categories': categories,
-        'data': [int(d) for d in data],
+        'series': series,
         'title': f'Max Concurrent Streams - {days} days'
     }
