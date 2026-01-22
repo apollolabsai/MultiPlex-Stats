@@ -259,9 +259,13 @@ def api_user_chart():
     if not days or days < 1 or days > 3650:
         return jsonify({'error': 'Invalid day range. Use 1-3650.'}), 400
 
+    top_n = request.args.get('top_n', type=int)
+    if top_n is not None and (top_n < 1 or top_n > 100):
+        return jsonify({'error': 'Invalid top_n. Use 1-100.'}), 400
+
     try:
         service = AnalyticsService()
-        result = service.get_user_chart_json(days=days)
+        result = service.get_user_chart_json(days=days, top_n=top_n)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -277,9 +281,13 @@ def api_movie_chart():
     if not days or days < 1 or days > 3650:
         return jsonify({'error': 'Invalid day range. Use 1-3650.'}), 400
 
+    top_n = request.args.get('top_n', type=int)
+    if top_n is not None and (top_n < 1 or top_n > 100):
+        return jsonify({'error': 'Invalid top_n. Use 1-100.'}), 400
+
     try:
         service = AnalyticsService()
-        result = service.get_movie_chart_json(days=days)
+        result = service.get_movie_chart_json(days=days, top_n=top_n)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -295,9 +303,13 @@ def api_tv_chart():
     if not days or days < 1 or days > 3650:
         return jsonify({'error': 'Invalid day range. Use 1-3650.'}), 400
 
+    top_n = request.args.get('top_n', type=int)
+    if top_n is not None and (top_n < 1 or top_n > 100):
+        return jsonify({'error': 'Invalid top_n. Use 1-100.'}), 400
+
     try:
         service = AnalyticsService()
-        result = service.get_tv_chart_json(days=days)
+        result = service.get_tv_chart_json(days=days, top_n=top_n)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500

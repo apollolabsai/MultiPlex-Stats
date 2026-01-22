@@ -256,7 +256,7 @@
         User Activity
     </h2>
     <div class="chart-controls">
-        <div class="chart-controls-label">User range</div>
+        <div class="chart-controls-label">Top <input type="number" class="top-n-input" id="user-top-n" min="1" max="100" value="{{ summary.top_users|default(20) }}"> Users</div>
         <form class="chart-controls-form" id="user-range-form">
             <div class="chart-controls-group">
                 <button type="button" data-days="7" class="range-pill {% if summary.user_chart_days == 7 %}active{% endif %}">7d</button>
@@ -289,7 +289,7 @@
         Top Content
     </h2>
     <div class="chart-controls">
-        <div class="chart-controls-label">Movies range</div>
+        <div class="chart-controls-label">Top <input type="number" class="top-n-input" id="movie-top-n" min="1" max="100" value="{{ summary.top_movies|default(30) }}"> Movies</div>
         <form class="chart-controls-form" id="movie-range-form">
             <div class="chart-controls-group">
                 <button type="button" data-days="7" class="range-pill {% if summary.movie_chart_days == 7 %}active{% endif %}">7d</button>
@@ -308,7 +308,7 @@
         <!-- Chart rendered by Highcharts -->
     </div>
     <div class="chart-controls">
-        <div class="chart-controls-label">TV range</div>
+        <div class="chart-controls-label">Top <input type="number" class="top-n-input" id="tv-top-n" min="1" max="100" value="{{ summary.top_tv_shows|default(30) }}"> TV Shows</div>
         <form class="chart-controls-form" id="tv-range-form">
             <div class="chart-controls-group">
                 <button type="button" data-days="7" class="range-pill {% if summary.tv_chart_days == 7 %}active{% endif %}">7d</button>
@@ -437,6 +437,19 @@
 .chart-container.is-loading {
     opacity: 0.6;
     pointer-events: none;
+}
+
+.top-n-input {
+    width: 50px;
+    padding: 4px 6px;
+    margin: 0 4px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.3);
+    color: #f18a3d;
+    font-weight: 600;
+    font-size: 0.95em;
+    text-align: center;
 }
 
 @media (min-width: 900px) {
@@ -676,15 +689,23 @@ $(document).ready(function() {
     }
 
     // User chart range controls
-    function fetchUserChart(days) {
+    function fetchUserChart(days, topN) {
         var container = document.getElementById('user-chart-container');
         if (!container || !days) {
             return;
         }
 
+        var topNInput = document.getElementById('user-top-n');
+        var topNValue = topN || (topNInput ? parseInt(topNInput.value, 10) : null);
+
         container.classList.add('is-loading');
 
-        fetch('{{ url_for("main.api_user_chart") }}?days=' + encodeURIComponent(days))
+        var url = '{{ url_for("main.api_user_chart") }}?days=' + encodeURIComponent(days);
+        if (topNValue) {
+            url += '&top_n=' + encodeURIComponent(topNValue);
+        }
+
+        fetch(url)
             .then(function(response) {
                 if (!response.ok) {
                     return response.json().then(function(payload) {
@@ -696,6 +717,9 @@ $(document).ready(function() {
             .then(function(payload) {
                 renderUserStackedBarChart('user-chart-container', payload.chart_data);
                 setActiveRange('user-range-form', 'user_days_custom', payload.user_chart_days, [7, 30, 60, 90]);
+                if (topNInput && payload.top_users) {
+                    topNInput.value = payload.top_users;
+                }
             })
             .catch(function(error) {
                 alert(error.message || 'Unable to update the user chart.');
@@ -727,16 +751,37 @@ $(document).ready(function() {
         });
     }
 
+    // User top-n change handler
+    var userTopNInput = document.getElementById('user-top-n');
+    if (userTopNInput) {
+        userTopNInput.addEventListener('change', function() {
+            var activeBtn = document.querySelector('#user-range-form .range-pill.active[data-days]');
+            var customInput = document.querySelector('#user-range-form input[name="user_days_custom"]');
+            var days = activeBtn ? parseInt(activeBtn.getAttribute('data-days'), 10) : (customInput ? parseInt(customInput.value, 10) : null);
+            if (days) {
+                fetchUserChart(days);
+            }
+        });
+    }
+
     // Movie chart range controls
-    function fetchMovieChart(days) {
+    function fetchMovieChart(days, topN) {
         var container = document.getElementById('movie-chart-container');
         if (!container || !days) {
             return;
         }
 
+        var topNInput = document.getElementById('movie-top-n');
+        var topNValue = topN || (topNInput ? parseInt(topNInput.value, 10) : null);
+
         container.classList.add('is-loading');
 
-        fetch('{{ url_for("main.api_movie_chart") }}?days=' + encodeURIComponent(days))
+        var url = '{{ url_for("main.api_movie_chart") }}?days=' + encodeURIComponent(days);
+        if (topNValue) {
+            url += '&top_n=' + encodeURIComponent(topNValue);
+        }
+
+        fetch(url)
             .then(function(response) {
                 if (!response.ok) {
                     return response.json().then(function(payload) {
@@ -748,6 +793,9 @@ $(document).ready(function() {
             .then(function(payload) {
                 renderGradientBarChart('movie-chart-container', payload.chart_data);
                 setActiveRange('movie-range-form', 'movie_days_custom', payload.movie_chart_days, [7, 30, 60, 90]);
+                if (topNInput && payload.top_movies) {
+                    topNInput.value = payload.top_movies;
+                }
             })
             .catch(function(error) {
                 alert(error.message || 'Unable to update the movie chart.');
@@ -779,16 +827,37 @@ $(document).ready(function() {
         });
     }
 
+    // Movie top-n change handler
+    var movieTopNInput = document.getElementById('movie-top-n');
+    if (movieTopNInput) {
+        movieTopNInput.addEventListener('change', function() {
+            var activeBtn = document.querySelector('#movie-range-form .range-pill.active[data-days]');
+            var customInput = document.querySelector('#movie-range-form input[name="movie_days_custom"]');
+            var days = activeBtn ? parseInt(activeBtn.getAttribute('data-days'), 10) : (customInput ? parseInt(customInput.value, 10) : null);
+            if (days) {
+                fetchMovieChart(days);
+            }
+        });
+    }
+
     // TV chart range controls
-    function fetchTvChart(days) {
+    function fetchTvChart(days, topN) {
         var container = document.getElementById('tv-chart-container');
         if (!container || !days) {
             return;
         }
 
+        var topNInput = document.getElementById('tv-top-n');
+        var topNValue = topN || (topNInput ? parseInt(topNInput.value, 10) : null);
+
         container.classList.add('is-loading');
 
-        fetch('{{ url_for("main.api_tv_chart") }}?days=' + encodeURIComponent(days))
+        var url = '{{ url_for("main.api_tv_chart") }}?days=' + encodeURIComponent(days);
+        if (topNValue) {
+            url += '&top_n=' + encodeURIComponent(topNValue);
+        }
+
+        fetch(url)
             .then(function(response) {
                 if (!response.ok) {
                     return response.json().then(function(payload) {
@@ -800,6 +869,9 @@ $(document).ready(function() {
             .then(function(payload) {
                 renderGradientBarChart('tv-chart-container', payload.chart_data);
                 setActiveRange('tv-range-form', 'tv_days_custom', payload.tv_chart_days, [7, 30, 60, 90]);
+                if (topNInput && payload.top_tv_shows) {
+                    topNInput.value = payload.top_tv_shows;
+                }
             })
             .catch(function(error) {
                 alert(error.message || 'Unable to update the TV chart.');
@@ -828,6 +900,19 @@ $(document).ready(function() {
                 return;
             }
             fetchTvChart(value);
+        });
+    }
+
+    // TV top-n change handler
+    var tvTopNInput = document.getElementById('tv-top-n');
+    if (tvTopNInput) {
+        tvTopNInput.addEventListener('change', function() {
+            var activeBtn = document.querySelector('#tv-range-form .range-pill.active[data-days]');
+            var customInput = document.querySelector('#tv-range-form input[name="tv_days_custom"]');
+            var days = activeBtn ? parseInt(activeBtn.getAttribute('data-days'), 10) : (customInput ? parseInt(customInput.value, 10) : null);
+            if (days) {
+                fetchTvChart(days);
+            }
         });
     }
 });

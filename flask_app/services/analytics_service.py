@@ -281,12 +281,13 @@ class AnalyticsService:
             'distribution_days': dist_days
         }
 
-    def get_user_chart_json(self, days: int | None = None) -> Dict[str, Any]:
+    def get_user_chart_json(self, days: int | None = None, top_n: int | None = None) -> Dict[str, Any]:
         """
         Generate the user activity chart JSON for Highcharts.
 
         Args:
             days: Optional override for user chart range.
+            top_n: Optional override for number of users to show.
 
         Returns:
             Dictionary with chart data and the day range used.
@@ -298,6 +299,7 @@ class AnalyticsService:
             raise ValueError("No server configuration found. Please configure at least one server.")
 
         history_days = days or settings.history_days
+        user_count = top_n or settings.top_users
 
         client_a = TautulliClient(server_a_config)
         client_b = TautulliClient(server_b_config) if server_b_config else None
@@ -314,20 +316,22 @@ class AnalyticsService:
             server_a_config.name,
             server_b_config.name if server_b_config else None,
             history_days,
-            top_n=settings.top_users
+            top_n=user_count
         )
 
         return {
             'chart_data': chart_data,
-            'user_chart_days': history_days
+            'user_chart_days': history_days,
+            'top_users': user_count
         }
 
-    def get_movie_chart_json(self, days: int | None = None) -> Dict[str, Any]:
+    def get_movie_chart_json(self, days: int | None = None, top_n: int | None = None) -> Dict[str, Any]:
         """
         Generate the top movies chart JSON for Highcharts.
 
         Args:
             days: Optional override for movie chart range.
+            top_n: Optional override for number of movies to show.
 
         Returns:
             Dictionary with chart data and the day range used.
@@ -339,6 +343,7 @@ class AnalyticsService:
             raise ValueError("No server configuration found. Please configure at least one server.")
 
         history_days = days or settings.history_days
+        movie_count = top_n or settings.top_movies
 
         client_a = TautulliClient(server_a_config)
         client_b = TautulliClient(server_b_config) if server_b_config else None
@@ -350,20 +355,22 @@ class AnalyticsService:
             server_a_config.name, server_b_config.name if server_b_config else None
         )
 
-        df_movies = aggregate_movie_stats(df_history, top_n=settings.top_movies)
+        df_movies = aggregate_movie_stats(df_history, top_n=movie_count)
         chart_data = get_movie_chart_data(df_movies, history_days)
 
         return {
             'chart_data': chart_data,
-            'movie_chart_days': history_days
+            'movie_chart_days': history_days,
+            'top_movies': movie_count
         }
 
-    def get_tv_chart_json(self, days: int | None = None) -> Dict[str, Any]:
+    def get_tv_chart_json(self, days: int | None = None, top_n: int | None = None) -> Dict[str, Any]:
         """
         Generate the top TV shows chart JSON for Highcharts.
 
         Args:
             days: Optional override for TV chart range.
+            top_n: Optional override for number of TV shows to show.
 
         Returns:
             Dictionary with chart data and the day range used.
@@ -375,6 +382,7 @@ class AnalyticsService:
             raise ValueError("No server configuration found. Please configure at least one server.")
 
         history_days = days or settings.history_days
+        tv_count = top_n or settings.top_tv_shows
 
         client_a = TautulliClient(server_a_config)
         client_b = TautulliClient(server_b_config) if server_b_config else None
@@ -386,12 +394,13 @@ class AnalyticsService:
             server_a_config.name, server_b_config.name if server_b_config else None
         )
 
-        df_tv = aggregate_tv_stats(df_history, top_n=settings.top_tv_shows)
+        df_tv = aggregate_tv_stats(df_history, top_n=tv_count)
         chart_data = get_tv_chart_data(df_tv, history_days)
 
         return {
             'chart_data': chart_data,
-            'tv_chart_days': history_days
+            'tv_chart_days': history_days,
+            'top_tv_shows': tv_count
         }
 
     def _get_user_thumb_map(self) -> dict:
