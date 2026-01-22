@@ -454,12 +454,12 @@ def get_concurrent_streams_chart_data(
                 'name': 'Total',
                 'type': 'area',
                 'data': total_data,
-                'color': '#e36414',
+                'color': '#7afb4f',
                 'fillColor': {
                     'linearGradient': {'x1': 0, 'y1': 0, 'x2': 0, 'y2': 1},
                     'stops': [
-                        [0, 'rgba(227, 100, 20, 0.3)'],
-                        [1, 'rgba(255, 152, 0, 0.05)']
+                        [0, 'rgba(122, 251, 79, 0.3)'],
+                        [1, 'rgba(122, 251, 79, 0.05)']
                     ]
                 }
             },
