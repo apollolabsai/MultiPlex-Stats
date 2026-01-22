@@ -390,7 +390,7 @@ def get_concurrent_streams_chart_data(
     """
     Get data for max concurrent streams area chart in Highcharts format.
 
-    Combines data from one or two servers, taking the max concurrent value
+    Combines data from one or two servers, summing the max concurrent values
     for each date across both servers.
 
     Args:
@@ -427,7 +427,7 @@ def get_concurrent_streams_chart_data(
     if api_response_b:
         server_b_data = extract_max_series(api_response_b)
 
-        # Merge data from both servers, taking max for each date
+        # Merge data from both servers, summing values for each date
         all_dates = set(server_a_data['categories']) | set(server_b_data['categories'])
         all_dates = sorted(all_dates)
 
@@ -439,7 +439,7 @@ def get_concurrent_streams_chart_data(
         for date in all_dates:
             val_a = a_lookup.get(date, 0)
             val_b = b_lookup.get(date, 0)
-            merged_data.append(max(val_a, val_b))
+            merged_data.append(val_a + val_b)
 
         categories = all_dates
         data = merged_data
