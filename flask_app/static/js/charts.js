@@ -86,7 +86,7 @@ function renderGradientBarChart(containerId, chartData) {
             categories: chartData.categories,
             labels: {
                 style: {
-                    fontSize: '13px'
+                    fontSize: '15px'
                 }
             }
         },
