@@ -86,6 +86,11 @@
                     </td>
                     <td style="text-align: right;">
                         <span class="user-plays">{{ "{:,}".format(user.total_plays) }}</span>
+                        {% if user.server_a_plays is not none %}
+                        <span class="user-plays-breakdown">
+                            ({{ "{:,}".format(user.server_a_plays) }}{% if user.server_b_plays is not none %} + {{ "{:,}".format(user.server_b_plays) }}{% endif %})
+                        </span>
+                        {% endif %}
                     </td>
                     <td>
                         {% if user.last_play %}
@@ -175,6 +180,12 @@
     font-weight: 600;
     color: #4CAF50;
     font-size: 1.1em;
+}
+
+.user-plays-breakdown {
+    display: block;
+    font-size: 0.85em;
+    color: #888;
 }
 
 .last-play-date {

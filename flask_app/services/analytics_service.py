@@ -993,7 +993,16 @@ class AnalyticsService:
         # Dictionary to aggregate user data by friendly_name
         users_by_name: Dict[str, Dict[str, Any]] = {}
 
-        def process_server(client: TautulliClient, server_config, server_ip: str):
+        server_a_key = 'server_a_plays'
+        server_b_key = 'server_b_plays' if server_b_config else None
+
+        def ensure_play_keys(user_data: Dict[str, Any]) -> None:
+            if server_a_key not in user_data:
+                user_data[server_a_key] = 0
+            if server_b_key and server_b_key not in user_data:
+                user_data[server_b_key] = 0
+
+        def process_server(client: TautulliClient, server_config, server_ip: str, plays_key: str):
             """Process users and play counts from a single server."""
             # First, get user list for metadata (username, email, thumb, etc.)
             try:
@@ -1015,7 +1024,7 @@ class AnalyticsService:
                             if user_thumb:
                                 thumb_url = f"{server_ip}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
 
-                            users_by_name[friendly_name] = {
+                            user_data = {
                                 'user_id': user.get('user_id'),
                                 'friendly_name': friendly_name,
                                 'username': user.get('username', ''),
@@ -1026,8 +1035,11 @@ class AnalyticsService:
                                 'is_active': user.get('is_active', 1),
                                 'library_count': library_count,
                             }
+                            ensure_play_keys(user_data)
+                            users_by_name[friendly_name] = user_data
                         else:
                             # User already exists from another server, add library count
+                            ensure_play_keys(users_by_name[friendly_name])
                             users_by_name[friendly_name]['library_count'] += library_count
             except Exception as e:
                 print(f"Error fetching users from {server_config.name}: {e}")
@@ -1042,10 +1054,12 @@ class AnalyticsService:
                             plays = stat.get('total_plays', 0)
 
                             if friendly_name in users_by_name:
+                                ensure_play_keys(users_by_name[friendly_name])
                                 users_by_name[friendly_name]['total_plays'] += plays
+                                users_by_name[friendly_name][plays_key] += plays
                             elif friendly_name:
                                 # User exists in library stats but not in users list
-                                users_by_name[friendly_name] = {
+                                user_data = {
                                     'user_id': stat.get('user_id'),
                                     'friendly_name': friendly_name,
                                     'username': '',
@@ -1056,17 +1070,20 @@ class AnalyticsService:
                                     'is_active': 1,
                                     'library_count': 0,
                                 }
+                                ensure_play_keys(user_data)
+                                user_data[plays_key] = plays
+                                users_by_name[friendly_name] = user_data
                 except Exception as e:
                     print(f"Error fetching library stats (section {section_id}) from {server_config.name}: {e}")
 
         # Process Server A
         client_a = TautulliClient(server_a_config)
-        process_server(client_a, server_a_config, server_a_config.ip_address)
+        process_server(client_a, server_a_config, server_a_config.ip_address, server_a_key)
 
         # Process Server B if configured
         if server_b_config:
             client_b = TautulliClient(server_b_config)
-            process_server(client_b, server_b_config, server_b_config.ip_address)
+            process_server(client_b, server_b_config, server_b_config.ip_address, server_b_key)
 
         # Get last play dates from ViewingHistory database
         # Query for max(started) grouped by user (username field in ViewingHistory)
