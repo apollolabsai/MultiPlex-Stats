@@ -153,6 +153,20 @@ def api_viewing_history():
     return jsonify(result)
 
 
+@main_bp.route('/api/users-list')
+def api_users_list():
+    """Return list of users for dropdown filters."""
+    if not ConfigService.has_valid_config():
+        return jsonify({'error': 'No server configuration found.'}), 400
+
+    try:
+        service = AnalyticsService()
+        users = service.get_users_for_filter()
+        return jsonify({'users': users})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @main_bp.route('/api/daily-chart')
 def api_daily_chart():
     """Return daily chart JSON for the requested day range."""
@@ -163,9 +177,11 @@ def api_daily_chart():
     if not days or days < 1 or days > 3650:
         return jsonify({'error': 'Invalid day range. Use 1-3650.'}), 400
 
+    user_id = request.args.get('user_id', type=int)
+
     try:
         service = AnalyticsService()
-        result = service.get_daily_chart_json(daily_trend_days=days)
+        result = service.get_daily_chart_json(daily_trend_days=days, user_id=user_id)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -181,9 +197,11 @@ def api_monthly_chart():
     if not months or months < 1 or months > 120:
         return jsonify({'error': 'Invalid month range. Use 1-120.'}), 400
 
+    user_id = request.args.get('user_id', type=int)
+
     try:
         service = AnalyticsService()
-        result = service.get_monthly_chart_json(monthly_trend_months=months)
+        result = service.get_monthly_chart_json(monthly_trend_months=months, user_id=user_id)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500

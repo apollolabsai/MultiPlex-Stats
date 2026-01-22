@@ -161,12 +161,17 @@ class AnalyticsService:
             'summary': summary
         }
 
-    def get_daily_chart_json(self, daily_trend_days: int | None = None) -> Dict[str, Any]:
+    def get_daily_chart_json(
+        self,
+        daily_trend_days: int | None = None,
+        user_id: int | None = None
+    ) -> Dict[str, Any]:
         """
         Generate the daily play count chart JSON for Highcharts.
 
         Args:
             daily_trend_days: Optional override for daily trend range.
+            user_id: Optional user ID to filter results for a specific user.
 
         Returns:
             Dictionary with chart data and the day range used.
@@ -182,8 +187,8 @@ class AnalyticsService:
         client_a = TautulliClient(server_a_config)
         client_b = TautulliClient(server_b_config) if server_b_config else None
 
-        daily_data_a = client_a.get_plays_by_date(time_range=daily_days)
-        daily_data_b = client_b.get_plays_by_date(time_range=daily_days) if client_b else None
+        daily_data_a = client_a.get_plays_by_date(time_range=daily_days, user_id=user_id)
+        daily_data_b = client_b.get_plays_by_date(time_range=daily_days, user_id=user_id) if client_b else None
         df_daily = process_daily_data(
             daily_data_a, daily_data_b,
             server_a_config.name, server_b_config.name if server_b_config else None
@@ -195,15 +200,21 @@ class AnalyticsService:
 
         return {
             'chart_data': chart_data,
-            'daily_trend_days': daily_days
+            'daily_trend_days': daily_days,
+            'user_id': user_id
         }
 
-    def get_monthly_chart_json(self, monthly_trend_months: int | None = None) -> Dict[str, Any]:
+    def get_monthly_chart_json(
+        self,
+        monthly_trend_months: int | None = None,
+        user_id: int | None = None
+    ) -> Dict[str, Any]:
         """
         Generate the monthly play count chart JSON for Highcharts.
 
         Args:
             monthly_trend_months: Optional override for monthly trend range.
+            user_id: Optional user ID to filter results for a specific user.
 
         Returns:
             Dictionary with chart data and the month range used.
@@ -219,8 +230,8 @@ class AnalyticsService:
         client_a = TautulliClient(server_a_config)
         client_b = TautulliClient(server_b_config) if server_b_config else None
 
-        monthly_data_a = client_a.get_plays_per_month(time_range=monthly_months)
-        monthly_data_b = client_b.get_plays_per_month(time_range=monthly_months) if client_b else None
+        monthly_data_a = client_a.get_plays_per_month(time_range=monthly_months, user_id=user_id)
+        monthly_data_b = client_b.get_plays_per_month(time_range=monthly_months, user_id=user_id) if client_b else None
         df_monthly = process_monthly_data(
             monthly_data_a, monthly_data_b,
             server_a_config.name, server_b_config.name if server_b_config else None
@@ -232,7 +243,8 @@ class AnalyticsService:
 
         return {
             'chart_data': chart_data,
-            'monthly_trend_months': monthly_months
+            'monthly_trend_months': monthly_months,
+            'user_id': user_id
         }
 
     def get_distribution_charts_json(self, days: int | None = None) -> Dict[str, Any]:
@@ -970,6 +982,51 @@ class AnalyticsService:
                 print(f"Error fetching activity from {server_b_config.name}: {e}")
 
         return current_streams
+
+    def get_users_for_filter(self) -> List[Dict[str, Any]]:
+        """
+        Get list of users for dropdown filter.
+
+        Returns a simplified list of users with user_id and friendly_name
+        for use in filter dropdowns. Users are sorted by friendly_name.
+
+        Returns:
+            List of dictionaries with 'user_id' and 'friendly_name'
+        """
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+
+        if not server_a_config:
+            return []
+
+        users_by_id: Dict[int, str] = {}
+
+        def fetch_users_from_server(client: TautulliClient):
+            try:
+                response = client.get_users()
+                if response and 'response' in response and 'data' in response['response']:
+                    for user in response['response']['data']:
+                        user_id = user.get('user_id')
+                        friendly_name = user.get('friendly_name', '')
+                        if user_id and friendly_name:
+                            users_by_id[user_id] = friendly_name
+            except Exception as e:
+                print(f"Error fetching users for filter: {e}")
+
+        client_a = TautulliClient(server_a_config)
+        fetch_users_from_server(client_a)
+
+        if server_b_config:
+            client_b = TautulliClient(server_b_config)
+            fetch_users_from_server(client_b)
+
+        # Convert to list and sort by friendly_name
+        users = [
+            {'user_id': uid, 'friendly_name': name}
+            for uid, name in users_by_id.items()
+        ]
+        users.sort(key=lambda x: x['friendly_name'].lower())
+
+        return users
 
     def get_all_users(self) -> List[Dict[str, Any]]:
         """

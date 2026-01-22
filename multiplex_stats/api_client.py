@@ -51,29 +51,45 @@ class TautulliClient:
         response.raise_for_status()
         return response.json()
 
-    def get_plays_by_date(self, time_range: int = 60) -> dict[str, Any]:
+    def get_plays_by_date(
+        self,
+        time_range: int = 60,
+        user_id: Optional[int] = None
+    ) -> dict[str, Any]:
         """
         Get play counts by date.
 
         Args:
             time_range: Number of days to fetch (default: 60)
+            user_id: Optional user ID to filter results for a specific user
 
         Returns:
             API response containing play counts by date
         """
-        return self._make_request('get_plays_by_date', time_range=time_range)
+        params = {'time_range': time_range}
+        if user_id is not None:
+            params['user_id'] = user_id
+        return self._make_request('get_plays_by_date', **params)
 
-    def get_plays_per_month(self, time_range: int = 60) -> dict[str, Any]:
+    def get_plays_per_month(
+        self,
+        time_range: int = 60,
+        user_id: Optional[int] = None
+    ) -> dict[str, Any]:
         """
         Get play counts per month.
 
         Args:
             time_range: Number of months to fetch (default: 60)
+            user_id: Optional user ID to filter results for a specific user
 
         Returns:
             API response containing play counts per month
         """
-        return self._make_request('get_plays_per_month', time_range=time_range)
+        params = {'time_range': time_range}
+        if user_id is not None:
+            params['user_id'] = user_id
+        return self._make_request('get_plays_per_month', **params)
 
     def get_history(
         self,

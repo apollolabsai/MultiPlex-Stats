@@ -171,6 +171,13 @@
         Activity Trends
     </h2>
     <div class="chart-controls">
+        <div class="chart-controls-label">Filter by user</div>
+        <select id="activity-user-filter" class="user-filter-select">
+            <option value="">All Users</option>
+            <!-- Options populated via JavaScript -->
+        </select>
+    </div>
+    <div class="chart-controls">
         <div class="chart-controls-label">Daily range</div>
         <form class="chart-controls-form" id="daily-range-form">
             <div class="chart-controls-group">
@@ -452,6 +459,27 @@
     text-align: center;
 }
 
+.user-filter-select {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.3);
+    color: #fff;
+    font-size: 0.95em;
+    min-width: 200px;
+    cursor: pointer;
+}
+
+.user-filter-select:focus {
+    outline: none;
+    border-color: #f18a3d;
+}
+
+.user-filter-select option {
+    background: #1a1a1a;
+    color: #fff;
+}
+
 @media (min-width: 900px) {
     .chart-controls-form {
         width: auto;
@@ -523,6 +551,42 @@ $(document).ready(function() {
         renderGradientBarChart('tv-chart-container', chartsJson.tv);
     }
 
+    // Load users for filter dropdown
+    function loadUserFilter() {
+        var select = document.getElementById('activity-user-filter');
+        if (!select) return;
+
+        fetch('{{ url_for("main.api_users_list") }}')
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Failed to load users');
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                // Keep the "All Users" option
+                select.innerHTML = '<option value="">All Users</option>';
+                data.users.forEach(function(user) {
+                    var option = document.createElement('option');
+                    option.value = user.user_id;
+                    option.textContent = user.friendly_name;
+                    select.appendChild(option);
+                });
+            })
+            .catch(function(error) {
+                console.error('Error loading users:', error);
+            });
+    }
+
+    // Load user filter on page load
+    loadUserFilter();
+
+    // Get selected user ID from filter
+    function getSelectedUserId() {
+        var select = document.getElementById('activity-user-filter');
+        return select && select.value ? parseInt(select.value, 10) : null;
+    }
+
     // Daily chart range controls
     function fetchDailyChart(days) {
         var container = document.getElementById('daily-chart-container');
@@ -532,7 +596,13 @@ $(document).ready(function() {
 
         container.classList.add('is-loading');
 
-        fetch('{{ url_for("main.api_daily_chart") }}?days=' + encodeURIComponent(days))
+        var url = '{{ url_for("main.api_daily_chart") }}?days=' + encodeURIComponent(days);
+        var userId = getSelectedUserId();
+        if (userId) {
+            url += '&user_id=' + encodeURIComponent(userId);
+        }
+
+        fetch(url)
             .then(function(response) {
                 if (!response.ok) {
                     return response.json().then(function(payload) {
@@ -584,7 +654,13 @@ $(document).ready(function() {
 
         container.classList.add('is-loading');
 
-        fetch('{{ url_for("main.api_monthly_chart") }}?months=' + encodeURIComponent(months))
+        var url = '{{ url_for("main.api_monthly_chart") }}?months=' + encodeURIComponent(months);
+        var userId = getSelectedUserId();
+        if (userId) {
+            url += '&user_id=' + encodeURIComponent(userId);
+        }
+
+        fetch(url)
             .then(function(response) {
                 if (!response.ok) {
                     return response.json().then(function(payload) {
@@ -624,6 +700,30 @@ $(document).ready(function() {
                 return;
             }
             fetchMonthlyChart(value);
+        });
+    }
+
+    // User filter change handler - refreshes both daily and monthly charts
+    var userFilterSelect = document.getElementById('activity-user-filter');
+    if (userFilterSelect) {
+        userFilterSelect.addEventListener('change', function() {
+            // Get current daily range
+            var dailyActiveBtn = document.querySelector('#daily-range-form .range-pill.active[data-days]');
+            var dailyCustomInput = document.querySelector('#daily-range-form input[name="daily_trend_days_custom"]');
+            var dailyDays = dailyActiveBtn ? parseInt(dailyActiveBtn.getAttribute('data-days'), 10) : (dailyCustomInput && dailyCustomInput.value ? parseInt(dailyCustomInput.value, 10) : {{ summary.daily_trend_days }});
+
+            // Get current monthly range
+            var monthlyActiveBtn = document.querySelector('#monthly-range-form .range-pill.active[data-months]');
+            var monthlyCustomInput = document.querySelector('#monthly-range-form input[name="monthly_trend_months_custom"]');
+            var monthlyMonths = monthlyActiveBtn ? parseInt(monthlyActiveBtn.getAttribute('data-months'), 10) : (monthlyCustomInput && monthlyCustomInput.value ? parseInt(monthlyCustomInput.value, 10) : {{ summary.monthly_trend_months }});
+
+            // Refresh both charts with the selected user
+            if (dailyDays) {
+                fetchDailyChart(dailyDays);
+            }
+            if (monthlyMonths) {
+                fetchMonthlyChart(monthlyMonths);
+            }
         });
     }
 
