@@ -40,7 +40,7 @@ body {
 .nav-brand {
     font-size: 1.5em;
     font-weight: bold;
-    color: #ed542b;
+    color: #ed542c;
     text-decoration: none;
 }
 
@@ -63,11 +63,11 @@ body {
 }
 
 .nav-link.active {
-    color: #ed542b;
+    color: #ed542c;
 }
 
 .nav-link.active:hover {
-    color: #ed542b;
+    color: #ed542c;
     background: rgba(237, 84, 43, 0.12);
 }
 
@@ -127,16 +127,16 @@ header {
 h1 {
     font-size: 3em;
     margin-bottom: 10px;
-    background: linear-gradient(135deg, #ed542b 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #ed542c 0%, #764ba2 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
 
 h1.settings-title {
-    color: #ed542b;
+    color: #ed542c;
     background: none;
-    -webkit-text-fill-color: #ed542b;
+    -webkit-text-fill-color: #ed542c;
 }
 
 .subtitle {
@@ -176,7 +176,7 @@ h1.settings-title {
 .stat-number {
     font-size: 2.5em;
     font-weight: bold;
-    color: #ed542b;
+    color: #ed542c;
     margin-bottom: 5px;
 }
 
@@ -197,14 +197,14 @@ h1.settings-title {
     margin-bottom: 20px;
     padding-bottom: 10px;
     border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-    color: #ed542b;
+    color: #ed542c;
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
 .section-icon {
-    color: #ed542b;
+    color: #ed542c;
     flex-shrink: 0;
 }
 
@@ -258,8 +258,8 @@ h1.settings-title {
 
 .btn-primary {
     background: #000000;
-    color: #ed542b;
-    border-color: #ed542b;
+    color: #ed542c;
+    border-color: #ed542c;
 }
 
 .btn-primary:hover {
@@ -309,7 +309,7 @@ h1.settings-title {
 }
 
 .welcome-card h2, .action-card h2, .status-card h2, .info-section h2 {
-    color: #ed542b;
+    color: #ed542c;
     margin-bottom: 15px;
 }
 
@@ -332,7 +332,7 @@ h1.settings-title {
 }
 
 .server-status h3 {
-    color: #ed542b;
+    color: #ed542c;
     margin-bottom: 10px;
 }
 
@@ -421,7 +421,7 @@ h1.settings-title {
 }
 
 .form-card h3 {
-    color: #ed542b;
+    color: #ed542c;
     margin-bottom: 20px;
 }
 
@@ -450,7 +450,7 @@ h1.settings-title {
 .form-group input:focus,
 .form-group select:focus {
     outline: none;
-    border-color: #ed542b;
+    border-color: #ed542c;
     box-shadow: 0 0 0 3px rgba(237, 84, 43, 0.1);
 }
 
@@ -494,7 +494,7 @@ h1.settings-title {
 }
 
 .server-info h3 {
-    color: #ed542b;
+    color: #ed542c;
     margin-bottom: 5px;
 }
 
@@ -517,7 +517,7 @@ h1.settings-title {
 }
 
 .import-section h3 {
-    color: #ed542b;
+    color: #ed542c;
     margin-bottom: 10px;
 }
 
@@ -569,7 +569,7 @@ h1.settings-title {
     align-items: center;
     justify-content: center;
     font-weight: bold;
-    color: #ed542b;
+    color: #ed542c;
     border: 2px solid rgba(237, 84, 43, 0.5);
 }
 
@@ -684,13 +684,13 @@ h1.settings-title {
 
 .progress-bar-fill {
     height: 100%;
-    background: linear-gradient(90deg, #ed542b 0%, #764ba2 100%);
+    background: linear-gradient(90deg, #ed542c 0%, #764ba2 100%);
     border-radius: 4px;
     transition: width 0.3s ease;
 }
 
 .progress-bar-fill.orange {
-    background: linear-gradient(90deg, #ff9800 0%, #ed542b 100%);
+    background: linear-gradient(90deg, #ff9800 0%, #ed542c 100%);
 }
 
 .progress-text {
@@ -709,8 +709,8 @@ table.dataTable {
 
 table.dataTable thead th {
     background: rgba(237, 84, 43, 0.2) !important;
-    color: #ed542b !important;
-    border-bottom: 2px solid #ed542b !important;
+    color: #ed542c !important;
+    border-bottom: 2px solid #ed542c !important;
     padding: 12px !important;
     font-weight: 600 !important;
     text-transform: uppercase;
@@ -768,7 +768,7 @@ table.dataTable tbody tr.odd:hover {
 
 .dataTables_wrapper .dataTables_filter input:focus {
     outline: none;
-    border-color: #ed542b !important;
+    border-color: #ed542c !important;
     box-shadow: 0 0 0 3px rgba(237, 84, 43, 0.1);
 }
 
@@ -783,13 +783,13 @@ table.dataTable tbody tr.odd:hover {
 
 .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
     background: rgba(237, 84, 43, 0.2) !important;
-    border-color: #ed542b !important;
+    border-color: #ed542c !important;
     color: #fff !important;
 }
 
 .dataTables_wrapper .dataTables_paginate .paginate_button.current {
-    background: linear-gradient(135deg, #ed542b 0%, #764ba2 100%) !important;
-    border-color: #ed542b !important;
+    background: linear-gradient(135deg, #ed542c 0%, #764ba2 100%) !important;
+    border-color: #ed542c !important;
     color: #fff !important;
 }
 

@@ -235,7 +235,7 @@ def get_movie_chart_data(df: pd.DataFrame, history_days: int) -> dict:
         ratio = (count - min_count) / (max_count - min_count) if max_count > min_count else 0
         data_with_colors.append({
             'y': int(count),
-            'color': _interpolate_color('#ff9800', '#ed542b', ratio)
+            'color': _interpolate_color('#ff9800', '#ed542c', ratio)
         })
 
     return {
@@ -267,7 +267,7 @@ def get_tv_chart_data(df: pd.DataFrame, history_days: int) -> dict:
         ratio = (count - min_count) / (max_count - min_count) if max_count > min_count else 0
         data_with_colors.append({
             'y': int(count),
-            'color': _interpolate_color('#ff9800', '#ed542b', ratio)
+            'color': _interpolate_color('#ff9800', '#ed542c', ratio)
         })
 
     return {

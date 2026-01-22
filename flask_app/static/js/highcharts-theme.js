@@ -39,7 +39,7 @@ Highcharts.setOptions({
             color: 'white'
         },
         itemHoverStyle: {
-            color: '#ed542b'
+            color: '#ed542c'
         }
     },
     tooltip: {
@@ -63,5 +63,5 @@ var CHART_COLORS = {
     PIE_YELLOW: '#FCE762',
     PIE_RED: '#D35F3D',
     GRADIENT_ORANGE: '#ff9800',
-    GRADIENT_RED: '#ed542b'
+    GRADIENT_RED: '#ed542c'
 };
