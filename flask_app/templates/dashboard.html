@@ -126,11 +126,11 @@
                     <!-- Quality -->
                     <td>
                         {% if stream.quality %}
-                            {% if stream.quality == 'Direct Play' %}
+                            {% if stream.quality.startswith('Direct Play') %}
                                 <span class="quality-badge direct-play">{{ stream.quality }}</span>
-                            {% elif stream.quality == 'Transcode' %}
+                            {% elif stream.quality.startswith('Transcode') %}
                                 <span class="quality-badge transcode">{{ stream.quality }}</span>
-                            {% elif stream.quality == 'Direct Stream' %}
+                            {% elif stream.quality.startswith('Direct Stream') %}
                                 <span class="quality-badge direct-stream">{{ stream.quality }}</span>
                             {% else %}
                                 <span class="quality-badge">{{ stream.quality }}</span>
