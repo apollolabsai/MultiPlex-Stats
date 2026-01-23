@@ -39,6 +39,7 @@
                     <th style="color:#f18a3d; text-align:left">Status</th>
                     <th style="color:#f18a3d; text-align:left">Progress</th>
                     <th style="color:#f18a3d; text-align:left">Quality</th>
+                    <th style="color:#f18a3d; text-align:left">Bandwidth</th>
                     <th style="color:#f18a3d; text-align:left">Platform</th>
                     <th style="color:#f18a3d; text-align:left">Location</th>
                 </tr>
@@ -136,6 +137,15 @@
                             {% endif %}
                         {% else %}
                             <span style="color: #888;">N/A</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Bandwidth -->
+                    <td>
+                        {% if stream.bandwidth_mbps %}
+                            {{ stream.bandwidth_mbps }} Mbps
+                        {% else %}
+                            <span style="color: #888;">-</span>
                         {% endif %}
                     </td>
 

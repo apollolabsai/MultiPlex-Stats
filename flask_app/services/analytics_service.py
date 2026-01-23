@@ -909,6 +909,10 @@ class AnalyticsService:
                     platform = session.get('platform', 'Unknown')
                     product = session.get('product', '')
 
+                    # Get bandwidth in Mbps (API returns kbps)
+                    bandwidth_kbps = session.get('bandwidth', 0)
+                    bandwidth_mbps = round(bandwidth_kbps / 1000, 1) if bandwidth_kbps else 0
+
                     current_streams.append({
                         'server': server_a_config.name,
                         'server_order': 'server-a',
@@ -921,6 +925,7 @@ class AnalyticsService:
                         'platform': platform,
                         'product': product,
                         'quality': quality,
+                        'bandwidth_mbps': bandwidth_mbps,
                         'ip_address': ip_address,
                         'location': location,
                         'poster_url': poster_url
@@ -999,6 +1004,10 @@ class AnalyticsService:
                         platform = session.get('platform', 'Unknown')
                         product = session.get('product', '')
 
+                        # Get bandwidth in Mbps (API returns kbps)
+                        bandwidth_kbps = session.get('bandwidth', 0)
+                        bandwidth_mbps = round(bandwidth_kbps / 1000, 1) if bandwidth_kbps else 0
+
                         current_streams.append({
                             'server': server_b_config.name,
                             'server_order': 'server-b',
@@ -1011,6 +1020,7 @@ class AnalyticsService:
                             'platform': platform,
                             'product': product,
                             'quality': quality,
+                            'bandwidth_mbps': bandwidth_mbps,
                             'ip_address': ip_address,
                             'location': location,
                             'poster_url': poster_url
