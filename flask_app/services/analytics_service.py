@@ -909,9 +909,12 @@ class AnalyticsService:
                     platform = session.get('platform', 'Unknown')
                     product = session.get('product', '')
 
-                    # Get bandwidth in Mbps (API returns kbps)
-                    bandwidth_kbps = session.get('bandwidth', 0)
-                    bandwidth_mbps = round(bandwidth_kbps / 1000, 1) if bandwidth_kbps else 0
+                    # Get bandwidth in Mbps (API returns kbps as string)
+                    try:
+                        bandwidth_kbps = int(session.get('bandwidth', 0) or 0)
+                        bandwidth_mbps = round(bandwidth_kbps / 1000, 1) if bandwidth_kbps else 0
+                    except (ValueError, TypeError):
+                        bandwidth_mbps = 0
 
                     current_streams.append({
                         'server': server_a_config.name,
@@ -1004,9 +1007,12 @@ class AnalyticsService:
                         platform = session.get('platform', 'Unknown')
                         product = session.get('product', '')
 
-                        # Get bandwidth in Mbps (API returns kbps)
-                        bandwidth_kbps = session.get('bandwidth', 0)
-                        bandwidth_mbps = round(bandwidth_kbps / 1000, 1) if bandwidth_kbps else 0
+                        # Get bandwidth in Mbps (API returns kbps as string)
+                        try:
+                            bandwidth_kbps = int(session.get('bandwidth', 0) or 0)
+                            bandwidth_mbps = round(bandwidth_kbps / 1000, 1) if bandwidth_kbps else 0
+                        except (ValueError, TypeError):
+                            bandwidth_mbps = 0
 
                         current_streams.append({
                             'server': server_b_config.name,
