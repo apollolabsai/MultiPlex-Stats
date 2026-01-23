@@ -896,6 +896,7 @@ class AnalyticsService:
 
                     # Format quality like viewing history table
                     transcode_decision = session.get('transcode_decision', '').lower()
+                    video_resolution = session.get('stream_video_full_resolution', '')
                     if transcode_decision == 'direct play':
                         quality = 'Direct Play'
                     elif transcode_decision == 'transcode':
@@ -904,6 +905,10 @@ class AnalyticsService:
                         quality = 'Direct Stream'
                     else:
                         quality = transcode_decision.title() if transcode_decision else ''
+
+                    # Append video resolution if available
+                    if quality and video_resolution:
+                        quality = f"{quality} - {video_resolution}"
 
                     # Format platform and product like viewing history table
                     platform = session.get('platform', 'Unknown')
@@ -994,6 +999,7 @@ class AnalyticsService:
 
                         # Format quality like viewing history table
                         transcode_decision = session.get('transcode_decision', '').lower()
+                        video_resolution = session.get('stream_video_full_resolution', '')
                         if transcode_decision == 'direct play':
                             quality = 'Direct Play'
                         elif transcode_decision == 'transcode':
@@ -1002,6 +1008,10 @@ class AnalyticsService:
                             quality = 'Direct Stream'
                         else:
                             quality = transcode_decision.title() if transcode_decision else ''
+
+                        # Append video resolution if available
+                        if quality and video_resolution:
+                            quality = f"{quality} - {video_resolution}"
 
                         # Format platform and product like viewing history table
                         platform = session.get('platform', 'Unknown')
