@@ -123,7 +123,7 @@ class MediaService:
             raise ValueError("No server configuration found")
 
         # Temporary storage for aggregation
-        movies_data = {}  # key: (title, year) -> {file_size, play_count, added_at, last_played, video_codec, video_resolution}
+        movies_data = {}  # key: (title, year) -> aggregate stats + version details
         tv_data = {}  # key: title -> {file_size, play_count, added_at, last_played}
 
         # Process Server A
@@ -261,7 +261,11 @@ class MediaService:
                         # Aggregate: SUM file_size and play_count, MAX on dates
                         data_dict[key]['file_size'] += file_size
                         data_dict[key]['play_count'] += play_count
-                        data_dict[key]['added_at'] = max(data_dict[key]['added_at'], added_at)
+                        if added_at:
+                            if data_dict[key]['added_at']:
+                                data_dict[key]['added_at'] = min(data_dict[key]['added_at'], added_at)
+                            else:
+                                data_dict[key]['added_at'] = added_at
                         if last_played:
                             data_dict[key]['last_played'] = max(data_dict[key]['last_played'], last_played)
                         # Collect all unique codecs and resolutions
@@ -269,6 +273,8 @@ class MediaService:
                             data_dict[key]['video_codecs'].add(video_codec)
                         if video_resolution and video_resolution not in data_dict[key]['video_resolutions']:
                             data_dict[key]['video_resolutions'].add(video_resolution)
+                        if file_size and file_size not in data_dict[key]['file_sizes']:
+                            data_dict[key]['file_sizes'].add(file_size)
                     else:
                         data_dict[key] = {
                             'title': title,
@@ -278,7 +284,8 @@ class MediaService:
                             'added_at': added_at,
                             'last_played': last_played,
                             'video_codecs': {video_codec} if video_codec else set(),
-                            'video_resolutions': {video_resolution} if video_resolution else set()
+                            'video_resolutions': {video_resolution} if video_resolution else set(),
+                            'file_sizes': {file_size} if file_size else set()
                         }
                 else:
                     # TV show - aggregate by title only
@@ -293,7 +300,11 @@ class MediaService:
                     if key in data_dict:
                         data_dict[key]['file_size'] += file_size
                         data_dict[key]['play_count'] += play_count
-                        data_dict[key]['added_at'] = max(data_dict[key]['added_at'], added_at)
+                        if added_at:
+                            if data_dict[key]['added_at']:
+                                data_dict[key]['added_at'] = min(data_dict[key]['added_at'], added_at)
+                            else:
+                                data_dict[key]['added_at'] = added_at
                         if last_played:
                             data_dict[key]['last_played'] = max(data_dict[key]['last_played'], last_played)
                     else:
@@ -327,16 +338,25 @@ class MediaService:
             )
             return ' | '.join(sorted_res)
 
+        def format_size_versions(sizes: set) -> str:
+            """Format unique file sizes (bytes) in GB, largest first."""
+            if not sizes:
+                return ''
+            sorted_sizes = sorted(sizes, reverse=True)
+            return ' | '.join(f"{size / (1024 ** 3):.2f}" for size in sorted_sizes)
+
         # Save movies
         for (title, year), data in movies_data.items():
             video_codec = ' | '.join(sorted(data['video_codecs'])) if data['video_codecs'] else ''
             video_resolution = sort_resolutions(data['video_resolutions']) if data['video_resolutions'] else ''
+            file_size_versions = format_size_versions(data.get('file_sizes', set()))
 
             media = CachedMedia(
                 media_type='movie',
                 title=data['title'],
                 year=data['year'],
                 file_size=data['file_size'],
+                file_size_versions=file_size_versions,
                 play_count=data['play_count'],
                 added_at=data['added_at'] if data['added_at'] else None,
                 last_played=data['last_played'] if data['last_played'] else None,
@@ -390,6 +410,7 @@ class MediaService:
                 'video_codec': movie.video_codec or '',
                 'video_resolution': movie.video_resolution or '',
                 'file_size': round(file_size_gb, 2),
+                'file_size_versions': movie.file_size_versions or '',
                 'last_played': last_played_str,
                 'play_count': movie.play_count
             })

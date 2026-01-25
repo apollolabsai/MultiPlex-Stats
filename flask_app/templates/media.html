@@ -259,8 +259,14 @@ $(document).ready(function() {
             { data: 'video_resolution' },
             {
                 data: 'file_size',
-                render: function(data) {
-                    return data ? data.toFixed(2) : '-';
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        if (row.file_size_versions) {
+                            return row.file_size_versions;
+                        }
+                        return data ? data.toFixed(2) : '-';
+                    }
+                    return data || 0;
                 }
             },
             { data: 'last_played' },
