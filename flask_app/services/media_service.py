@@ -191,7 +191,7 @@ class MediaService:
             server_name: Server name for progress updates
         """
         status = self.get_or_create_status()
-        page_size = 5000
+        page_size = 500
         start = 0
         total_records = None
 
