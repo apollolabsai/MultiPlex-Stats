@@ -312,8 +312,13 @@ class MediaService:
 
                             download_response = client.download_export(export_id)
                             if download_response:
-                                # download_export returns the data directly
-                                return download_response if isinstance(download_response, list) else []
+                                # Extract data from response wrapper
+                                if isinstance(download_response, dict) and 'response' in download_response:
+                                    export_data = download_response['response'].get('data', [])
+                                    return export_data if isinstance(export_data, list) else []
+                                elif isinstance(download_response, list):
+                                    return download_response
+                                return []
                             raise ValueError(f"Failed to download export for {section_name}")
                         break
 
