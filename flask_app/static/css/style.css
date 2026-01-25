@@ -822,8 +822,8 @@ footer {
 }
 
 .rating-icon {
-    width: 16px;
-    height: 16px;
+    height: 1.1em;
+    width: auto;
     flex-shrink: 0;
 }
 
