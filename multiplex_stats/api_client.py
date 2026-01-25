@@ -203,7 +203,8 @@ class TautulliClient:
         start: int = 0,
         length: int = 25000,
         order_column: str = 'added_at',
-        order_dir: str = 'desc'
+        order_dir: str = 'desc',
+        refresh: bool = True
     ) -> dict[str, Any]:
         """
         Get media info for a library section.
@@ -214,6 +215,7 @@ class TautulliClient:
             length: Number of records to return
             order_column: Column to order by
             order_dir: Order direction (asc/desc)
+            refresh: Refresh cache to get accurate counts (default: True)
 
         Returns:
             API response containing media info for the library section
@@ -224,7 +226,8 @@ class TautulliClient:
             start=start,
             length=length,
             order_column=order_column,
-            order_dir=order_dir
+            order_dir=order_dir,
+            refresh='true' if refresh else 'false'
         )
 
     def get_libraries(self) -> dict[str, Any]:

@@ -236,11 +236,11 @@ class MediaService:
                         data_dict[key]['added_at'] = max(data_dict[key]['added_at'], added_at)
                         if last_played:
                             data_dict[key]['last_played'] = max(data_dict[key]['last_played'], last_played)
-                        # Keep first non-empty codec/resolution
-                        if not data_dict[key]['video_codec'] and video_codec:
-                            data_dict[key]['video_codec'] = video_codec
-                        if not data_dict[key]['video_resolution'] and video_resolution:
-                            data_dict[key]['video_resolution'] = video_resolution
+                        # Collect all unique codecs and resolutions
+                        if video_codec and video_codec not in data_dict[key]['video_codecs']:
+                            data_dict[key]['video_codecs'].add(video_codec)
+                        if video_resolution and video_resolution not in data_dict[key]['video_resolutions']:
+                            data_dict[key]['video_resolutions'].add(video_resolution)
                     else:
                         data_dict[key] = {
                             'title': title,
@@ -249,8 +249,8 @@ class MediaService:
                             'play_count': play_count,
                             'added_at': added_at,
                             'last_played': last_played,
-                            'video_codec': video_codec,
-                            'video_resolution': video_resolution
+                            'video_codecs': {video_codec} if video_codec else set(),
+                            'video_resolutions': {video_resolution} if video_resolution else set()
                         }
                 else:
                     # TV show - aggregate by title only
@@ -288,8 +288,22 @@ class MediaService:
 
     def _save_aggregated_media(self, movies_data: dict, tv_data: dict):
         """Save aggregated media data to the database."""
+        # Resolution sort order (highest quality first)
+        resolution_order = {'4k': 0, '2160p': 0, '1080p': 1, '1080': 1, '720p': 2, '720': 2, '480p': 3, '480': 3, 'sd': 4}
+
+        def sort_resolutions(resolutions: set) -> str:
+            """Sort resolutions by quality (highest first) and join with |"""
+            sorted_res = sorted(
+                resolutions,
+                key=lambda r: resolution_order.get(r.lower(), 99)
+            )
+            return ' | '.join(sorted_res)
+
         # Save movies
         for (title, year), data in movies_data.items():
+            video_codec = ' | '.join(sorted(data['video_codecs'])) if data['video_codecs'] else ''
+            video_resolution = sort_resolutions(data['video_resolutions']) if data['video_resolutions'] else ''
+
             media = CachedMedia(
                 media_type='movie',
                 title=data['title'],
@@ -298,8 +312,8 @@ class MediaService:
                 play_count=data['play_count'],
                 added_at=data['added_at'] if data['added_at'] else None,
                 last_played=data['last_played'] if data['last_played'] else None,
-                video_codec=data['video_codec'],
-                video_resolution=data['video_resolution']
+                video_codec=video_codec,
+                video_resolution=video_resolution
             )
             db.session.add(media)
 
