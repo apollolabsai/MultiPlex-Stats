@@ -249,6 +249,45 @@
     color: #f44336;
 }
 
+.resolution-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.resolution-badge {
+    font-size: 0.75em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+.resolution-badge.res-4k {
+    background: #ed542c;
+    color: #fff;
+}
+
+.resolution-badge.res-1080 {
+    background: #4caf50;
+    color: #fff;
+}
+
+.resolution-badge.res-720 {
+    background: #e6b413;
+    color: #1a1a1a;
+}
+
+.resolution-badge.res-sd {
+    background: #f44336;
+    color: #fff;
+}
+
+.resolution-badge.res-other {
+    background: rgba(255, 255, 255, 0.15);
+    color: #ddd;
+}
+
 .server-step {
     font-size: 0.85em;
     color: #f18a3d;
@@ -348,20 +387,100 @@ $(document).ready(function() {
         return '';
     }
 
+    function normalizeResolutionLabel(value) {
+        if (!value) {
+            return { label: '', className: 'res-other' };
+        }
+        var lower = value.trim().toLowerCase();
+        if (lower === '4k' || lower === '2160p' || lower === 'uhd') {
+            return { label: '4K', className: 'res-4k' };
+        }
+        if (lower === '1080p' || lower === '1080') {
+            return { label: '1080p', className: 'res-1080' };
+        }
+        if (lower === '720p' || lower === '720') {
+            return { label: '720p', className: 'res-720' };
+        }
+        if (lower === '480p' || lower === '480' || lower === 'sd') {
+            return { label: 'SD', className: 'res-sd' };
+        }
+        return { label: value.trim(), className: 'res-other' };
+    }
+
+    function formatResolutionBadges(value) {
+        if (!value) {
+            return '-';
+        }
+        var parts = value.split(/[|,]/).map(function(part) {
+            return part.trim();
+        }).filter(Boolean);
+
+        if (!parts.length) {
+            return '-';
+        }
+
+        var html = '<div class="resolution-badges">';
+        parts.forEach(function(part) {
+            var normalized = normalizeResolutionLabel(part);
+            if (!normalized.label) {
+                return;
+            }
+            html += '<span class="resolution-badge ' + normalized.className + '">' + normalized.label + '</span>';
+        });
+        html += '</div>';
+        return html;
+    }
+
+    function formatResolutionText(value) {
+        if (!value) {
+            return '';
+        }
+        return value.replace(/\s*\|\s*/g, ' ').trim();
+    }
+
+    function formatRatingValue(value, ratingImage) {
+        if (value === null || value === undefined || value === '') {
+            return '';
+        }
+        var num = parseFloat(value);
+        if (isNaN(num)) {
+            return String(value);
+        }
+        var source = ratingImage ? ratingImage.toLowerCase() : '';
+
+        if (source.startsWith('rottentomatoes://')) {
+            if (num > 0 && num <= 1) {
+                num = num * 100;
+            }
+            return Math.round(num) + '%';
+        }
+
+        if (source.startsWith('imdb://') || source.startsWith('themoviedb://')) {
+            return num.toFixed(1);
+        }
+
+        if (num > 10) {
+            return Math.round(num) + '%';
+        }
+        return num.toFixed(1);
+    }
+
     function formatRatingCell(row) {
         var html = '<div class="rating-cell">';
         var hasRating = false;
 
         if (row.rating && row.rating_image) {
             var icon = getRatingIcon(row.rating_image);
+            var value = formatRatingValue(row.rating, row.rating_image);
             html += '<div class="rating-item">' + icon;
-            html += '<span class="rating-value critic">' + row.rating + '</span></div>';
+            html += '<span class="rating-value critic">' + value + '</span></div>';
             hasRating = true;
         }
         if (row.audience_rating && row.audience_rating_image) {
             var icon = getRatingIcon(row.audience_rating_image);
+            var value = formatRatingValue(row.audience_rating, row.audience_rating_image);
             html += '<div class="rating-item">' + icon;
-            html += '<span class="rating-value audience">' + row.audience_rating + '%</span></div>';
+            html += '<span class="rating-value audience">' + value + '</span></div>';
             hasRating = true;
         }
         html += '</div>';
@@ -378,7 +497,15 @@ $(document).ready(function() {
             { data: 'title' },
             { data: 'added_at' },
             { data: 'video_codec' },
-            { data: 'video_resolution' },
+            {
+                data: 'video_resolution',
+                render: function(data, type) {
+                    if (type === 'display') {
+                        return formatResolutionBadges(data);
+                    }
+                    return formatResolutionText(data);
+                }
+            },
             {
                 data: 'rating',
                 render: function(data, type, row) {
