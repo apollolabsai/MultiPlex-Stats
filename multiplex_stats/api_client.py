@@ -196,3 +196,42 @@ class TautulliClient:
             'get_concurrent_streams_by_stream_type',
             time_range=time_range
         )
+
+    def get_library_media_info(
+        self,
+        section_id: int,
+        start: int = 0,
+        length: int = 25000,
+        order_column: str = 'added_at',
+        order_dir: str = 'desc'
+    ) -> dict[str, Any]:
+        """
+        Get media info for a library section.
+
+        Args:
+            section_id: Library section ID (1=Movies, 2=TV typically)
+            start: Row offset to start from (for pagination)
+            length: Number of records to return
+            order_column: Column to order by
+            order_dir: Order direction (asc/desc)
+
+        Returns:
+            API response containing media info for the library section
+        """
+        return self._make_request(
+            'get_library_media_info',
+            section_id=section_id,
+            start=start,
+            length=length,
+            order_column=order_column,
+            order_dir=order_dir
+        )
+
+    def get_libraries(self) -> dict[str, Any]:
+        """
+        Get list of all libraries.
+
+        Returns:
+            API response containing library information
+        """
+        return self._make_request('get_libraries')

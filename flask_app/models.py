@@ -166,3 +166,51 @@ class HistorySyncStatus(db.Model):
     # Last successful sync
     last_sync_date = db.Column(db.DateTime, nullable=True)
     last_sync_record_count = db.Column(db.Integer, nullable=True)
+
+
+class MediaSyncStatus(db.Model):
+    """Track media library sync status for progress polling."""
+    __tablename__ = 'media_sync_status'
+
+    id = db.Column(db.Integer, primary_key=True)
+    status = db.Column(db.String(20), default='idle')  # idle, running, success, failed
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+    # Progress tracking
+    current_step = db.Column(db.String(100), nullable=True)  # e.g., "Fetching movies from Server A"
+    records_fetched = db.Column(db.Integer, default=0)
+    records_total = db.Column(db.Integer, nullable=True)
+
+    # Result info
+    movies_count = db.Column(db.Integer, default=0)
+    tv_shows_count = db.Column(db.Integer, default=0)
+    error_message = db.Column(db.Text, nullable=True)
+
+    # Last successful sync
+    last_sync_date = db.Column(db.DateTime, nullable=True)
+
+
+class CachedMedia(db.Model):
+    """Cached media library data from Tautulli."""
+    __tablename__ = 'cached_media'
+
+    id = db.Column(db.Integer, primary_key=True)
+    media_type = db.Column(db.String(20), nullable=False, index=True)  # movie, show
+
+    # Common fields
+    title = db.Column(db.String(500), nullable=False)
+    year = db.Column(db.Integer, nullable=True)
+    added_at = db.Column(db.Integer, nullable=True)  # Unix timestamp (MAX across servers)
+    last_played = db.Column(db.Integer, nullable=True)  # Unix timestamp (MAX across servers)
+    play_count = db.Column(db.Integer, default=0)  # SUM across servers
+    file_size = db.Column(db.BigInteger, default=0)  # SUM across servers (bytes)
+
+    # Movie-specific fields
+    video_codec = db.Column(db.String(50), nullable=True)
+    video_resolution = db.Column(db.String(50), nullable=True)
+
+    # Unique constraint on title + year + media_type
+    __table_args__ = (
+        db.UniqueConstraint('title', 'year', 'media_type', name='uq_media_title_year_type'),
+    )

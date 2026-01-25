@@ -19,6 +19,7 @@
                 <a href="{{ url_for('main.dashboard') }}" class="nav-link{% if request.endpoint == 'main.dashboard' %} active{% endif %}">Dashboard</a>
                 <a href="{{ url_for('main.viewing_history') }}" class="nav-link{% if request.endpoint == 'main.viewing_history' %} active{% endif %}">History</a>
                 <a href="{{ url_for('main.users') }}" class="nav-link{% if request.endpoint == 'main.users' %} active{% endif %}">Users</a>
+                <a href="{{ url_for('main.media') }}" class="nav-link{% if request.endpoint == 'main.media' %} active{% endif %}">Media</a>
                 <a href="{{ url_for('settings.index') }}" class="nav-link{% if request.endpoint and request.endpoint.startswith('settings.') %} active{% endif %}">Settings</a>
             </div>
         </div>
@@ -42,7 +43,6 @@
     </div>
 
     <footer>
-        <p>MultiPlex Stats Web Interface | Powered by Flask & Highcharts</p>
         <p>Build: [{{ git_branch }}] {{ git_commit_hash }} ({{ git_commit_date }} {{ timezone_name }})</p>
     </footer>
 

@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_app.models import db, AnalyticsRun, ViewingHistory
 from flask_app.services.analytics_service import AnalyticsService
+from flask_app.services.media_service import MediaService
 from flask_app.services.config_service import ConfigService
 from multiplex_stats.timezone_utils import get_local_timezone
 
@@ -422,3 +423,74 @@ def users():
     all_users = service.get_all_users()
 
     return render_template('users.html', users=all_users)
+
+
+@main_bp.route('/media')
+def media():
+    """Display media library page with Movies and TV Shows."""
+    if not ConfigService.has_valid_config():
+        flash('Please configure at least one server before viewing media.', 'error')
+        return redirect(url_for('settings.index'))
+
+    service = MediaService()
+    sync_status = service.get_sync_status()
+
+    movies = []
+    tv_shows = []
+    if sync_status['has_data']:
+        movies = service.get_movies()
+        tv_shows = service.get_tv_shows()
+
+    return render_template('media.html',
+                          sync_status=sync_status,
+                          movies=movies,
+                          tv_shows=tv_shows)
+
+
+@main_bp.route('/api/media/start-load', methods=['POST'])
+def api_media_start_load():
+    """Start loading media library data."""
+    if not ConfigService.has_valid_config():
+        return jsonify({'error': 'No server configuration found.'}), 400
+
+    try:
+        service = MediaService()
+        started = service.start_media_load()
+        if not started:
+            return jsonify({'error': 'Media load already in progress.'}), 409
+        return jsonify({'status': 'started'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@main_bp.route('/api/media/status')
+def api_media_status():
+    """Get current media load status for polling."""
+    try:
+        service = MediaService()
+        status = service.get_sync_status()
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@main_bp.route('/api/media/movies')
+def api_media_movies():
+    """Get movies data for DataTables."""
+    try:
+        service = MediaService()
+        movies = service.get_movies()
+        return jsonify({'data': movies})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@main_bp.route('/api/media/tv-shows')
+def api_media_tv_shows():
+    """Get TV shows data for DataTables."""
+    try:
+        service = MediaService()
+        tv_shows = service.get_tv_shows()
+        return jsonify({'data': tv_shows})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

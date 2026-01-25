@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+
+{% block title %}Media Library - MultiPlex Stats{% endblock %}
+
+{% block content %}
+<header>
+    <h1 class="settings-title">Media Library</h1>
+    <div class="subtitle">Movies and TV Shows from all servers</div>
+</header>
+
+<!-- Load Media Section (shown when no data) -->
+<div class="media-load-section" id="media-load-section" {% if sync_status.has_data and sync_status.status != 'running' %}style="display: none;"{% endif %}>
+    <div class="form-card load-card">
+        <div class="load-header">
+            <svg class="load-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
+            <div class="load-text">
+                <h3>Load Media Library</h3>
+                <p>Fetch movie and TV show information from your Plex servers via Tautulli.</p>
+            </div>
+        </div>
+
+        <!-- Sync Progress (shown when running) -->
+        <div class="sync-progress" id="sync-progress" {% if sync_status.status != 'running' %}style="display: none;"{% endif %}>
+            <div class="progress-header">
+                <span class="progress-title" id="progress-step">{{ sync_status.current_step or 'Loading...' }}</span>
+            </div>
+            <div class="progress-bar-container large">
+                <div class="progress-bar-fill orange" id="progress-bar" style="width: 0%;"></div>
+            </div>
+            <div class="progress-stats">
+                <span id="progress-fetched">{{ sync_status.records_fetched or 0 }}</span> records fetched
+            </div>
+        </div>
+
+        <button type="button" class="btn btn-primary btn-large" id="load-media-btn" {% if sync_status.status == 'running' %}disabled{% endif %}>
+            {% if sync_status.status == 'running' %}
+            Loading...
+            {% elif sync_status.has_data %}
+            Reload Media Library
+            {% else %}
+            Load Media
+            {% endif %}
+        </button>
+
+        {% if sync_status.last_sync_date %}
+        <div class="last-sync-info">Last loaded: {{ sync_status.last_sync_date }}</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Stats Grid -->
+<div class="stats-grid" id="stats-grid" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
+    <div class="stat-card">
+        <div class="stat-number" id="stat-movies-count">{{ movies|length }}</div>
+        <div class="stat-label">Movies</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number" id="stat-tv-count">{{ tv_shows|length }}</div>
+        <div class="stat-label">TV Shows</div>
+    </div>
+</div>
+
+<!-- Reload button when data exists -->
+<div class="reload-section" id="reload-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
+    <button type="button" class="btn btn-secondary" id="reload-media-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6"></path>
+            <path d="M1 20v-6h6"></path>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+        Reload Media Library
+    </button>
+</div>
+
+<!-- Movies Section -->
+<div class="section" id="movies-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
+    <h2 class="section-header">
+        <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="#ed542c">
+            <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
+        </svg>
+        Movies
+    </h2>
+    <div class="table-container">
+        <table id="moviesTable" class="display" style="width:100%">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Added</th>
+                    <th>Codec</th>
+                    <th>Resolution</th>
+                    <th>Size (GB)</th>
+                    <th>Last Played</th>
+                    <th>Plays</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- TV Shows Section -->
+<div class="section" id="tv-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
+    <h2 class="section-header">
+        <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="#ed542c">
+            <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
+        </svg>
+        TV Shows
+    </h2>
+    <div class="table-container">
+        <table id="tvShowsTable" class="display" style="width:100%">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Added</th>
+                    <th>Size (GB)</th>
+                    <th>Last Played</th>
+                    <th>Plays</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- DataTables CSS and JS -->
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+
+<style>
+.media-load-section {
+    max-width: 600px;
+    margin: 40px auto;
+}
+
+.load-card {
+    text-align: center;
+    padding: 40px;
+}
+
+.load-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.load-icon {
+    color: #f18a3d;
+}
+
+.load-text h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.3em;
+    color: #fff;
+}
+
+.load-text p {
+    margin: 0;
+    color: #aaa;
+}
+
+.btn-large {
+    padding: 14px 40px;
+    font-size: 1.1em;
+}
+
+.last-sync-info {
+    margin-top: 15px;
+    color: #888;
+    font-size: 0.9em;
+}
+
+.sync-progress {
+    margin-bottom: 20px;
+    padding: 20px;
+    background: rgba(241, 138, 61, 0.1);
+    border: 1px solid rgba(241, 138, 61, 0.3);
+    border-radius: 8px;
+    text-align: left;
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.progress-title {
+    font-weight: 600;
+    color: #f18a3d;
+}
+
+.progress-bar-container.large {
+    height: 20px;
+    margin-bottom: 10px;
+}
+
+.progress-stats {
+    text-align: center;
+    color: #aaa;
+    font-size: 0.9em;
+}
+
+.reload-section {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 20px;
+}
+
+.reload-section .btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    font-size: 1.4em;
+    color: #fff;
+}
+
+.section-header .section-icon {
+    flex-shrink: 0;
+}
+
+.section {
+    margin-bottom: 40px;
+}
+</style>
+
+<script>
+$(document).ready(function() {
+    var moviesData = {{ movies | tojson }};
+    var tvShowsData = {{ tv_shows | tojson }};
+    var pollInterval = null;
+
+    // Initialize Movies DataTable
+    var moviesTable = $('#moviesTable').DataTable({
+        data: moviesData,
+        pageLength: 100,
+        lengthMenu: [[50, 100, 200, 500], [50, 100, 200, 500]],
+        order: [[1, 'desc']],
+        columns: [
+            { data: 'title' },
+            { data: 'added_at' },
+            { data: 'video_codec' },
+            { data: 'video_resolution' },
+            {
+                data: 'file_size',
+                render: function(data) {
+                    return data ? data.toFixed(2) : '-';
+                }
+            },
+            { data: 'last_played' },
+            { data: 'play_count' }
+        ],
+        language: {
+            search: "Filter:",
+            lengthMenu: "Show _MENU_ movies",
+            info: "Showing _START_ to _END_ of _TOTAL_ movies",
+            infoEmpty: "No movies available",
+            emptyTable: "No movies loaded"
+        }
+    });
+
+    // Initialize TV Shows DataTable
+    var tvShowsTable = $('#tvShowsTable').DataTable({
+        data: tvShowsData,
+        pageLength: 100,
+        lengthMenu: [[50, 100, 200, 500], [50, 100, 200, 500]],
+        order: [[1, 'desc']],
+        columns: [
+            { data: 'title' },
+            { data: 'added_at' },
+            {
+                data: 'file_size',
+                render: function(data) {
+                    return data ? data.toFixed(2) : '-';
+                }
+            },
+            { data: 'last_played' },
+            { data: 'play_count' }
+        ],
+        language: {
+            search: "Filter:",
+            lengthMenu: "Show _MENU_ shows",
+            info: "Showing _START_ to _END_ of _TOTAL_ TV shows",
+            infoEmpty: "No TV shows available",
+            emptyTable: "No TV shows loaded"
+        }
+    });
+
+    function updateProgress(status) {
+        var progressDiv = document.getElementById('sync-progress');
+        var loadBtn = document.getElementById('load-media-btn');
+        var reloadBtn = document.getElementById('reload-media-btn');
+
+        if (status.status === 'running') {
+            progressDiv.style.display = 'block';
+            loadBtn.disabled = true;
+            loadBtn.textContent = 'Loading...';
+            if (reloadBtn) reloadBtn.disabled = true;
+
+            document.getElementById('progress-step').textContent = status.current_step || 'Loading...';
+            document.getElementById('progress-fetched').textContent = (status.records_fetched || 0).toLocaleString();
+
+            // Animate progress bar (indeterminate since we don't know total)
+            if (status.records_total && status.records_total > 0) {
+                var percent = Math.min(100, (status.records_fetched / status.records_total) * 100);
+                document.getElementById('progress-bar').style.width = percent + '%';
+            }
+        } else {
+            progressDiv.style.display = 'none';
+            loadBtn.disabled = false;
+            if (reloadBtn) reloadBtn.disabled = false;
+
+            if (status.status === 'success') {
+                // Reload page to show new data
+                window.location.reload();
+            } else if (status.status === 'failed' && status.error_message) {
+                alert('Media load failed: ' + status.error_message);
+                loadBtn.textContent = status.has_data ? 'Reload Media Library' : 'Load Media';
+            }
+
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+        }
+    }
+
+    function pollStatus() {
+        fetch('{{ url_for("main.api_media_status") }}')
+            .then(function(response) { return response.json(); })
+            .then(function(data) { updateProgress(data); })
+            .catch(function(error) { console.error('Error polling status:', error); });
+    }
+
+    function startMediaLoad() {
+        var loadBtn = document.getElementById('load-media-btn');
+        var reloadBtn = document.getElementById('reload-media-btn');
+
+        loadBtn.disabled = true;
+        loadBtn.textContent = 'Loading...';
+        if (reloadBtn) reloadBtn.disabled = true;
+
+        // Show load section if hidden
+        document.getElementById('media-load-section').style.display = 'block';
+        document.getElementById('sync-progress').style.display = 'block';
+
+        fetch('{{ url_for("main.api_media_start_load") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(function(response) {
+            if (!response.ok) {
+                return response.json().then(function(data) {
+                    throw new Error(data.error || 'Failed to start media load');
+                });
+            }
+            return response.json();
+        })
+        .then(function(data) {
+            // Start polling for status
+            pollInterval = setInterval(pollStatus, 1000);
+        })
+        .catch(function(error) {
+            alert(error.message);
+            loadBtn.disabled = false;
+            loadBtn.textContent = '{{ "Reload Media Library" if sync_status.has_data else "Load Media" }}';
+            if (reloadBtn) reloadBtn.disabled = false;
+            document.getElementById('sync-progress').style.display = 'none';
+        });
+    }
+
+    // Bind click handlers
+    document.getElementById('load-media-btn').addEventListener('click', startMediaLoad);
+
+    var reloadBtn = document.getElementById('reload-media-btn');
+    if (reloadBtn) {
+        reloadBtn.addEventListener('click', startMediaLoad);
+    }
+
+    // Check if we should start polling (sync already running)
+    {% if sync_status.status == 'running' %}
+    pollInterval = setInterval(pollStatus, 1000);
+    {% endif %}
+});
+</script>
+{% endblock %}
