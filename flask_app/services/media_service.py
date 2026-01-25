@@ -147,7 +147,7 @@ class MediaService:
 
         libraries = libraries_response['response'].get('data', [])
 
-        # Collect ALL movie and TV libraries (not just the first one)
+        # Collect ALL movie and TV libraries with their counts
         movie_libraries = []
         tv_libraries = []
 
@@ -155,10 +155,19 @@ class MediaService:
             section_type = lib.get('section_type', '')
             section_id = lib.get('section_id')
             section_name = lib.get('section_name', f'Library {section_id}')
+            count = int(lib.get('count', 0) or 0)
             if section_type == 'movie':
-                movie_libraries.append({'id': section_id, 'name': section_name})
+                movie_libraries.append({'id': section_id, 'name': section_name, 'count': count})
             elif section_type == 'show':
-                tv_libraries.append({'id': section_id, 'name': section_name})
+                tv_libraries.append({'id': section_id, 'name': section_name, 'count': count})
+
+        # Add library counts to cumulative total for progress tracking
+        server_total = sum(lib['count'] for lib in movie_libraries) + sum(lib['count'] for lib in tv_libraries)
+        if status.records_total is None:
+            status.records_total = server_total
+        else:
+            status.records_total += server_total
+        db.session.commit()
 
         # Fetch movies from ALL movie libraries
         for lib in movie_libraries:
