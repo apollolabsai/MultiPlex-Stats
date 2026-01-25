@@ -18,7 +18,7 @@ class MediaService:
     """Service for managing media library sync operations."""
 
     EXPORT_POLL_INTERVAL = 2   # seconds between export status checks
-    EXPORT_TIMEOUT = 300       # max seconds to wait for export (5 minutes)
+    EXPORT_TIMEOUT = 600       # max seconds to wait for export (10 minutes)
 
     def __init__(self):
         self.local_tz = get_local_timezone()
