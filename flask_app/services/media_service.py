@@ -1,9 +1,11 @@
 """
 Service for syncing media library info from Tautulli to local database.
 Uses export_metadata API for rich metadata including ratings.
+Supports parallel fetching from multiple servers.
 """
 import time
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -42,6 +44,32 @@ class MediaService:
                 .astimezone(self.local_tz)
                 .isoformat()
             )
+
+        # Build per-server status
+        servers = []
+
+        # Server A
+        if status.server_a_name:
+            servers.append({
+                'name': status.server_a_name,
+                'status': status.server_a_status or 'idle',
+                'step': status.server_a_step or '',
+                'fetched': status.server_a_fetched or 0,
+                'total': status.server_a_total,
+                'error': status.server_a_error,
+            })
+
+        # Server B
+        if status.server_b_name:
+            servers.append({
+                'name': status.server_b_name,
+                'status': status.server_b_status or 'idle',
+                'step': status.server_b_step or '',
+                'fetched': status.server_b_fetched or 0,
+                'total': status.server_b_total,
+                'error': status.server_b_error,
+            })
+
         return {
             'status': status.status,
             'current_step': status.current_step,
@@ -51,7 +79,8 @@ class MediaService:
             'tv_shows_count': status.tv_shows_count,
             'error_message': status.error_message,
             'last_sync_date': last_sync_date,
-            'has_data': self.has_media_data()
+            'has_data': self.has_media_data(),
+            'servers': servers,
         }
 
     def has_media_data(self) -> bool:
@@ -73,6 +102,9 @@ class MediaService:
         if status.status == 'running':
             return False
 
+        # Get server configs to populate names
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+
         # Reset status for new load
         status.status = 'running'
         status.started_at = datetime.utcnow()
@@ -83,6 +115,22 @@ class MediaService:
         status.movies_count = 0
         status.tv_shows_count = 0
         status.error_message = None
+
+        # Reset per-server status
+        status.server_a_name = server_a_config.name if server_a_config else None
+        status.server_a_status = 'pending' if server_a_config else 'idle'
+        status.server_a_step = None
+        status.server_a_fetched = 0
+        status.server_a_total = None
+        status.server_a_error = None
+
+        status.server_b_name = server_b_config.name if server_b_config else None
+        status.server_b_status = 'pending' if server_b_config else 'idle'
+        status.server_b_step = None
+        status.server_b_fetched = 0
+        status.server_b_total = None
+        status.server_b_error = None
+
         db.session.commit()
 
         # Clear existing media data
@@ -103,7 +151,7 @@ class MediaService:
         """Run media sync in a background thread with app context."""
         with app.app_context():
             try:
-                self._run_media_sync()
+                self._run_media_sync_parallel(app)
                 status = self.get_or_create_status()
                 status.status = 'success'
                 status.completed_at = datetime.utcnow()
@@ -119,31 +167,80 @@ class MediaService:
 
             db.session.commit()
 
-    def _run_media_sync(self):
-        """Run the actual media sync operation using export_metadata."""
+    def _run_media_sync_parallel(self, app):
+        """Run the actual media sync operation with parallel server fetching."""
         status = self.get_or_create_status()
         server_a_config, server_b_config = ConfigService.get_server_configs()
 
         if not server_a_config:
             raise ValueError("No server configuration found")
 
-        # Temporary storage for aggregation
-        # Movies: key = (title, year), TV: key = title
+        # Shared storage for aggregation (thread-safe via locks)
         movies_data = {}
         tv_data = {}
+        data_lock = threading.Lock()
 
-        # Process Server A (primary - its metadata takes priority)
-        status.current_step = f'Processing {server_a_config.name}...'
+        # Track errors from threads
+        errors = []
+        errors_lock = threading.Lock()
+
+        def fetch_server(server_config, is_primary: bool, server_key: str):
+            """Fetch media from a single server (runs in thread)."""
+            with app.app_context():
+                try:
+                    self._fetch_server_media_parallel(
+                        server_config, movies_data, tv_data, data_lock,
+                        is_primary, server_key
+                    )
+                except Exception as e:
+                    with errors_lock:
+                        errors.append((server_key, str(e)))
+                    # Update server status to failed
+                    status = self.get_or_create_status()
+                    if server_key == 'a':
+                        status.server_a_status = 'failed'
+                        status.server_a_error = str(e)
+                    else:
+                        status.server_b_status = 'failed'
+                        status.server_b_error = str(e)
+                    db.session.commit()
+
+        # Start parallel fetching
+        status.current_step = 'Fetching from servers...'
         db.session.commit()
-        self._fetch_server_media(server_a_config, movies_data, tv_data, is_primary=True)
 
-        # Process Server B if configured (secondary)
+        threads = []
+
+        # Server A thread (primary)
+        thread_a = threading.Thread(
+            target=fetch_server,
+            args=(server_a_config, True, 'a')
+        )
+        thread_a.start()
+        threads.append(thread_a)
+
+        # Server B thread (secondary) - if configured
         if server_b_config:
-            status.current_step = f'Processing {server_b_config.name}...'
-            db.session.commit()
-            self._fetch_server_media(server_b_config, movies_data, tv_data, is_primary=False)
+            thread_b = threading.Thread(
+                target=fetch_server,
+                args=(server_b_config, False, 'b')
+            )
+            thread_b.start()
+            threads.append(thread_b)
+
+        # Wait for all threads to complete
+        for thread in threads:
+            thread.join()
+
+        # Check if any critical errors occurred
+        if errors:
+            # If Server A failed, that's critical
+            for server_key, error_msg in errors:
+                if server_key == 'a':
+                    raise ValueError(f"Server A failed: {error_msg}")
 
         # Save aggregated data to database
+        status = self.get_or_create_status()
         status.current_step = 'Saving media data...'
         db.session.commit()
         self._save_aggregated_media(movies_data, tv_data)
@@ -151,23 +248,38 @@ class MediaService:
         status.current_step = 'Finalizing...'
         db.session.commit()
 
-    def _fetch_server_media(
+    def _fetch_server_media_parallel(
         self,
         server_config,
         movies_data: dict,
         tv_data: dict,
-        is_primary: bool
+        data_lock: threading.Lock,
+        is_primary: bool,
+        server_key: str
     ):
         """
         Fetch media from a single server using export_metadata API.
+        Thread-safe version that updates per-server status.
 
         Args:
             server_config: Server configuration object
-            movies_data: Dict to aggregate movie data
-            tv_data: Dict to aggregate TV data
+            movies_data: Shared dict to aggregate movie data
+            tv_data: Shared dict to aggregate TV data
+            data_lock: Lock for thread-safe access to shared dicts
             is_primary: If True, this server's metadata takes priority
+            server_key: 'a' or 'b' for status updates
         """
         status = self.get_or_create_status()
+
+        # Update server status to running
+        if server_key == 'a':
+            status.server_a_status = 'running'
+            status.server_a_step = 'Connecting...'
+        else:
+            status.server_b_status = 'running'
+            status.server_b_step = 'Connecting...'
+        db.session.commit()
+
         client = TautulliClient(server_config)
 
         # Get all libraries
@@ -193,65 +305,78 @@ class MediaService:
 
         # Update total for progress tracking
         server_total = sum(lib['count'] for lib in movie_libraries) + sum(lib['count'] for lib in tv_libraries)
-        if status.records_total is None:
-            status.records_total = server_total
+
+        status = self.get_or_create_status()
+        if server_key == 'a':
+            status.server_a_total = server_total
         else:
-            status.records_total += server_total
+            status.server_b_total = server_total
         db.session.commit()
 
         # Process each library via export_metadata (for ratings)
         for lib in movie_libraries:
-            self._fetch_library_via_export(
+            self._fetch_library_via_export_parallel(
                 client, server_config.name, lib['id'], lib['name'],
-                'movie', movies_data, is_primary
+                'movie', movies_data, tv_data, data_lock, is_primary, server_key
             )
 
         for lib in tv_libraries:
-            self._fetch_library_via_export(
+            self._fetch_library_via_export_parallel(
                 client, server_config.name, lib['id'], lib['name'],
-                'show', tv_data, is_primary
+                'show', movies_data, tv_data, data_lock, is_primary, server_key
             )
 
-        # Fetch play stats from get_library_media_info (for file_size, play_count, last_played)
-        status.current_step = f'Fetching play stats from {server_config.name}...'
+        # Fetch play stats from get_library_media_info
+        status = self.get_or_create_status()
+        if server_key == 'a':
+            status.server_a_step = 'Fetching play stats...'
+        else:
+            status.server_b_step = 'Fetching play stats...'
         db.session.commit()
 
         for lib in movie_libraries:
-            self._fetch_library_play_stats(
-                client, lib['id'], 'movie', movies_data
+            self._fetch_library_play_stats_parallel(
+                client, lib['id'], 'movie', movies_data, data_lock
             )
 
         for lib in tv_libraries:
-            self._fetch_library_play_stats(
-                client, lib['id'], 'show', tv_data
+            self._fetch_library_play_stats_parallel(
+                client, lib['id'], 'show', tv_data, data_lock
             )
 
-    def _fetch_library_via_export(
+        # Mark server as complete
+        status = self.get_or_create_status()
+        if server_key == 'a':
+            status.server_a_status = 'success'
+            status.server_a_step = 'Complete'
+        else:
+            status.server_b_status = 'success'
+            status.server_b_step = 'Complete'
+        db.session.commit()
+
+    def _fetch_library_via_export_parallel(
         self,
         client: TautulliClient,
         server_name: str,
         section_id: int,
         section_name: str,
         media_type: str,
-        data_dict: dict,
-        is_primary: bool
+        movies_data: dict,
+        tv_data: dict,
+        data_lock: threading.Lock,
+        is_primary: bool,
+        server_key: str
     ):
         """
-        Fetch library metadata using export_metadata API.
-
-        Args:
-            client: TautulliClient instance
-            server_name: Server name for status updates
-            section_id: Library section ID
-            section_name: Library name for status updates
-            media_type: 'movie' or 'show'
-            data_dict: Dict to aggregate data into
-            is_primary: If True, this server's metadata takes priority
+        Fetch library metadata using export_metadata API (parallel version).
         """
         status = self.get_or_create_status()
 
-        # Start export
-        status.current_step = f'Starting export for {server_name} - {section_name}...'
+        # Update server step
+        if server_key == 'a':
+            status.server_a_step = f'Starting export for {section_name}...'
+        else:
+            status.server_b_step = f'Starting export for {section_name}...'
         db.session.commit()
 
         export_response = client.export_metadata(
@@ -270,38 +395,27 @@ class MediaService:
             raise ValueError(f"No export_id returned for {section_name}")
 
         # Wait for export to complete
-        export_data = self._wait_for_export(
-            client, section_id, export_id, section_name, server_name
+        export_data = self._wait_for_export_parallel(
+            client, section_id, export_id, section_name, server_key
         )
 
         # Process the export data
-        self._process_export_data(export_data, media_type, data_dict, is_primary)
+        data_dict = movies_data if media_type == 'movie' else tv_data
+        self._process_export_data_parallel(
+            export_data, media_type, data_dict, data_lock, is_primary, server_key
+        )
 
-    def _wait_for_export(
+    def _wait_for_export_parallel(
         self,
         client: TautulliClient,
         section_id: int,
         export_id: int,
         section_name: str,
-        server_name: str
+        server_key: str
     ) -> list:
         """
-        Poll for export completion and download when ready.
-
-        Args:
-            client: TautulliClient instance
-            section_id: Library section ID
-            export_id: Export ID to wait for
-            section_name: Library name for status updates
-            server_name: Server name for status updates
-
-        Returns:
-            List of metadata records from the export
-
-        Raises:
-            ValueError: If export times out or fails
+        Poll for export completion and download when ready (parallel version).
         """
-        status = self.get_or_create_status()
         start_time = time.time()
 
         while True:
@@ -310,33 +424,38 @@ class MediaService:
             if elapsed > self.EXPORT_TIMEOUT:
                 raise ValueError(f"Export timed out for {section_name} after {self.EXPORT_TIMEOUT}s")
 
-            status.current_step = f'Waiting for export {section_name} ({elapsed}s)...'
+            # Update server step with elapsed time
+            status = self.get_or_create_status()
+            if server_key == 'a':
+                status.server_a_step = f'Waiting for export {section_name} ({elapsed}s)...'
+            else:
+                status.server_b_step = f'Waiting for export {section_name} ({elapsed}s)...'
             db.session.commit()
 
             # Check export status
             exports_response = client.get_exports_table(section_id)
             if exports_response and 'response' in exports_response:
-                # Data is doubly nested: response.data.data
                 outer_data = exports_response['response'].get('data', {})
                 exports = outer_data.get('data', []) if isinstance(outer_data, dict) else []
                 for export in exports:
                     if export.get('export_id') == export_id:
                         if export.get('complete') == 1:
                             # Download completed export
-                            status.current_step = f'Downloading export for {section_name}...'
+                            status = self.get_or_create_status()
+                            if server_key == 'a':
+                                status.server_a_step = f'Downloading export for {section_name}...'
+                            else:
+                                status.server_b_step = f'Downloading export for {section_name}...'
                             db.session.commit()
 
                             download_response = client.download_export(export_id)
                             if download_response:
-                                # Extract data from response wrapper
-                                # Tautulli wraps in {'response': {'data': [...]}}
                                 if isinstance(download_response, dict) and 'response' in download_response:
                                     response_data = download_response['response']
                                     if isinstance(response_data, dict):
                                         export_data = response_data.get('data', [])
                                     else:
                                         export_data = response_data
-                                    # Handle case where data might be a string (JSON) that needs parsing
                                     if isinstance(export_data, str):
                                         import json
                                         try:
@@ -352,26 +471,21 @@ class MediaService:
 
             time.sleep(self.EXPORT_POLL_INTERVAL)
 
-    def _process_export_data(
+    def _process_export_data_parallel(
         self,
         export_data: list,
         media_type: str,
         data_dict: dict,
-        is_primary: bool
+        data_lock: threading.Lock,
+        is_primary: bool,
+        server_key: str
     ):
         """
-        Process export metadata and merge into data dict.
-
-        Args:
-            export_data: List of metadata records from export
-            media_type: 'movie' or 'show'
-            data_dict: Dict to aggregate data into
-            is_primary: If True, this server's metadata takes priority for ratings
+        Process export metadata and merge into data dict (thread-safe).
         """
-        status = self.get_or_create_status()
+        records_processed = 0
 
         for record in export_data:
-            # Skip non-dict records (handle unexpected data structures)
             if not isinstance(record, dict):
                 continue
 
@@ -386,8 +500,6 @@ class MediaService:
                 key = title
                 year = None
 
-            # Extract fields from export (Tautulli uses camelCase)
-            # Media info is nested in 'media' array
             media_info = record.get('media', [{}])[0] if record.get('media') else {}
 
             # Parse addedAt from ISO format to unix timestamp
@@ -395,13 +507,11 @@ class MediaService:
             added_at = 0
             if added_at_str:
                 try:
-                    from datetime import datetime
                     dt = datetime.fromisoformat(added_at_str.replace('Z', '+00:00'))
                     added_at = int(dt.timestamp())
                 except (ValueError, AttributeError):
                     pass
 
-            # Export doesn't have file_size, play_count, last_played - those come from get_library_media_info
             file_size = 0
             play_count = 0
             last_played = 0
@@ -409,94 +519,92 @@ class MediaService:
             video_codec = media_info.get('videoCodec', '') or ''
             video_resolution = media_info.get('videoResolution', '') or ''
 
-            # Rating fields (camelCase in export)
             rating = record.get('rating')
             rating_image = record.get('ratingImage')
             audience_rating = record.get('audienceRating')
             audience_rating_image = record.get('audienceRatingImage')
 
-            if key in data_dict:
-                existing = data_dict[key]
+            # Thread-safe update to shared dict
+            with data_lock:
+                if key in data_dict:
+                    existing = data_dict[key]
 
-                # Aggregate numeric fields
-                existing['file_size'] += file_size
-                existing['play_count'] += play_count
+                    existing['file_size'] += file_size
+                    existing['play_count'] += play_count
 
-                # MIN for added_at
-                if added_at:
-                    if existing['added_at']:
-                        existing['added_at'] = min(existing['added_at'], added_at)
+                    if added_at:
+                        if existing['added_at']:
+                            existing['added_at'] = min(existing['added_at'], added_at)
+                        else:
+                            existing['added_at'] = added_at
+
+                    if last_played:
+                        existing['last_played'] = max(existing['last_played'] or 0, last_played)
+
+                    if video_codec:
+                        existing['video_codecs'].add(video_codec)
+                    if video_resolution:
+                        existing['video_resolutions'].add(video_resolution)
+                    if file_size:
+                        existing['file_sizes'].add(file_size)
+
+                    # Ratings: primary server takes priority
+                    if is_primary:
+                        if rating:
+                            existing['rating'] = rating
+                        if rating_image:
+                            existing['rating_image'] = rating_image
+                        if audience_rating:
+                            existing['audience_rating'] = audience_rating
+                        if audience_rating_image:
+                            existing['audience_rating_image'] = audience_rating_image
                     else:
-                        existing['added_at'] = added_at
-
-                # MAX for last_played
-                if last_played:
-                    existing['last_played'] = max(existing['last_played'] or 0, last_played)
-
-                # Collect unique codecs, resolutions, file sizes
-                if video_codec:
-                    existing['video_codecs'].add(video_codec)
-                if video_resolution:
-                    existing['video_resolutions'].add(video_resolution)
-                if file_size:
-                    existing['file_sizes'].add(file_size)
-
-                # Ratings: primary server takes priority, only fill if not already set
-                if is_primary:
-                    if rating:
-                        existing['rating'] = rating
-                    if rating_image:
-                        existing['rating_image'] = rating_image
-                    if audience_rating:
-                        existing['audience_rating'] = audience_rating
-                    if audience_rating_image:
-                        existing['audience_rating_image'] = audience_rating_image
+                        if not existing.get('rating') and rating:
+                            existing['rating'] = rating
+                        if not existing.get('rating_image') and rating_image:
+                            existing['rating_image'] = rating_image
+                        if not existing.get('audience_rating') and audience_rating:
+                            existing['audience_rating'] = audience_rating
+                        if not existing.get('audience_rating_image') and audience_rating_image:
+                            existing['audience_rating_image'] = audience_rating_image
                 else:
-                    # Secondary: only fill if not set
-                    if not existing.get('rating') and rating:
-                        existing['rating'] = rating
-                    if not existing.get('rating_image') and rating_image:
-                        existing['rating_image'] = rating_image
-                    if not existing.get('audience_rating') and audience_rating:
-                        existing['audience_rating'] = audience_rating
-                    if not existing.get('audience_rating_image') and audience_rating_image:
-                        existing['audience_rating_image'] = audience_rating_image
-            else:
-                data_dict[key] = {
-                    'title': title,
-                    'year': year,
-                    'file_size': file_size,
-                    'play_count': play_count,
-                    'added_at': added_at,
-                    'last_played': last_played,
-                    'video_codecs': {video_codec} if video_codec else set(),
-                    'video_resolutions': {video_resolution} if video_resolution else set(),
-                    'file_sizes': {file_size} if file_size else set(),
-                    'rating': rating,
-                    'rating_image': rating_image,
-                    'audience_rating': audience_rating,
-                    'audience_rating_image': audience_rating_image,
-                }
+                    data_dict[key] = {
+                        'title': title,
+                        'year': year,
+                        'file_size': file_size,
+                        'play_count': play_count,
+                        'added_at': added_at,
+                        'last_played': last_played,
+                        'video_codecs': {video_codec} if video_codec else set(),
+                        'video_resolutions': {video_resolution} if video_resolution else set(),
+                        'file_sizes': {file_size} if file_size else set(),
+                        'rating': rating,
+                        'rating_image': rating_image,
+                        'audience_rating': audience_rating,
+                        'audience_rating_image': audience_rating_image,
+                    }
 
-            status.records_fetched += 1
+            records_processed += 1
 
+        # Update fetched count
+        status = self.get_or_create_status()
+        if server_key == 'a':
+            status.server_a_fetched += records_processed
+        else:
+            status.server_b_fetched += records_processed
+        status.records_fetched += records_processed
         db.session.commit()
 
-    def _fetch_library_play_stats(
+    def _fetch_library_play_stats_parallel(
         self,
         client: TautulliClient,
         section_id: int,
         media_type: str,
-        data_dict: dict
+        data_dict: dict,
+        data_lock: threading.Lock
     ):
         """
-        Fetch play stats from get_library_media_info and merge into data dict.
-
-        Args:
-            client: TautulliClient instance
-            section_id: Library section ID
-            media_type: 'movie' or 'show'
-            data_dict: Dict to merge play stats into
+        Fetch play stats from get_library_media_info and merge into data dict (thread-safe).
         """
         response = client.get_library_media_info(
             section_id=section_id,
@@ -507,7 +615,6 @@ class MediaService:
         if not response or 'response' not in response:
             return
 
-        # Data is doubly nested: response.data.data
         outer_data = response['response'].get('data', {})
         items = outer_data.get('data', []) if isinstance(outer_data, dict) else []
 
@@ -526,44 +633,40 @@ class MediaService:
             else:
                 key = title
 
-            if key not in data_dict:
-                continue
+            # Thread-safe update
+            with data_lock:
+                if key not in data_dict:
+                    continue
 
-            # Get play stats
-            file_size = int(item.get('file_size', 0) or 0)
-            play_count = int(item.get('play_count', 0) or 0)
-            last_played = int(item.get('last_played', 0) or 0)
-            video_codec = item.get('video_codec', '') or ''
-            video_resolution = item.get('video_resolution', '') or ''
+                file_size = int(item.get('file_size', 0) or 0)
+                play_count = int(item.get('play_count', 0) or 0)
+                last_played = int(item.get('last_played', 0) or 0)
+                video_codec = item.get('video_codec', '') or ''
+                video_resolution = item.get('video_resolution', '') or ''
 
-            existing = data_dict[key]
+                existing = data_dict[key]
 
-            # Aggregate file_size and play_count
-            existing['file_size'] += file_size
-            existing['play_count'] += play_count
+                existing['file_size'] += file_size
+                existing['play_count'] += play_count
 
-            # MAX for last_played
-            if last_played:
-                existing['last_played'] = max(existing['last_played'] or 0, last_played)
+                if last_played:
+                    existing['last_played'] = max(existing['last_played'] or 0, last_played)
 
-            # Collect unique codecs, resolutions, file sizes for version display
-            if video_codec:
-                existing['video_codecs'].add(video_codec)
-            if video_resolution:
-                existing['video_resolutions'].add(video_resolution)
-            if file_size:
-                existing['file_sizes'].add(file_size)
+                if video_codec:
+                    existing['video_codecs'].add(video_codec)
+                if video_resolution:
+                    existing['video_resolutions'].add(video_resolution)
+                if file_size:
+                    existing['file_sizes'].add(file_size)
 
     def _save_aggregated_media(self, movies_data: dict, tv_data: dict):
         """Save aggregated media data to the database."""
-        # Resolution sort order (highest quality first)
         resolution_order = {
             '4k': 0, '2160p': 0, '1080p': 1, '1080': 1,
             '720p': 2, '720': 2, '480p': 3, '480': 3, 'sd': 4
         }
 
         def sort_resolutions(resolutions: set) -> str:
-            """Sort resolutions by quality (highest first) and join with |"""
             sorted_res = sorted(
                 resolutions,
                 key=lambda r: resolution_order.get(r.lower(), 99)
@@ -571,7 +674,6 @@ class MediaService:
             return ' | '.join(sorted_res)
 
         def format_size_versions(sizes: set) -> str:
-            """Format unique file sizes (bytes) in GB, largest first."""
             if not sizes:
                 return ''
             sorted_sizes = sorted(sizes, reverse=True)

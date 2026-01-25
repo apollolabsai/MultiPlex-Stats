@@ -24,14 +24,11 @@
 
         <!-- Sync Progress (shown when running) -->
         <div class="sync-progress" id="sync-progress" {% if sync_status.status != 'running' %}style="display: none;"{% endif %}>
-            <div class="progress-header">
-                <span class="progress-title" id="progress-step">{{ sync_status.current_step or 'Loading...' }}</span>
-            </div>
-            <div class="progress-bar-container large">
-                <div class="progress-bar-fill orange" id="progress-bar" style="width: 0%;"></div>
+            <div id="server-progress-container">
+                <!-- Server progress bars will be dynamically inserted here -->
             </div>
             <div class="progress-stats">
-                <span id="progress-fetched">{{ sync_status.records_fetched or 0 }}</span> records fetched
+                <span id="progress-fetched">{{ sync_status.records_fetched or 0 }}</span> total records fetched
             </div>
         </div>
 
@@ -146,7 +143,7 @@
 
 <style>
 .media-load-section {
-    max-width: 600px;
+    max-width: 700px;
     margin: 40px auto;
 }
 
@@ -198,26 +195,106 @@
     text-align: left;
 }
 
-.progress-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 10px;
+/* Per-server progress styling */
+.server-progress {
+    margin-bottom: 15px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
 }
 
-.progress-title {
+.server-progress:last-child {
+    margin-bottom: 0;
+}
+
+.server-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.server-name {
     font-weight: 600;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.server-status-badge {
+    font-size: 0.75em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.server-status-badge.pending {
+    background: rgba(150, 150, 150, 0.3);
+    color: #aaa;
+}
+
+.server-status-badge.running {
+    background: rgba(241, 138, 61, 0.3);
     color: #f18a3d;
 }
 
-.progress-bar-container.large {
-    height: 20px;
-    margin-bottom: 10px;
+.server-status-badge.success {
+    background: rgba(76, 175, 80, 0.3);
+    color: #4caf50;
+}
+
+.server-status-badge.failed {
+    background: rgba(244, 67, 54, 0.3);
+    color: #f44336;
+}
+
+.server-step {
+    font-size: 0.85em;
+    color: #f18a3d;
+}
+
+.server-progress-bar {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.server-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #f18a3d, #ed542c);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.server-progress-fill.success {
+    background: linear-gradient(90deg, #4caf50, #45a049);
+}
+
+.server-progress-fill.failed {
+    background: linear-gradient(90deg, #f44336, #d32f2f);
+}
+
+.server-fetched {
+    font-size: 0.8em;
+    color: #888;
+}
+
+.server-error {
+    font-size: 0.8em;
+    color: #f44336;
+    margin-top: 4px;
 }
 
 .progress-stats {
     text-align: center;
     color: #aaa;
     font-size: 0.9em;
+    margin-top: 15px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .reload-section {
@@ -371,6 +448,46 @@ $(document).ready(function() {
         }
     });
 
+    function renderServerProgress(servers) {
+        var container = document.getElementById('server-progress-container');
+        var html = '';
+
+        servers.forEach(function(server) {
+            var percent = 0;
+            if (server.total && server.total > 0) {
+                percent = Math.min(100, (server.fetched / server.total) * 100);
+            } else if (server.status === 'success') {
+                percent = 100;
+            }
+
+            var fillClass = '';
+            if (server.status === 'success') fillClass = 'success';
+            else if (server.status === 'failed') fillClass = 'failed';
+
+            html += '<div class="server-progress">';
+            html += '<div class="server-progress-header">';
+            html += '<span class="server-name">' + server.name;
+            html += '<span class="server-status-badge ' + server.status + '">' + server.status + '</span>';
+            html += '</span>';
+            html += '<span class="server-step">' + (server.step || '') + '</span>';
+            html += '</div>';
+            html += '<div class="server-progress-bar">';
+            html += '<div class="server-progress-fill ' + fillClass + '" style="width: ' + percent + '%;"></div>';
+            html += '</div>';
+            html += '<div class="server-fetched">' + (server.fetched || 0).toLocaleString() + ' records';
+            if (server.total) {
+                html += ' / ' + server.total.toLocaleString() + ' total';
+            }
+            html += '</div>';
+            if (server.error) {
+                html += '<div class="server-error">' + server.error + '</div>';
+            }
+            html += '</div>';
+        });
+
+        container.innerHTML = html;
+    }
+
     function updateProgress(status) {
         var progressDiv = document.getElementById('sync-progress');
         var loadBtn = document.getElementById('load-media-btn');
@@ -382,14 +499,13 @@ $(document).ready(function() {
             loadBtn.textContent = 'Loading...';
             if (reloadBtn) reloadBtn.disabled = true;
 
-            document.getElementById('progress-step').textContent = status.current_step || 'Loading...';
-            document.getElementById('progress-fetched').textContent = (status.records_fetched || 0).toLocaleString();
-
-            // Animate progress bar (indeterminate since we don't know total)
-            if (status.records_total && status.records_total > 0) {
-                var percent = Math.min(100, (status.records_fetched / status.records_total) * 100);
-                document.getElementById('progress-bar').style.width = percent + '%';
+            // Render per-server progress bars
+            if (status.servers && status.servers.length > 0) {
+                renderServerProgress(status.servers);
             }
+
+            // Update total fetched
+            document.getElementById('progress-fetched').textContent = (status.records_fetched || 0).toLocaleString();
         } else {
             progressDiv.style.display = 'none';
             loadBtn.disabled = false;

@@ -177,10 +177,26 @@ class MediaSyncStatus(db.Model):
     started_at = db.Column(db.DateTime, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)
 
-    # Progress tracking
-    current_step = db.Column(db.String(100), nullable=True)  # e.g., "Fetching movies from Server A"
+    # Overall progress tracking (legacy, kept for compatibility)
+    current_step = db.Column(db.String(100), nullable=True)
     records_fetched = db.Column(db.Integer, default=0)
     records_total = db.Column(db.Integer, nullable=True)
+
+    # Per-server progress tracking (Server A)
+    server_a_name = db.Column(db.String(100), nullable=True)
+    server_a_status = db.Column(db.String(20), default='idle')  # idle, running, success, failed
+    server_a_step = db.Column(db.String(100), nullable=True)
+    server_a_fetched = db.Column(db.Integer, default=0)
+    server_a_total = db.Column(db.Integer, nullable=True)
+    server_a_error = db.Column(db.Text, nullable=True)
+
+    # Per-server progress tracking (Server B)
+    server_b_name = db.Column(db.String(100), nullable=True)
+    server_b_status = db.Column(db.String(20), default='idle')  # idle, running, success, failed
+    server_b_step = db.Column(db.String(100), nullable=True)
+    server_b_fetched = db.Column(db.Integer, default=0)
+    server_b_total = db.Column(db.Integer, nullable=True)
+    server_b_error = db.Column(db.Text, nullable=True)
 
     # Result info
     movies_count = db.Column(db.Integer, default=0)
