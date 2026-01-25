@@ -247,8 +247,7 @@ class TautulliClient:
         media_info_level: int = 1,
         thumb_level: int = 0,
         art_level: int = 0,
-        custom_fields: Optional[list[str] | str] = None,
-        include_children: bool = True
+        custom_fields: Optional[list[str] | str] = None
     ) -> dict[str, Any]:
         """
         Start an async export of library metadata.
@@ -256,12 +255,14 @@ class TautulliClient:
         Args:
             section_id: Library section ID
             file_format: Export format ('json', 'csv', 'xml', 'm3u')
-            metadata_level: Detail level for metadata (0=none, 1=basic, 2=full)
+            metadata_level: Detail level for metadata (0=custom/none, 1=basic, 2=full).
+                           For TV shows, use 0 with custom_fields to avoid exporting
+                           seasons/episodes which are bundled into levels 1+.
             media_info_level: Detail level for media info (0=none, 1=basic, 2=full)
             thumb_level: Detail level for thumbs (0=none, 1=basic, 2=full)
             art_level: Detail level for artwork (0=none, 1=basic, 2=full)
-            custom_fields: Optional list or comma-separated string of fields
-            include_children: Include child items (seasons/episodes for TV). Default True.
+            custom_fields: Optional list or comma-separated string of fields.
+                          When metadata_level=0, only these fields are exported.
 
         Returns:
             API response containing export_id for tracking
@@ -278,8 +279,7 @@ class TautulliClient:
             media_info_level=media_info_level,
             thumb_level=thumb_level,
             art_level=art_level,
-            custom_fields=fields,
-            include_children=1 if include_children else 0
+            custom_fields=fields
         )
 
     def get_exports_table(self, section_id: int) -> dict[str, Any]:

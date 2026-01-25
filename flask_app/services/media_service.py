@@ -382,6 +382,10 @@ class MediaService:
         # Use minimal custom_fields based on media type
         # Movies need: title, year (dedup key), addedAt, ratings
         # TV shows need: title (dedup key), addedAt, ratings - NO episode/season data
+        #
+        # IMPORTANT: For TV shows, use metadata_level=0 (Custom) to avoid pulling
+        # seasons/episodes which are bundled into levels 1+. Only custom_fields
+        # will be exported.
         if media_type == 'movie':
             custom_fields = [
                 'title',
@@ -392,9 +396,10 @@ class MediaService:
                 'audienceRating',
                 'audienceRatingImage',
             ]
-            include_children = True  # Movies don't have children anyway
+            metadata_level = 1  # Basic metadata for movies
         else:
             # TV shows - only show-level data, no year needed for dedup
+            # Use metadata_level=0 to avoid seasons/episodes tree
             custom_fields = [
                 'title',
                 'addedAt',
@@ -403,17 +408,16 @@ class MediaService:
                 'audienceRating',
                 'audienceRatingImage',
             ]
-            include_children = False  # Skip seasons and episodes
+            metadata_level = 0  # Custom only - avoids seasons/episodes
 
         export_response = client.export_metadata(
             section_id=section_id,
             file_format='json',
-            metadata_level=1,
+            metadata_level=metadata_level,
             media_info_level=0,
             thumb_level=0,
             art_level=0,
-            custom_fields=custom_fields,
-            include_children=include_children
+            custom_fields=custom_fields
         )
 
         if not export_response or 'response' not in export_response:
