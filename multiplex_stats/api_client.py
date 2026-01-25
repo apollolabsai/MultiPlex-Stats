@@ -238,3 +238,55 @@ class TautulliClient:
             API response containing library information
         """
         return self._make_request('get_libraries')
+
+    def export_metadata(
+        self,
+        section_id: int,
+        file_format: str = 'json',
+        metadata_level: int = 1,
+        media_info_level: int = 1
+    ) -> dict[str, Any]:
+        """
+        Start an async export of library metadata.
+
+        Args:
+            section_id: Library section ID
+            file_format: Export format ('json', 'csv', 'xml', 'm3u')
+            metadata_level: Detail level for metadata (0=none, 1=basic, 2=full)
+            media_info_level: Detail level for media info (0=none, 1=basic, 2=full)
+
+        Returns:
+            API response containing export_id for tracking
+        """
+        return self._make_request(
+            'export_metadata',
+            section_id=section_id,
+            file_format=file_format,
+            metadata_level=metadata_level,
+            media_info_level=media_info_level
+        )
+
+    def get_exports_table(self, section_id: int) -> dict[str, Any]:
+        """
+        Get status of all exports for a library section.
+
+        Args:
+            section_id: Library section ID
+
+        Returns:
+            API response containing list of exports with their status.
+            Each export has: export_id, complete (0/1), file_format, etc.
+        """
+        return self._make_request('get_exports_table', section_id=section_id)
+
+    def download_export(self, export_id: int) -> dict[str, Any]:
+        """
+        Download a completed export.
+
+        Args:
+            export_id: Export ID from export_metadata response
+
+        Returns:
+            JSON content of the export directly (for json format)
+        """
+        return self._make_request('download_export', export_id=export_id)

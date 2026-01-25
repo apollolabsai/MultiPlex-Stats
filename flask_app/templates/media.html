@@ -99,6 +99,7 @@
                     <th>Added</th>
                     <th>Codec</th>
                     <th>Resolution</th>
+                    <th>Rating</th>
                     <th>Size (GB)</th>
                     <th>Last Played</th>
                     <th>Plays</th>
@@ -124,6 +125,7 @@
                 <tr>
                     <th>Title</th>
                     <th>Added</th>
+                    <th>Rating</th>
                     <th>Size (GB)</th>
                     <th>Last Played</th>
                     <th>Plays</th>
@@ -254,6 +256,41 @@ $(document).ready(function() {
     var tvShowsData = {{ tv_shows | tojson }};
     var pollInterval = null;
 
+    // Rating display helper functions
+    function getRatingIcon(ratingImage) {
+        if (!ratingImage) return '';
+        if (ratingImage.startsWith('imdb://')) {
+            return '<svg class="rating-icon" viewBox="0 0 48 48" fill="#f5c518"><path d="M44 10H4c-1.1 0-2 .9-2 2v24c0 1.1.9 2 2 2h40c1.1 0 2-.9 2-2V12c0-1.1-.9-2-2-2zM9 32H6V16h3v16zm8 0h-2.5l-.3-7.5-.8 7.5h-1.8l-.9-7.5-.2 7.5H8V16h3.5l.6 6 .7-6H16v16zm7 0h-3.5V16H24c1.3 0 2.3.4 3 1.1.7.7 1 1.7 1 3v7.8c0 1.3-.3 2.3-1 3-.7.7-1.7 1.1-3 1.1zm9.8-2c0 1.1-.9 2-2 2h-.8c-1.1 0-2-.9-2-2v-12h-.8c-.6 0-1-.4-1-1v-.5c0-.3.1-.5.3-.7.2-.2.4-.3.7-.3h6c.3 0 .5.1.7.3.2.2.3.4.3.7v.5c0 .6-.4 1-1 1h-.8v7h1.4v-2c0-.6.4-1 1-1s1 .4 1 1v6zm8.2 0c0 1.1-.9 2-2 2h-.8c-1.1 0-2-.9-2-2v-12h-.8c-.6 0-1-.4-1-1v-.5c0-.3.1-.5.3-.7.2-.2.4-.3.7-.3h6c.3 0 .5.1.7.3.2.2.3.4.3.7v.5c0 .6-.4 1-1 1h-.8v12zm-14.5-11v9c0 .6.4 1 1 1h.5c.6 0 1-.4 1-1v-9c0-.6-.4-1-1-1h-.5c-.6 0-1 .4-1 1z"/></svg>';
+        }
+        if (ratingImage.startsWith('rottentomatoes://')) {
+            return '<svg class="rating-icon" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#fa320a"/><text x="24" y="30" text-anchor="middle" fill="#fff" font-size="16" font-weight="bold">RT</text></svg>';
+        }
+        if (ratingImage.startsWith('themoviedb://')) {
+            return '<svg class="rating-icon" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="#01d277"/><text x="24" y="30" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">TMDb</text></svg>';
+        }
+        return '';
+    }
+
+    function formatRatingCell(row) {
+        var html = '<div class="rating-cell">';
+        var hasRating = false;
+
+        if (row.rating && row.rating_image) {
+            var icon = getRatingIcon(row.rating_image);
+            html += '<div class="rating-item">' + icon;
+            html += '<span class="rating-value critic">' + row.rating + '</span></div>';
+            hasRating = true;
+        }
+        if (row.audience_rating && row.audience_rating_image) {
+            var icon = getRatingIcon(row.audience_rating_image);
+            html += '<div class="rating-item">' + icon;
+            html += '<span class="rating-value audience">' + row.audience_rating + '%</span></div>';
+            hasRating = true;
+        }
+        html += '</div>';
+        return hasRating ? html : '-';
+    }
+
     // Initialize Movies DataTable
     var moviesTable = $('#moviesTable').DataTable({
         data: moviesData,
@@ -265,6 +302,15 @@ $(document).ready(function() {
             { data: 'added_at' },
             { data: 'video_codec' },
             { data: 'video_resolution' },
+            {
+                data: 'rating',
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        return formatRatingCell(row);
+                    }
+                    return parseFloat(data) || 0;
+                }
+            },
             {
                 data: 'file_size',
                 render: function(data, type, row) {
@@ -298,6 +344,15 @@ $(document).ready(function() {
         columns: [
             { data: 'title' },
             { data: 'added_at' },
+            {
+                data: 'rating',
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        return formatRatingCell(row);
+                    }
+                    return parseFloat(data) || 0;
+                }
+            },
             {
                 data: 'file_size',
                 render: function(data) {

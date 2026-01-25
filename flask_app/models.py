@@ -211,6 +211,12 @@ class CachedMedia(db.Model):
     video_codec = db.Column(db.String(50), nullable=True)
     video_resolution = db.Column(db.String(50), nullable=True)
 
+    # Rating fields (from export_metadata)
+    rating = db.Column(db.String(20), nullable=True)  # e.g., "7.5"
+    rating_image = db.Column(db.String(100), nullable=True)  # e.g., "imdb://image.rating"
+    audience_rating = db.Column(db.String(20), nullable=True)  # e.g., "85"
+    audience_rating_image = db.Column(db.String(100), nullable=True)
+
     # Unique constraint on title + year + media_type
     __table_args__ = (
         db.UniqueConstraint('title', 'year', 'media_type', name='uq_media_title_year_type'),

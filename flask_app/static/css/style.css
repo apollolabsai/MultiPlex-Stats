@@ -807,6 +807,50 @@ footer {
     margin-top: 50px;
 }
 
+/* Rating Display Styles */
+.rating-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.rating-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9em;
+}
+
+.rating-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.rating-value {
+    color: #fff;
+    font-weight: 500;
+}
+
+.rating-value.critic {
+    color: #f5c518;  /* IMDb gold */
+}
+
+.rating-value.audience {
+    color: #fa320a;  /* RT red */
+}
+
+/* Indeterminate progress for export waits */
+.progress-bar-fill.indeterminate {
+    width: 30% !important;
+    animation: indeterminate 1.5s infinite linear;
+}
+
+@keyframes indeterminate {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(400%); }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     h1 {
