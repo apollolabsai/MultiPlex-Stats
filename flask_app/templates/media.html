@@ -80,6 +80,11 @@
     </button>
 </div>
 
+<div class="media-table-toggle" id="media-table-toggle" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
+    <button type="button" class="btn btn-secondary media-toggle-btn active" id="media-tab-movies">Movies</button>
+    <button type="button" class="btn btn-secondary media-toggle-btn" id="media-tab-tv">TV Shows</button>
+</div>
+
 <!-- Movies Section -->
 <div class="section" id="movies-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
     <h2 class="section-header">
@@ -345,6 +350,22 @@
     gap: 8px;
 }
 
+.media-table-toggle {
+    display: flex;
+    gap: 12px;
+    margin: 10px 0 20px;
+}
+
+.media-toggle-btn {
+    min-width: 120px;
+}
+
+.media-toggle-btn.active {
+    background: linear-gradient(135deg, #f18a3d 0%, #ed542c 100%);
+    border-color: #ed542c;
+    color: #fff;
+}
+
 .section-header {
     display: flex;
     align-items: center;
@@ -520,6 +541,35 @@ $(document).ready(function() {
         return hasRating ? html : '-';
     }
 
+    function setMediaTableView(view) {
+        var moviesSection = document.getElementById('movies-section');
+        var tvSection = document.getElementById('tv-section');
+        var moviesBtn = document.getElementById('media-tab-movies');
+        var tvBtn = document.getElementById('media-tab-tv');
+
+        if (!moviesSection || !tvSection || !moviesBtn || !tvBtn) {
+            return;
+        }
+
+        if (view === 'tv') {
+            moviesSection.style.display = 'none';
+            tvSection.style.display = 'block';
+            moviesBtn.classList.remove('active');
+            tvBtn.classList.add('active');
+            if (tvShowsTable) {
+                tvShowsTable.columns.adjust().draw(false);
+            }
+        } else {
+            moviesSection.style.display = 'block';
+            tvSection.style.display = 'none';
+            moviesBtn.classList.add('active');
+            tvBtn.classList.remove('active');
+            if (moviesTable) {
+                moviesTable.columns.adjust().draw(false);
+            }
+        }
+    }
+
     // Initialize Movies DataTable
     var moviesTable = $('#moviesTable').DataTable({
         data: moviesData,
@@ -607,6 +657,16 @@ $(document).ready(function() {
             emptyTable: "No TV shows loaded"
         }
     });
+
+    $('#media-tab-movies').on('click', function() {
+        setMediaTableView('movies');
+    });
+
+    $('#media-tab-tv').on('click', function() {
+        setMediaTableView('tv');
+    });
+
+    setMediaTableView('movies');
 
     function renderServerProgress(servers) {
         var container = document.getElementById('server-progress-container');
