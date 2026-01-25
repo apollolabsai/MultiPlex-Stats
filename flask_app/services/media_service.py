@@ -199,7 +199,7 @@ class MediaService:
             status.records_total += server_total
         db.session.commit()
 
-        # Process each library via export_metadata
+        # Process each library via export_metadata (for ratings)
         for lib in movie_libraries:
             self._fetch_library_via_export(
                 client, server_config.name, lib['id'], lib['name'],
@@ -210,6 +210,20 @@ class MediaService:
             self._fetch_library_via_export(
                 client, server_config.name, lib['id'], lib['name'],
                 'show', tv_data, is_primary
+            )
+
+        # Fetch play stats from get_library_media_info (for file_size, play_count, last_played)
+        status.current_step = f'Fetching play stats from {server_config.name}...'
+        db.session.commit()
+
+        for lib in movie_libraries:
+            self._fetch_library_play_stats(
+                client, lib['id'], 'movie', movies_data
+            )
+
+        for lib in tv_libraries:
+            self._fetch_library_play_stats(
+                client, lib['id'], 'show', tv_data
             )
 
     def _fetch_library_via_export(
@@ -302,7 +316,9 @@ class MediaService:
             # Check export status
             exports_response = client.get_exports_table(section_id)
             if exports_response and 'response' in exports_response:
-                exports = exports_response['response'].get('data', [])
+                # Data is doubly nested: response.data.data
+                outer_data = exports_response['response'].get('data', {})
+                exports = outer_data.get('data', []) if isinstance(outer_data, dict) else []
                 for export in exports:
                     if export.get('export_id') == export_id:
                         if export.get('complete') == 1:
@@ -370,17 +386,34 @@ class MediaService:
                 key = title
                 year = None
 
-            # Extract fields from export
-            file_size = int(record.get('file_size', 0) or 0)
-            play_count = int(record.get('play_count', 0) or 0)
-            added_at = int(record.get('added_at', 0) or 0)
-            last_played = int(record.get('last_played', 0) or 0)
-            video_codec = record.get('video_codec', '') or ''
-            video_resolution = record.get('video_resolution', '') or ''
+            # Extract fields from export (Tautulli uses camelCase)
+            # Media info is nested in 'media' array
+            media_info = record.get('media', [{}])[0] if record.get('media') else {}
+
+            # Parse addedAt from ISO format to unix timestamp
+            added_at_str = record.get('addedAt', '')
+            added_at = 0
+            if added_at_str:
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(added_at_str.replace('Z', '+00:00'))
+                    added_at = int(dt.timestamp())
+                except (ValueError, AttributeError):
+                    pass
+
+            # Export doesn't have file_size, play_count, last_played - those come from get_library_media_info
+            file_size = 0
+            play_count = 0
+            last_played = 0
+
+            video_codec = media_info.get('videoCodec', '') or ''
+            video_resolution = media_info.get('videoResolution', '') or ''
+
+            # Rating fields (camelCase in export)
             rating = record.get('rating')
-            rating_image = record.get('rating_image')
-            audience_rating = record.get('audience_rating')
-            audience_rating_image = record.get('audience_rating_image')
+            rating_image = record.get('ratingImage')
+            audience_rating = record.get('audienceRating')
+            audience_rating_image = record.get('audienceRatingImage')
 
             if key in data_dict:
                 existing = data_dict[key]
@@ -448,6 +481,78 @@ class MediaService:
             status.records_fetched += 1
 
         db.session.commit()
+
+    def _fetch_library_play_stats(
+        self,
+        client: TautulliClient,
+        section_id: int,
+        media_type: str,
+        data_dict: dict
+    ):
+        """
+        Fetch play stats from get_library_media_info and merge into data dict.
+
+        Args:
+            client: TautulliClient instance
+            section_id: Library section ID
+            media_type: 'movie' or 'show'
+            data_dict: Dict to merge play stats into
+        """
+        response = client.get_library_media_info(
+            section_id=section_id,
+            length=25000,
+            refresh=False
+        )
+
+        if not response or 'response' not in response:
+            return
+
+        # Data is doubly nested: response.data.data
+        outer_data = response['response'].get('data', {})
+        items = outer_data.get('data', []) if isinstance(outer_data, dict) else []
+
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+
+            title = item.get('title', '')
+            if not title:
+                continue
+
+            if media_type == 'movie':
+                year_str = item.get('year', '')
+                year = int(year_str) if year_str else None
+                key = (title, year)
+            else:
+                key = title
+
+            if key not in data_dict:
+                continue
+
+            # Get play stats
+            file_size = int(item.get('file_size', 0) or 0)
+            play_count = int(item.get('play_count', 0) or 0)
+            last_played = int(item.get('last_played', 0) or 0)
+            video_codec = item.get('video_codec', '') or ''
+            video_resolution = item.get('video_resolution', '') or ''
+
+            existing = data_dict[key]
+
+            # Aggregate file_size and play_count
+            existing['file_size'] += file_size
+            existing['play_count'] += play_count
+
+            # MAX for last_played
+            if last_played:
+                existing['last_played'] = max(existing['last_played'] or 0, last_played)
+
+            # Collect unique codecs, resolutions, file sizes for version display
+            if video_codec:
+                existing['video_codecs'].add(video_codec)
+            if video_resolution:
+                existing['video_resolutions'].add(video_resolution)
+            if file_size:
+                existing['file_sizes'].add(file_size)
 
     def _save_aggregated_media(self, movies_data: dict, tv_data: dict):
         """Save aggregated media data to the database."""
