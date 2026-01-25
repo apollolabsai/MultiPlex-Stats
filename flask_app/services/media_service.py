@@ -1,9 +1,11 @@
 """
 Service for syncing media library info from Tautulli to local database.
 """
+import threading
 from datetime import datetime, timezone
 from typing import Optional
 
+from flask import current_app
 from flask_app.models import db, MediaSyncStatus, CachedMedia
 from flask_app.services.config_service import ConfigService
 from multiplex_stats.api_client import TautulliClient
@@ -51,9 +53,12 @@ class MediaService:
         """Check if there's any media data in the database."""
         return CachedMedia.query.count() > 0
 
-    def start_media_load(self) -> bool:
+    def start_media_load(self, app=None) -> bool:
         """
-        Start loading media library data.
+        Start loading media library data in background thread.
+
+        Args:
+            app: Flask application instance for app context in thread
 
         Returns:
             True if load started, False if already running
@@ -79,21 +84,35 @@ class MediaService:
         CachedMedia.query.delete()
         db.session.commit()
 
-        try:
-            self._run_media_sync()
-            status.status = 'success'
-            status.completed_at = datetime.utcnow()
-            status.last_sync_date = datetime.utcnow()
-            status.current_step = 'Complete'
-            status.movies_count = CachedMedia.query.filter_by(media_type='movie').count()
-            status.tv_shows_count = CachedMedia.query.filter_by(media_type='show').count()
-        except Exception as e:
-            status.status = 'failed'
-            status.completed_at = datetime.utcnow()
-            status.error_message = str(e)
+        # Run sync in background thread
+        if app is None:
+            app = current_app._get_current_object()
 
-        db.session.commit()
+        thread = threading.Thread(target=self._run_media_sync_thread, args=(app,))
+        thread.daemon = True
+        thread.start()
+
         return True
+
+    def _run_media_sync_thread(self, app):
+        """Run media sync in a background thread with app context."""
+        with app.app_context():
+            try:
+                self._run_media_sync()
+                status = self.get_or_create_status()
+                status.status = 'success'
+                status.completed_at = datetime.utcnow()
+                status.last_sync_date = datetime.utcnow()
+                status.current_step = 'Complete'
+                status.movies_count = CachedMedia.query.filter_by(media_type='movie').count()
+                status.tv_shows_count = CachedMedia.query.filter_by(media_type='show').count()
+            except Exception as e:
+                status = self.get_or_create_status()
+                status.status = 'failed'
+                status.completed_at = datetime.utcnow()
+                status.error_message = str(e)
+
+            db.session.commit()
 
     def _run_media_sync(self):
         """Run the actual media sync operation."""
