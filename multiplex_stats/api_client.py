@@ -306,3 +306,41 @@ class TautulliClient:
             JSON content of the export directly (for json format)
         """
         return self._make_request('download_export', export_id=export_id)
+
+    def get_metadata(self, rating_key: int) -> dict[str, Any]:
+        """
+        Get metadata for a specific media item.
+
+        Args:
+            rating_key: The rating key of the media item
+
+        Returns:
+            API response containing detailed metadata including rating images
+        """
+        return self._make_request('get_metadata', rating_key=rating_key)
+
+    def pms_image_proxy(
+        self,
+        img: str,
+        width: int = 300,
+        height: int = 300,
+        fallback: str = 'poster'
+    ) -> bytes:
+        """
+        Get an image from the Plex Media Server via Tautulli proxy.
+
+        Args:
+            img: The image path/URL from Plex metadata
+            width: Desired width (default 300)
+            height: Desired height (default 300)
+            fallback: Fallback image type if not found
+
+        Returns:
+            Raw image bytes
+        """
+        url = f"{self.base_url}?apikey={self.api_key}&cmd=pms_image_proxy"
+        url += f"&img={img}&width={width}&height={height}&fallback={fallback}"
+
+        response = requests.get(url, verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.content
