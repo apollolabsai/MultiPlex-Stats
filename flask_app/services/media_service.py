@@ -313,8 +313,20 @@ class MediaService:
                             download_response = client.download_export(export_id)
                             if download_response:
                                 # Extract data from response wrapper
+                                # Tautulli wraps in {'response': {'data': [...]}}
                                 if isinstance(download_response, dict) and 'response' in download_response:
-                                    export_data = download_response['response'].get('data', [])
+                                    response_data = download_response['response']
+                                    if isinstance(response_data, dict):
+                                        export_data = response_data.get('data', [])
+                                    else:
+                                        export_data = response_data
+                                    # Handle case where data might be a string (JSON) that needs parsing
+                                    if isinstance(export_data, str):
+                                        import json
+                                        try:
+                                            export_data = json.loads(export_data)
+                                        except json.JSONDecodeError:
+                                            export_data = []
                                     return export_data if isinstance(export_data, list) else []
                                 elif isinstance(download_response, list):
                                     return download_response
@@ -343,6 +355,10 @@ class MediaService:
         status = self.get_or_create_status()
 
         for record in export_data:
+            # Skip non-dict records (handle unexpected data structures)
+            if not isinstance(record, dict):
+                continue
+
             title = record.get('title', '')
             if not title:
                 continue
