@@ -51,11 +51,11 @@
 <!-- Stats Grid -->
 <div class="stats-grid" id="stats-grid" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
     <div class="stat-card">
-        <div class="stat-number" id="stat-movies-count">{{ movies|length }}</div>
+        <div class="stat-number" id="stat-movies-count">{{ "{:,}".format(movies|length) }}</div>
         <div class="stat-label">Movies</div>
     </div>
     <div class="stat-card">
-        <div class="stat-number" id="stat-tv-count">{{ tv_shows|length }}</div>
+        <div class="stat-number" id="stat-tv-count">{{ "{:,}".format(tv_shows|length) }}</div>
         <div class="stat-label">TV Shows</div>
     </div>
     <div class="stat-card">
