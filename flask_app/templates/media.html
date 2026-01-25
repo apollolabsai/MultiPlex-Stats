@@ -61,6 +61,14 @@
         <div class="stat-number" id="stat-tv-count">{{ tv_shows|length }}</div>
         <div class="stat-label">TV Shows</div>
     </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ "{:,}".format(total_movie_plays) }}</div>
+        <div class="stat-label">Movie Plays</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ "{:,}".format(total_tv_plays) }}</div>
+        <div class="stat-label">TV Plays</div>
+    </div>
 </div>
 
 <!-- Reload button when data exists -->

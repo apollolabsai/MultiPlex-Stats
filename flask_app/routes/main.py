@@ -437,14 +437,20 @@ def media():
 
     movies = []
     tv_shows = []
+    total_movie_plays = 0
+    total_tv_plays = 0
     if sync_status['has_data']:
         movies = service.get_movies()
         tv_shows = service.get_tv_shows()
+        total_movie_plays = sum(movie.get('play_count', 0) for movie in movies)
+        total_tv_plays = sum(show.get('play_count', 0) for show in tv_shows)
 
     return render_template('media.html',
                           sync_status=sync_status,
                           movies=movies,
-                          tv_shows=tv_shows)
+                          tv_shows=tv_shows,
+                          total_movie_plays=total_movie_plays,
+                          total_tv_plays=total_tv_plays)
 
 
 @main_bp.route('/api/media/start-load', methods=['POST'])
