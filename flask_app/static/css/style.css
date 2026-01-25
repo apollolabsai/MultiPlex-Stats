@@ -840,6 +840,18 @@ footer {
     color: #fa320a;  /* RT red */
 }
 
+.rating-value.rating-good {
+    color: #4caf50;
+}
+
+.rating-value.rating-warn {
+    color: #e6b413;
+}
+
+.rating-value.rating-bad {
+    color: #f44336;
+}
+
 /* Indeterminate progress for export waits */
 .progress-bar-fill.indeterminate {
     width: 30% !important;

@@ -435,33 +435,63 @@ $(document).ready(function() {
         return value.replace(/\s*\|\s*/g, ' ').trim();
     }
 
-    function formatRatingValue(value, ratingImage) {
+    function getRatingMeta(value, ratingImage) {
         if (value === null || value === undefined || value === '') {
-            return '';
+            return null;
         }
         var num = parseFloat(value);
         if (isNaN(num)) {
-            return String(value);
+            return { display: String(value), className: '' };
         }
+
         var source = ratingImage ? ratingImage.toLowerCase() : '';
+        var type = 'score';
 
         if (source.startsWith('rottentomatoes://')) {
+            type = 'percent';
             if (num > 0 && num <= 1) {
                 num = num * 100;
             } else if (num > 1 && num <= 10) {
                 num = num * 10;
             }
-            return Math.round(num) + '%';
+        } else if (
+            source.startsWith('imdb://') ||
+            source.startsWith('themoviedb://') ||
+            source.startsWith('thetvdb://') ||
+            source.startsWith('tvdb://')
+        ) {
+            type = 'score';
+        } else if (num > 10) {
+            type = 'percent';
         }
 
-        if (source.startsWith('imdb://') || source.startsWith('themoviedb://')) {
-            return num.toFixed(1);
+        var display = type === 'percent' ? Math.round(num) + '%' : num.toFixed(1);
+        var className = '';
+
+        if (type === 'percent') {
+            if (num > 69) {
+                className = 'rating-good';
+            } else if (num >= 60) {
+                className = 'rating-warn';
+            } else {
+                className = 'rating-bad';
+            }
+        } else {
+            if (num > 6.9) {
+                className = 'rating-good';
+            } else if (num >= 6.0) {
+                className = 'rating-warn';
+            } else {
+                className = 'rating-bad';
+            }
         }
 
-        if (num > 10) {
-            return Math.round(num) + '%';
-        }
-        return num.toFixed(1);
+        return { display: display, className: className };
+    }
+
+    function formatRatingValue(value, ratingImage) {
+        var meta = getRatingMeta(value, ratingImage);
+        return meta ? meta.display : '';
     }
 
     function formatRatingCell(row) {
@@ -470,16 +500,20 @@ $(document).ready(function() {
 
         if (row.rating && row.rating_image) {
             var icon = getRatingIcon(row.rating_image);
-            var value = formatRatingValue(row.rating, row.rating_image);
+            var meta = getRatingMeta(row.rating, row.rating_image);
+            var value = meta ? meta.display : '';
+            var ratingClass = meta ? meta.className : '';
             html += '<div class="rating-item">' + icon;
-            html += '<span class="rating-value critic">' + value + '</span></div>';
+            html += '<span class="rating-value critic ' + ratingClass + '">' + value + '</span></div>';
             hasRating = true;
         }
         if (row.audience_rating && row.audience_rating_image) {
             var icon = getRatingIcon(row.audience_rating_image);
-            var value = formatRatingValue(row.audience_rating, row.audience_rating_image);
+            var meta = getRatingMeta(row.audience_rating, row.audience_rating_image);
+            var value = meta ? meta.display : '';
+            var ratingClass = meta ? meta.className : '';
             html += '<div class="rating-item">' + icon;
-            html += '<span class="rating-value audience">' + value + '</span></div>';
+            html += '<span class="rating-value audience ' + ratingClass + '">' + value + '</span></div>';
             hasRating = true;
         }
         html += '</div>';
