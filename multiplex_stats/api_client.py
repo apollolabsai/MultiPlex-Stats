@@ -244,7 +244,10 @@ class TautulliClient:
         section_id: int,
         file_format: str = 'json',
         metadata_level: int = 1,
-        media_info_level: int = 1
+        media_info_level: int = 1,
+        thumb_level: int = 0,
+        art_level: int = 0,
+        custom_fields: Optional[list[str] | str] = None
     ) -> dict[str, Any]:
         """
         Start an async export of library metadata.
@@ -254,16 +257,26 @@ class TautulliClient:
             file_format: Export format ('json', 'csv', 'xml', 'm3u')
             metadata_level: Detail level for metadata (0=none, 1=basic, 2=full)
             media_info_level: Detail level for media info (0=none, 1=basic, 2=full)
+            thumb_level: Detail level for thumbs (0=none, 1=basic, 2=full)
+            art_level: Detail level for artwork (0=none, 1=basic, 2=full)
+            custom_fields: Optional list or comma-separated string of fields
 
         Returns:
             API response containing export_id for tracking
         """
+        fields = custom_fields
+        if isinstance(custom_fields, list):
+            fields = ','.join(custom_fields)
+
         return self._make_request(
             'export_metadata',
             section_id=section_id,
             file_format=file_format,
             metadata_level=metadata_level,
-            media_info_level=media_info_level
+            media_info_level=media_info_level,
+            thumb_level=thumb_level,
+            art_level=art_level,
+            custom_fields=fields
         )
 
     def get_exports_table(self, section_id: int) -> dict[str, Any]:

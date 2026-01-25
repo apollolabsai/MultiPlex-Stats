@@ -383,7 +383,18 @@ class MediaService:
             section_id=section_id,
             file_format='json',
             metadata_level=1,
-            media_info_level=1
+            media_info_level=0,
+            thumb_level=0,
+            art_level=0,
+            custom_fields=[
+                'title',
+                'year',
+                'addedAt',
+                'rating',
+                'ratingImage',
+                'audienceRating',
+                'audienceRatingImage',
+            ]
         )
 
         if not export_response or 'response' not in export_response:
