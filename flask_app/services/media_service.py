@@ -379,14 +379,11 @@ class MediaService:
             status.server_b_step = f'Starting export for {section_name}...'
         db.session.commit()
 
-        export_response = client.export_metadata(
-            section_id=section_id,
-            file_format='json',
-            metadata_level=1,
-            media_info_level=0,
-            thumb_level=0,
-            art_level=0,
-            custom_fields=[
+        # Use minimal custom_fields based on media type
+        # Movies need: title, year (dedup key), addedAt, ratings
+        # TV shows need: title (dedup key), addedAt, ratings - NO episode/season data
+        if media_type == 'movie':
+            custom_fields = [
                 'title',
                 'year',
                 'addedAt',
@@ -395,6 +392,28 @@ class MediaService:
                 'audienceRating',
                 'audienceRatingImage',
             ]
+            include_children = True  # Movies don't have children anyway
+        else:
+            # TV shows - only show-level data, no year needed for dedup
+            custom_fields = [
+                'title',
+                'addedAt',
+                'rating',
+                'ratingImage',
+                'audienceRating',
+                'audienceRatingImage',
+            ]
+            include_children = False  # Skip seasons and episodes
+
+        export_response = client.export_metadata(
+            section_id=section_id,
+            file_format='json',
+            metadata_level=1,
+            media_info_level=0,
+            thumb_level=0,
+            art_level=0,
+            custom_fields=custom_fields,
+            include_children=include_children
         )
 
         if not export_response or 'response' not in export_response:
@@ -450,7 +469,18 @@ class MediaService:
                 exports = outer_data.get('data', []) if isinstance(outer_data, dict) else []
                 for export in exports:
                     if export.get('export_id') == export_id:
-                        if export.get('complete') == 1:
+                        complete_status = export.get('complete')
+
+                        # complete=-1 means export failed on Tautulli's side
+                        if complete_status == -1:
+                            exported_items = export.get('exported_items', 0)
+                            total_items = export.get('total_items', 0)
+                            raise ValueError(
+                                f"Export failed for {section_name} on Tautulli's side "
+                                f"(processed {exported_items}/{total_items} items)"
+                            )
+
+                        if complete_status == 1:
                             # Download completed export
                             status = self.get_or_create_status()
                             if server_key == 'a':

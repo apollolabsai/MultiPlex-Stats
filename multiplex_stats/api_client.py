@@ -247,7 +247,8 @@ class TautulliClient:
         media_info_level: int = 1,
         thumb_level: int = 0,
         art_level: int = 0,
-        custom_fields: Optional[list[str] | str] = None
+        custom_fields: Optional[list[str] | str] = None,
+        include_children: bool = True
     ) -> dict[str, Any]:
         """
         Start an async export of library metadata.
@@ -260,6 +261,7 @@ class TautulliClient:
             thumb_level: Detail level for thumbs (0=none, 1=basic, 2=full)
             art_level: Detail level for artwork (0=none, 1=basic, 2=full)
             custom_fields: Optional list or comma-separated string of fields
+            include_children: Include child items (seasons/episodes for TV). Default True.
 
         Returns:
             API response containing export_id for tracking
@@ -276,7 +278,8 @@ class TautulliClient:
             media_info_level=media_info_level,
             thumb_level=thumb_level,
             art_level=art_level,
-            custom_fields=fields
+            custom_fields=fields,
+            include_children=1 if include_children else 0
         )
 
     def get_exports_table(self, section_id: int) -> dict[str, Any]:
