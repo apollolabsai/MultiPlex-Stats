@@ -255,37 +255,34 @@
     gap: 6px;
 }
 
-.resolution-badge {
-    font-size: 0.75em;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-weight: 600;
-    letter-spacing: 0.2px;
-}
-
 .resolution-badge.res-4k {
-    background: #ed542c;
-    color: #fff;
+    background: rgba(237, 84, 44, 0.2);
+    color: #ed542c;
+    border: 1px solid rgba(237, 84, 44, 0.4);
 }
 
 .resolution-badge.res-1080 {
-    background: #4caf50;
-    color: #fff;
+    background: rgba(76, 175, 80, 0.2);
+    color: #4caf50;
+    border: 1px solid rgba(76, 175, 80, 0.4);
 }
 
 .resolution-badge.res-720 {
-    background: #e6b413;
-    color: #1a1a1a;
+    background: rgba(230, 180, 19, 0.2);
+    color: #e6b413;
+    border: 1px solid rgba(230, 180, 19, 0.4);
 }
 
 .resolution-badge.res-sd {
-    background: #f44336;
-    color: #fff;
+    background: rgba(244, 67, 54, 0.2);
+    color: #f44336;
+    border: 1px solid rgba(244, 67, 54, 0.4);
 }
 
 .resolution-badge.res-other {
     background: rgba(255, 255, 255, 0.15);
     color: #ddd;
+    border: 1px solid rgba(255, 255, 255, 0.25);
 }
 
 .server-step {
@@ -425,7 +422,7 @@ $(document).ready(function() {
             if (!normalized.label) {
                 return;
             }
-            html += '<span class="resolution-badge ' + normalized.className + '">' + normalized.label + '</span>';
+            html += '<span class="quality-badge resolution-badge ' + normalized.className + '">' + normalized.label + '</span>';
         });
         html += '</div>';
         return html;
@@ -451,6 +448,8 @@ $(document).ready(function() {
         if (source.startsWith('rottentomatoes://')) {
             if (num > 0 && num <= 1) {
                 num = num * 100;
+            } else if (num > 1 && num <= 10) {
+                num = num * 10;
             }
             return Math.round(num) + '%';
         }
