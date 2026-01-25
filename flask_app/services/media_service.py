@@ -140,34 +140,37 @@ class MediaService:
         status = self.get_or_create_status()
         client = TautulliClient(server_config)
 
-        # First, get libraries to find movie and TV section IDs
+        # First, get libraries to find ALL movie and TV section IDs
         libraries_response = client.get_libraries()
         if not libraries_response or 'response' not in libraries_response:
             raise ValueError(f"Failed to get libraries from {server_config.name}")
 
         libraries = libraries_response['response'].get('data', [])
 
-        movie_section_id = None
-        tv_section_id = None
+        # Collect ALL movie and TV libraries (not just the first one)
+        movie_libraries = []
+        tv_libraries = []
 
         for lib in libraries:
             section_type = lib.get('section_type', '')
+            section_id = lib.get('section_id')
+            section_name = lib.get('section_name', f'Library {section_id}')
             if section_type == 'movie':
-                movie_section_id = lib.get('section_id')
+                movie_libraries.append({'id': section_id, 'name': section_name})
             elif section_type == 'show':
-                tv_section_id = lib.get('section_id')
+                tv_libraries.append({'id': section_id, 'name': section_name})
 
-        # Fetch movies
-        if movie_section_id:
-            status.current_step = f'Fetching movies from {server_config.name}...'
+        # Fetch movies from ALL movie libraries
+        for lib in movie_libraries:
+            status.current_step = f'Fetching movies from {server_config.name} - {lib["name"]}...'
             db.session.commit()
-            self._fetch_library_media(client, movie_section_id, 'movie', movies_data, server_config.name)
+            self._fetch_library_media(client, lib['id'], 'movie', movies_data, server_config.name)
 
-        # Fetch TV shows
-        if tv_section_id:
-            status.current_step = f'Fetching TV shows from {server_config.name}...'
+        # Fetch TV shows from ALL TV libraries
+        for lib in tv_libraries:
+            status.current_step = f'Fetching TV shows from {server_config.name} - {lib["name"]}...'
             db.session.commit()
-            self._fetch_library_media(client, tv_section_id, 'show', tv_data, server_config.name)
+            self._fetch_library_media(client, lib['id'], 'show', tv_data, server_config.name)
 
     def _fetch_library_media(
         self,
@@ -178,7 +181,7 @@ class MediaService:
         server_name: str
     ):
         """
-        Fetch media info for a library section.
+        Fetch media info for a library section with pagination.
 
         Args:
             client: TautulliClient instance
@@ -188,83 +191,100 @@ class MediaService:
             server_name: Server name for progress updates
         """
         status = self.get_or_create_status()
+        page_size = 5000
+        start = 0
+        total_records = None
 
-        response = client.get_library_media_info(
-            section_id=section_id,
-            start=0,
-            length=50000  # Get all at once
-        )
+        while True:
+            response = client.get_library_media_info(
+                section_id=section_id,
+                start=start,
+                length=page_size
+            )
 
-        if not response or 'response' not in response:
-            return
+            if not response or 'response' not in response:
+                break
 
-        data = response['response'].get('data', {})
-        records = data.get('data', [])
+            data = response['response'].get('data', {})
+            records = data.get('data', [])
 
-        for record in records:
-            if media_type == 'movie':
-                title = record.get('title', '')
-                year = record.get('year')
-                key = (title, year)
+            # Get total on first request
+            if total_records is None:
+                total_records = data.get('recordsTotal', 0)
 
-                file_size = int(record.get('file_size', 0) or 0)
-                play_count = int(record.get('play_count', 0) or 0)
-                added_at = int(record.get('added_at', 0) or 0)
-                last_played = int(record.get('last_played', 0) or 0)
-                video_codec = record.get('video_codec', '')
-                video_resolution = record.get('video_resolution', '')
+            if not records:
+                break
 
-                if key in data_dict:
-                    # Aggregate: SUM file_size and play_count, MAX on dates
-                    data_dict[key]['file_size'] += file_size
-                    data_dict[key]['play_count'] += play_count
-                    data_dict[key]['added_at'] = max(data_dict[key]['added_at'], added_at)
-                    if last_played:
-                        data_dict[key]['last_played'] = max(data_dict[key]['last_played'], last_played)
-                    # Keep first non-empty codec/resolution
-                    if not data_dict[key]['video_codec'] and video_codec:
-                        data_dict[key]['video_codec'] = video_codec
-                    if not data_dict[key]['video_resolution'] and video_resolution:
-                        data_dict[key]['video_resolution'] = video_resolution
+            # Process records from this page
+            for record in records:
+                if media_type == 'movie':
+                    title = record.get('title', '')
+                    year = record.get('year')
+                    key = (title, year)
+
+                    file_size = int(record.get('file_size', 0) or 0)
+                    play_count = int(record.get('play_count', 0) or 0)
+                    added_at = int(record.get('added_at', 0) or 0)
+                    last_played = int(record.get('last_played', 0) or 0)
+                    video_codec = record.get('video_codec', '')
+                    video_resolution = record.get('video_resolution', '')
+
+                    if key in data_dict:
+                        # Aggregate: SUM file_size and play_count, MAX on dates
+                        data_dict[key]['file_size'] += file_size
+                        data_dict[key]['play_count'] += play_count
+                        data_dict[key]['added_at'] = max(data_dict[key]['added_at'], added_at)
+                        if last_played:
+                            data_dict[key]['last_played'] = max(data_dict[key]['last_played'], last_played)
+                        # Keep first non-empty codec/resolution
+                        if not data_dict[key]['video_codec'] and video_codec:
+                            data_dict[key]['video_codec'] = video_codec
+                        if not data_dict[key]['video_resolution'] and video_resolution:
+                            data_dict[key]['video_resolution'] = video_resolution
+                    else:
+                        data_dict[key] = {
+                            'title': title,
+                            'year': year,
+                            'file_size': file_size,
+                            'play_count': play_count,
+                            'added_at': added_at,
+                            'last_played': last_played,
+                            'video_codec': video_codec,
+                            'video_resolution': video_resolution
+                        }
                 else:
-                    data_dict[key] = {
-                        'title': title,
-                        'year': year,
-                        'file_size': file_size,
-                        'play_count': play_count,
-                        'added_at': added_at,
-                        'last_played': last_played,
-                        'video_codec': video_codec,
-                        'video_resolution': video_resolution
-                    }
-            else:
-                # TV show - aggregate by title only
-                title = record.get('title', '')
-                key = title
+                    # TV show - aggregate by title only
+                    title = record.get('title', '')
+                    key = title
 
-                file_size = int(record.get('file_size', 0) or 0)
-                play_count = int(record.get('play_count', 0) or 0)
-                added_at = int(record.get('added_at', 0) or 0)
-                last_played = int(record.get('last_played', 0) or 0)
+                    file_size = int(record.get('file_size', 0) or 0)
+                    play_count = int(record.get('play_count', 0) or 0)
+                    added_at = int(record.get('added_at', 0) or 0)
+                    last_played = int(record.get('last_played', 0) or 0)
 
-                if key in data_dict:
-                    data_dict[key]['file_size'] += file_size
-                    data_dict[key]['play_count'] += play_count
-                    data_dict[key]['added_at'] = max(data_dict[key]['added_at'], added_at)
-                    if last_played:
-                        data_dict[key]['last_played'] = max(data_dict[key]['last_played'], last_played)
-                else:
-                    data_dict[key] = {
-                        'title': title,
-                        'file_size': file_size,
-                        'play_count': play_count,
-                        'added_at': added_at,
-                        'last_played': last_played
-                    }
+                    if key in data_dict:
+                        data_dict[key]['file_size'] += file_size
+                        data_dict[key]['play_count'] += play_count
+                        data_dict[key]['added_at'] = max(data_dict[key]['added_at'], added_at)
+                        if last_played:
+                            data_dict[key]['last_played'] = max(data_dict[key]['last_played'], last_played)
+                    else:
+                        data_dict[key] = {
+                            'title': title,
+                            'file_size': file_size,
+                            'play_count': play_count,
+                            'added_at': added_at,
+                            'last_played': last_played
+                        }
 
-            status.records_fetched += 1
+                status.records_fetched += 1
 
-        db.session.commit()
+            db.session.commit()
+
+            # Check if we've fetched all records
+            start += len(records)
+            if start >= total_records:
+                break
 
     def _save_aggregated_media(self, movies_data: dict, tv_data: dict):
         """Save aggregated media data to the database."""
