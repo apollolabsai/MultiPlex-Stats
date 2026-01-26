@@ -116,6 +116,15 @@ def dashboard():
                           servers=servers)
 
 
+@main_bp.route('/api/current-activity')
+def api_current_activity():
+    """Return current streaming activity table markup."""
+    service = AnalyticsService()
+    current_activity = service.get_current_activity()
+    return render_template('partials/current_activity.html',
+                          current_activity=current_activity)
+
+
 @main_bp.route('/api/viewing-history')
 def api_viewing_history():
     """

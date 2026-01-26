@@ -113,147 +113,18 @@
         </svg>
         Currently Streaming
     </h2>
+    <div class="current-activity-controls">
+        <label class="current-activity-refresh">
+            Refresh every
+            <input type="number" id="current-activity-refresh-minutes" class="current-activity-refresh-input" min="1" step="1" value="5">
+            Minutes
+        </label>
+        <div class="current-activity-last-updated" id="current-activity-last-updated">Last Updated: just now</div>
+    </div>
     <div class="table-container" style="overflow: visible;">
-        {% if current_activity and current_activity|length > 0 %}
-        <table class="display" style="width:100%">
-            <thead>
-                <tr>
-                    <th style="color:#f18a3d; text-align:left">#</th>
-                    <th style="color:#f18a3d; text-align:left">Server</th>
-                    <th style="color:#f18a3d; text-align:left">User</th>
-                    <th style="color:#f18a3d; text-align:left">Content</th>
-                    <th style="color:#f18a3d; text-align:left">Status</th>
-                    <th style="color:#f18a3d; text-align:left">Progress</th>
-                    <th style="color:#f18a3d; text-align:left">Quality</th>
-                    <th style="color:#f18a3d; text-align:left">Bandwidth</th>
-                    <th style="color:#f18a3d; text-align:left">Platform</th>
-                    <th style="color:#f18a3d; text-align:left">Location</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for stream in current_activity %}
-                <tr>
-                    <td>{{ loop.index }}</td>
-
-                    <!-- Server with badge -->
-                    <td>
-                        <span class="server-badge {{ stream.server_order }}">
-                            {{ stream.server }}
-                        </span>
-                    </td>
-
-                    <!-- User -->
-                    <td>{{ stream.user }}</td>
-
-                    <!-- Content (Title with Icon and Subtitle) -->
-                    <td>
-                        {% if stream.poster_url %}
-                            <div class="title-with-preview">
-                                <div class="content-cell">
-                                    <div>
-                                        {% if stream.media_type|lower in ['movie'] %}
-                                            <svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24">
-                                                <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
-                                            </svg>
-                                        {% else %}
-                                            <svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24">
-                                                <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
-                                            </svg>
-                                        {% endif %}
-                                        <span class="content-title">{{ stream.title }}</span>
-                                    </div>
-                                    {% if stream.subtitle %}
-                                        <div class="content-subtitle">{{ stream.subtitle }}</div>
-                                    {% endif %}
-                                </div>
-                                <div class="poster-preview" data-poster-url="http://{{ stream.poster_url }}">
-                                </div>
-                            </div>
-                        {% else %}
-                            <div class="content-cell">
-                                <div>
-                                    {% if stream.media_type|lower in ['movie'] %}
-                                        <svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24">
-                                            <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
-                                        </svg>
-                                    {% else %}
-                                        <svg class="media-icon" fill="#ed542b" viewBox="0 0 24 24">
-                                            <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
-                                        </svg>
-                                    {% endif %}
-                                    <span class="content-title">{{ stream.title }}</span>
-                                </div>
-                                {% if stream.subtitle %}
-                                    <div class="content-subtitle">{{ stream.subtitle }}</div>
-                                {% endif %}
-                            </div>
-                        {% endif %}
-                    </td>
-
-                    <!-- Status -->
-                    <td>
-                        {% if stream.state == 'playing' %}
-                            <span style="color: #4CAF50;">● Playing</span>
-                        {% elif stream.state == 'paused' %}
-                            <span style="color: #FFC107;">⏸ Paused</span>
-                        {% else %}
-                            {{ stream.state }}
-                        {% endif %}
-                    </td>
-
-                    <!-- Progress -->
-                    <td>
-                        <div class="progress-bar-container">
-                            <div class="progress-bar-fill orange" style="width: {{ stream.progress_percent }}%;"></div>
-                        </div>
-                        <div class="progress-text">{{ stream.progress_percent }}%</div>
-                    </td>
-
-                    <!-- Quality -->
-                    <td>
-                        {% if stream.quality %}
-                            {% if stream.quality.startswith('Direct Play') %}
-                                <span class="quality-badge direct-play">{{ stream.quality }}</span>
-                            {% elif stream.quality.startswith('Transcode') %}
-                                <span class="quality-badge transcode">{{ stream.quality }}</span>
-                            {% elif stream.quality.startswith('Direct Stream') %}
-                                <span class="quality-badge direct-stream">{{ stream.quality }}</span>
-                            {% else %}
-                                <span class="quality-badge">{{ stream.quality }}</span>
-                            {% endif %}
-                        {% else %}
-                            <span style="color: #888;">N/A</span>
-                        {% endif %}
-                    </td>
-
-                    <!-- Bandwidth -->
-                    <td>
-                        {% if stream.bandwidth_mbps %}
-                            {{ stream.bandwidth_mbps }} Mbps
-                        {% else %}
-                            <span style="color: #888;">-</span>
-                        {% endif %}
-                    </td>
-
-                    <!-- Platform with Product -->
-                    <td>
-                        <div class="content-cell">
-                            <div class="platform-name">{{ stream.platform }}</div>
-                            {% if stream.product %}
-                                <div class="platform-product">{{ stream.product }}</div>
-                            {% endif %}
-                        </div>
-                    </td>
-
-                    <!-- Location -->
-                    <td>{{ stream.location }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="info-message">No active streams at the moment. Check back later!</p>
-        {% endif %}
+        <div id="current-activity-container">
+            {% include 'partials/current_activity.html' %}
+        </div>
     </div>
 </div>
 
@@ -493,6 +364,41 @@
     border-radius: 4px;
 }
 
+/* Current activity controls */
+.current-activity-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.current-activity-refresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #bdbdbd;
+    font-size: 0.95em;
+}
+
+.current-activity-refresh-input {
+    width: 60px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.3);
+    color: #f18a3d;
+    font-weight: 600;
+    font-size: 0.95em;
+    text-align: center;
+}
+
+.current-activity-last-updated {
+    color: #888;
+    font-size: 0.9em;
+}
+
 /* Chart range controls */
 .chart-controls {
     display: flex;
@@ -605,38 +511,135 @@
 
 <script>
 $(document).ready(function() {
-    // Preload poster images in background after page loads
-    $('.poster-preview').each(function() {
-        var $preview = $(this);
-        var url = $preview.data('poster-url');
-        if (url) {
-            var img = new Image();
-            img.onload = function() {
-                // Image is now cached, add it to the DOM
-                $preview.append($('<img>').attr('src', url).attr('alt', 'Poster'));
-                $preview.addClass('loaded');
-            };
-            img.src = url; // Start loading in background
-        }
-    });
+    var refreshTimer = null;
+    var lastUpdatedTimer = null;
+    var lastActivityUpdateAt = Date.now();
+    var posterPreviewBound = false;
 
-    // Position poster preview on hover (only show if loaded)
-    $('.title-with-preview').on('mouseenter', function(e) {
-        var $preview = $(this).find('.poster-preview');
-        if (!$preview.hasClass('loaded')) return;
-
-        var rect = this.getBoundingClientRect();
-
-        // Position below the title
-        $preview.css({
-            'left': rect.left + 'px',
-            'top': (rect.bottom + 5) + 'px'
+    function preloadPosterPreviews(scope) {
+        var $scope = scope ? $(scope) : $(document);
+        $scope.find('.poster-preview').each(function() {
+            var $preview = $(this);
+            if ($preview.hasClass('loaded') || $preview.find('img').length) {
+                return;
+            }
+            var url = $preview.data('poster-url');
+            if (url) {
+                var img = new Image();
+                img.onload = function() {
+                    $preview.append($('<img>').attr('src', url).attr('alt', 'Poster'));
+                    $preview.addClass('loaded');
+                };
+                img.src = url;
+            }
         });
+    }
 
-        $preview.show();
-    }).on('mouseleave', function() {
-        $(this).find('.poster-preview').hide();
-    });
+    function bindPosterPreviewHandlers() {
+        if (posterPreviewBound) {
+            return;
+        }
+        posterPreviewBound = true;
+
+        $(document).on('mouseenter', '.title-with-preview', function() {
+            var $preview = $(this).find('.poster-preview');
+            if (!$preview.hasClass('loaded')) return;
+
+            var rect = this.getBoundingClientRect();
+            $preview.css({
+                'left': rect.left + 'px',
+                'top': (rect.bottom + 5) + 'px'
+            });
+            $preview.show();
+        }).on('mouseleave', '.title-with-preview', function() {
+            $(this).find('.poster-preview').hide();
+        });
+    }
+
+    function formatElapsedTime(ms) {
+        var seconds = Math.floor(ms / 1000);
+        if (seconds < 60) {
+            return 'Less than 1 minute ago';
+        }
+
+        var minutes = seconds / 60;
+        if (minutes < 60) {
+            var roundedMinutes = Math.round(minutes);
+            return roundedMinutes === 1 ? '1 minute ago' : roundedMinutes + ' minutes ago';
+        }
+
+        var hours = minutes / 60;
+        if (hours < 24) {
+            var roundedHours = Math.round(hours * 2) / 2;
+            var hoursLabel = (roundedHours % 1 === 0) ? roundedHours.toFixed(0) : roundedHours.toFixed(1);
+            return roundedHours === 1 ? hoursLabel + ' hour ago' : hoursLabel + ' hours ago';
+        }
+
+        var days = Math.round(hours / 24);
+        return days === 1 ? '1 day ago' : days + ' days ago';
+    }
+
+    function updateLastUpdatedLabel() {
+        var label = document.getElementById('current-activity-last-updated');
+        if (!label || !lastActivityUpdateAt) {
+            return;
+        }
+        var elapsed = Date.now() - lastActivityUpdateAt;
+        label.textContent = 'Last Updated: ' + formatElapsedTime(elapsed);
+    }
+
+    function refreshCurrentActivity() {
+        var container = document.getElementById('current-activity-container');
+        if (!container) {
+            return;
+        }
+
+        fetch('{{ url_for("main.api_current_activity") }}', { cache: 'no-store' })
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Failed to refresh current activity');
+                }
+                return response.text();
+            })
+            .then(function(html) {
+                container.innerHTML = html;
+                preloadPosterPreviews(container);
+                lastActivityUpdateAt = Date.now();
+                updateLastUpdatedLabel();
+            })
+            .catch(function(error) {
+                console.error(error);
+            });
+    }
+
+    function setRefreshInterval(minutes) {
+        if (refreshTimer) {
+            clearInterval(refreshTimer);
+        }
+
+        if (!minutes || minutes < 1) {
+            return;
+        }
+
+        refreshTimer = setInterval(refreshCurrentActivity, minutes * 60 * 1000);
+    }
+
+    bindPosterPreviewHandlers();
+    preloadPosterPreviews(document);
+    updateLastUpdatedLabel();
+
+    lastUpdatedTimer = setInterval(updateLastUpdatedLabel, 30000);
+
+    var refreshInput = document.getElementById('current-activity-refresh-minutes');
+    if (refreshInput) {
+        var initialMinutes = parseInt(refreshInput.value, 10);
+        setRefreshInterval(initialMinutes);
+
+        refreshInput.addEventListener('change', function() {
+            var minutes = parseInt(refreshInput.value, 10);
+            setRefreshInterval(minutes);
+        });
+    }
 
     // Initial chart data from server (rendered on page load)
     var chartsJson = {{ charts_json | tojson | safe }};
