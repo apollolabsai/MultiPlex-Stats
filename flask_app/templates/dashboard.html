@@ -3,6 +3,92 @@
 {% block title %}Dashboard - MultiPlex Stats{% endblock %}
 
 {% block content %}
+{% if not has_data %}
+<header>
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="MultiPlex Stats" style="max-width: 400px; height: auto; margin-bottom: 10px;">
+    <div class="subtitle">Web Interface for Tautulli Analytics</div>
+</header>
+
+{% if not has_config %}
+<div class="welcome-card">
+    <h2>Welcome to MultiPlex Stats!</h2>
+    <p>Get started by configuring your Tautulli server connection.</p>
+    <a href="{{ url_for('settings.index') }}" class="btn btn-primary btn-large">
+        <img class="button-icon" src="{{ url_for('static', filename='gear.png') }}" alt="" width="20" height="20">
+        Go to Settings
+    </a>
+</div>
+{% else %}
+<div class="action-card">
+    <h2>Run Analytics</h2>
+    <p>Execute analytics on your configured Tautulli servers.</p>
+
+    {% if servers %}
+    <div class="server-status">
+        <h3>Configured Servers:</h3>
+        <ul>
+            {% for server in servers %}
+            <li>{{ server.name }} ({{ server.ip_address }})</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('main.run_analytics') }}">
+        <button type="submit" class="btn btn-success btn-large">
+            <svg class="button-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+            Run Analytics
+        </button>
+    </form>
+</div>
+
+{% if last_run %}
+<div class="status-card">
+    <h2>Last Run Status</h2>
+    <div class="status-info">
+        <p><strong>Status:</strong>
+            {% if last_run.status == 'success' %}
+                <span class="badge badge-success">✓ Success</span>
+            {% elif last_run.status == 'failed' %}
+                <span class="badge badge-error">✗ Failed</span>
+            {% else %}
+                <span class="badge badge-info">⟳ Running</span>
+            {% endif %}
+        </p>
+        <p><strong>Started ({{ timezone_name }}):</strong> {{ last_run.started_at | datetime_to_local }}</p>
+        {% if last_run.completed_at %}
+        <p><strong>Completed ({{ timezone_name }}):</strong> {{ last_run.completed_at | datetime_to_local }}</p>
+        {% endif %}
+
+        {% if last_run.status == 'success' %}
+        <p><strong>Total Plays:</strong> {{ "{:,}".format(last_run.total_plays) }}</p>
+        <p><strong>Active Users:</strong> {{ last_run.total_users }}</p>
+        {% endif %}
+
+        {% if last_run.status == 'failed' and last_run.error_message %}
+        <div class="error-message">
+            <strong>Error:</strong> {{ last_run.error_message }}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endif %}
+
+<div class="info-section">
+    <h2>About MultiPlex Stats</h2>
+    <p>MultiPlex Stats provides comprehensive analytics for your Plex Media Server using Tautulli data.</p>
+    <ul>
+        <li>Track viewing trends over time</li>
+        <li>Identify your most active users</li>
+        <li>Discover your most popular content</li>
+        <li>Compare statistics across multiple servers</li>
+        <li>Beautiful interactive charts powered by Highcharts</li>
+    </ul>
+</div>
+{% else %}
 <header>
     <img src="{{ url_for('static', filename='logo.png') }}" alt="MultiPlex Stats" style="max-width: 400px; height: auto; margin-bottom: 10px;">
     <div class="subtitle">Plex Server Analytics & Insights</div>
@@ -363,9 +449,11 @@
     </div>
 </div>
 
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
+{% if has_data %}
 <!-- jQuery for DOM manipulation -->
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <!-- Highcharts rendering functions -->
@@ -1100,4 +1188,5 @@ $(document).ready(function() {
     }
 });
 </script>
+{% endif %}
 {% endblock %}

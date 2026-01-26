@@ -15,15 +15,8 @@ main_bp = Blueprint('main', __name__)
 
 @main_bp.route('/')
 def index():
-    """Landing page showing last run status and quick actions."""
-    last_run = AnalyticsRun.query.order_by(AnalyticsRun.started_at.desc()).first()
-    servers = ConfigService.get_active_servers()
-    has_config = len(servers) > 0
-
-    return render_template('index.html',
-                          last_run=last_run,
-                          has_config=has_config,
-                          servers=servers)
+    """Redirect root to the dashboard."""
+    return redirect(url_for('main.dashboard'))
 
 
 @main_bp.route('/run-analytics', methods=['POST'])
@@ -42,7 +35,7 @@ def run_analytics():
                 custom_days = request.form.get('daily_trend_days_custom', type=int)
                 if not custom_days or custom_days < 1 or custom_days > 3650:
                     flash('Please enter a valid number of days (1-3650).', 'error')
-                    return redirect(request.referrer or url_for('main.index'))
+                    return redirect(request.referrer or url_for('main.dashboard'))
                 daily_trend_days = custom_days
             else:
                 daily_trend_days = request.form.get('daily_trend_days', type=int)
@@ -79,39 +72,48 @@ def run_analytics():
             db.session.commit()
 
         flash(f'Analytics failed: {str(e)}', 'error')
-        return redirect(url_for('main.index'))
+        return redirect(url_for('main.dashboard'))
 
 
 @main_bp.route('/dashboard')
 def dashboard():
     """Display analytics dashboard with all charts."""
-    last_run = AnalyticsRun.query.filter_by(status='success').order_by(
+    last_success_run = AnalyticsRun.query.filter_by(status='success').order_by(
         AnalyticsRun.completed_at.desc()
     ).first()
+    last_run = AnalyticsRun.query.order_by(AnalyticsRun.started_at.desc()).first()
+    servers = ConfigService.get_active_servers()
+    has_config = len(servers) > 0
 
-    if not last_run:
-        flash('No analytics data available. Please run analytics first.', 'info')
-        return redirect(url_for('main.index'))
+    if not last_success_run:
+        return render_template('dashboard.html',
+                              has_data=False,
+                              last_run=last_run,
+                              has_config=has_config,
+                              servers=servers)
 
     # Convert completed_at from UTC to Pacific Time
-    completed_at_pt = last_run.completed_at.replace(tzinfo=timezone.utc).astimezone(get_local_timezone())
+    completed_at_pt = last_success_run.completed_at.replace(tzinfo=timezone.utc).astimezone(get_local_timezone())
 
     # Load cached chart JSON and table data from service
     service = AnalyticsService()
-    charts_json = service.get_cached_charts(last_run.id)
-    table_data = service.get_cached_table_data(last_run.id)
-    summary = json.loads(last_run.summary_json)
+    charts_json = service.get_cached_charts(last_success_run.id)
+    table_data = service.get_cached_table_data(last_success_run.id)
+    summary = json.loads(last_success_run.summary_json)
 
     # Get current streaming activity (real-time)
     current_activity = service.get_current_activity()
 
     return render_template('dashboard.html',
+                          has_data=True,
                           charts_json=charts_json,
                           table_data=table_data,
                           summary=summary,
                           last_run=last_run,
                           completed_at_pt=completed_at_pt,
-                          current_activity=current_activity)
+                          current_activity=current_activity,
+                          has_config=has_config,
+                          servers=servers)
 
 
 @main_bp.route('/api/viewing-history')
