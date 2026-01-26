@@ -5,7 +5,20 @@ The format is based on Keep a Changelog, and this project adheres to
 semantic versioning.
 
 ## [Main branch updates — last 7 days]
-- **Summary:** Charts migrated fully to Highcharts, with stacked user bars, dynamic bar chart sizing, tooltip/label fixes, and color refinements; legacy Plotly code was removed; empty-history messaging and settings CTA icon were improved; README visuals were refreshed.
+- **Summary:** Media library sync got faster and richer with export tuning, rating source icons, resolution badges, and display formatting, plus a dedicated Media page for play counts by movie/TV, surfacing low-play content for potential removal along with ratings, file sizes, and resolution; the dashboard became the default landing page; current streaming now auto-refreshes on an interval with elapsed-time labels, and media stats/counts/toggles were refined.
+
+- 2026-01-25 (b8071a9) Auto-refresh current activity section.
+- 2026-01-25 (0547c18) Add load-time note to media page.
+- 2026-01-25 (ce0e9c8) Make dashboard the default landing page.
+- 2026-01-25 (d26f57b) Add Movies/TV toggle on media page.
+- 2026-01-25 (448766c) Format media counts with commas.
+- 2026-01-25 (cdfc898) Color media ratings by score thresholds.
+- 2026-01-25 (2a05d00) Increase rating icon size to match line height.
+- 2026-01-25 (205fbec) Add rating source SVG icons and use img tags for display.
+- 2026-01-25 (d608925) Fix Rotten Tomatoes rating scaling.
+- 2026-01-25 (7c18e43) Add resolution badges in media table.
+- 2026-01-25 (d571847) Use metadata_level=0 for TV exports to skip seasons/episodes.
+- 2026-01-25 (93b8b97) Optimize export payload and handle export failures.
 
 - 2026-01-20 (253fa41) Update README dashboard image.
 - 2026-01-19 (6aaf4c7) Fix syntax error: remove orphaned @dataclass decorator.
