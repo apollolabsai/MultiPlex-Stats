@@ -10,12 +10,16 @@
 name = Server1
 ip_address = 192.168.1.101:8581
 api_key = YOUR_API_KEY_HERE
+use_ssl = false
+verify_ssl = false
 
 [ServerB]
 # Your second Tautulli server (OPTIONAL - leave blank or remove if you only have one server)
 name = Server2
 ip_address = 192.168.1.102:8581
 api_key = YOUR_API_KEY_HERE
+use_ssl = false
+verify_ssl = false
 
 [Settings]
 # Time ranges for trend charts

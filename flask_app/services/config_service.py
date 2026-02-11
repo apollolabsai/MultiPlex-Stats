@@ -53,12 +53,16 @@ class ConfigService:
         if server:
             server.ip_address = multiplex_server_config.ip_address
             server.api_key = multiplex_server_config.api_key
+            server.use_ssl = getattr(multiplex_server_config, 'use_ssl', False)
+            server.verify_ssl = getattr(multiplex_server_config, 'verify_ssl', False)
             server.server_order = order
         else:
             server = ServerConfig(
                 name=multiplex_server_config.name,
                 ip_address=multiplex_server_config.ip_address,
                 api_key=multiplex_server_config.api_key,
+                use_ssl=getattr(multiplex_server_config, 'use_ssl', False),
+                verify_ssl=getattr(multiplex_server_config, 'verify_ssl', False),
                 server_order=order
             )
             db.session.add(server)

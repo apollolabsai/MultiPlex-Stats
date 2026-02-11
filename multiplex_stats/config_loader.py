@@ -8,7 +8,6 @@ Supports loading configuration from:
 
 import configparser
 import os
-from pathlib import Path
 from typing import Optional, Tuple
 from dataclasses import dataclass
 
@@ -59,6 +58,24 @@ class ConfigLoader:
         self.config.read(self.config_file)
         return True
 
+    @staticmethod
+    def _parse_bool(value: Optional[str], default: bool = False) -> bool:
+        """
+        Parse a boolean-like string value.
+
+        Accepts common truthy/falsey strings and falls back to default for
+        unknown values.
+        """
+        if value is None:
+            return default
+
+        normalized = str(value).strip().lower()
+        if normalized in {'1', 'true', 'yes', 'y', 'on'}:
+            return True
+        if normalized in {'0', 'false', 'no', 'n', 'off', ''}:
+            return False
+        return default
+
     def get_server_configs(self) -> Tuple[Optional[ServerConfig], Optional[ServerConfig]]:
         """
         Get server configurations.
@@ -75,7 +92,9 @@ class ConfigLoader:
                 server_a = ServerConfig(
                     name=self.config.get('ServerA', 'name'),
                     ip_address=self.config.get('ServerA', 'ip_address'),
-                    api_key=self.config.get('ServerA', 'api_key')
+                    api_key=self.config.get('ServerA', 'api_key'),
+                    use_ssl=self._parse_bool(self.config.get('ServerA', 'use_ssl', fallback='false')),
+                    verify_ssl=self._parse_bool(self.config.get('ServerA', 'verify_ssl', fallback='false'))
                 )
 
                 # Validate Server A API key isn't a placeholder
@@ -98,7 +117,9 @@ class ConfigLoader:
                             server_b = ServerConfig(
                                 name=server_b_name,
                                 ip_address=server_b_ip,
-                                api_key=server_b_key
+                                api_key=server_b_key,
+                                use_ssl=self._parse_bool(self.config.get('ServerB', 'use_ssl', fallback='false')),
+                                verify_ssl=self._parse_bool(self.config.get('ServerB', 'verify_ssl', fallback='false'))
                             )
                     except (configparser.NoOptionError):
                         # Server B is incomplete, leave as None
@@ -113,18 +134,34 @@ class ConfigLoader:
         env_a_name = os.getenv('TAUTULLI_SERVER_A_NAME')
         env_a_ip = os.getenv('TAUTULLI_SERVER_A_IP')
         env_a_key = os.getenv('TAUTULLI_SERVER_A_KEY')
+        env_a_ssl = self._parse_bool(os.getenv('TAUTULLI_SERVER_A_SSL'), default=False)
+        env_a_verify_ssl = self._parse_bool(os.getenv('TAUTULLI_SERVER_A_VERIFY_SSL'), default=False)
 
         env_b_name = os.getenv('TAUTULLI_SERVER_B_NAME')
         env_b_ip = os.getenv('TAUTULLI_SERVER_B_IP')
         env_b_key = os.getenv('TAUTULLI_SERVER_B_KEY')
+        env_b_ssl = self._parse_bool(os.getenv('TAUTULLI_SERVER_B_SSL'), default=False)
+        env_b_verify_ssl = self._parse_bool(os.getenv('TAUTULLI_SERVER_B_VERIFY_SSL'), default=False)
 
         if all([env_a_name, env_a_ip, env_a_key]):
-            server_a = ServerConfig(name=env_a_name, ip_address=env_a_ip, api_key=env_a_key)
+            server_a = ServerConfig(
+                name=env_a_name,
+                ip_address=env_a_ip,
+                api_key=env_a_key,
+                use_ssl=env_a_ssl,
+                verify_ssl=env_a_verify_ssl
+            )
 
             # Server B is optional
             server_b = None
             if all([env_b_name, env_b_ip, env_b_key]):
-                server_b = ServerConfig(name=env_b_name, ip_address=env_b_ip, api_key=env_b_key)
+                server_b = ServerConfig(
+                    name=env_b_name,
+                    ip_address=env_b_ip,
+                    api_key=env_b_key,
+                    use_ssl=env_b_ssl,
+                    verify_ssl=env_b_verify_ssl
+                )
 
             return server_a, server_b
 
@@ -135,7 +172,9 @@ class ConfigLoader:
             "  2. Edit config.ini with your server information\n\n"
             "Or set environment variables:\n"
             "  TAUTULLI_SERVER_A_NAME, TAUTULLI_SERVER_A_IP, TAUTULLI_SERVER_A_KEY\n"
-            "  (Optional) TAUTULLI_SERVER_B_NAME, TAUTULLI_SERVER_B_IP, TAUTULLI_SERVER_B_KEY"
+            "  (Optional) TAUTULLI_SERVER_A_SSL, TAUTULLI_SERVER_A_VERIFY_SSL\n"
+            "  (Optional) TAUTULLI_SERVER_B_NAME, TAUTULLI_SERVER_B_IP, TAUTULLI_SERVER_B_KEY\n"
+            "  (Optional) TAUTULLI_SERVER_B_SSL, TAUTULLI_SERVER_B_VERIFY_SSL"
         )
 
     def get_settings(self) -> AnalyticsSettings:
