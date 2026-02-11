@@ -169,15 +169,6 @@ class TautulliClient:
         """
         return self._make_request('get_users')
 
-    def get_activity(self) -> dict[str, Any]:
-        """
-        Get current activity on the server.
-
-        Returns:
-            API response containing current streaming activity
-        """
-        return self._make_request('get_activity')
-
     def get_concurrent_streams_by_stream_type(
         self,
         time_range: int = 60
