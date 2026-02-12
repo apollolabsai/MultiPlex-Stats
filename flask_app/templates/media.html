@@ -80,11 +80,11 @@
         </p>
     </div>
 
-    <button type="button" class="btn btn-primary" id="lifetime-sync-btn">
+    <button type="button" class="btn btn-secondary" id="lifetime-sync-btn">
         {% if lifetime_sync_status.has_data %}
-        Refresh Lifetime Play Counts
+        Refresh Lifetime Play Counts Only
         {% else %}
-        Load Lifetime Play Counts
+        Load Lifetime Play Counts Only
         {% endif %}
     </button>
     <div class="last-sync-info" id="lifetime-last-sync-label">
@@ -105,13 +105,21 @@
 
 <!-- Reload button when data exists -->
 <div class="reload-section" id="reload-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
+    <button type="button" class="btn btn-primary" id="refresh-all-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6"></path>
+            <path d="M1 20v-6h6"></path>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+        Refresh Media Data
+    </button>
     <button type="button" class="btn btn-secondary" id="reload-media-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M23 4v6h-6"></path>
             <path d="M1 20v-6h6"></path>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
         </svg>
-        Reload Media Library
+        Reload Media Library Only
     </button>
 </div>
 
@@ -386,6 +394,8 @@
 .reload-section {
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 10px;
     margin-bottom: 20px;
 }
 
@@ -523,6 +533,8 @@ $(document).ready(function() {
     var pollInterval = null;
     var lifetimePollInterval = null;
     var lifetimeSyncWasRunning = false;
+    var combinedRefreshRequested = false;
+    var combinedWaitingForLifetime = false;
     var lifetimeStatus = {{ lifetime_sync_status | tojson }};
     var navigationInProgress = false;
     var contentDetailBase = '{{ url_for("main.content_details", history_id=0) }}';
@@ -547,6 +559,15 @@ $(document).ready(function() {
         subtitleEl.textContent = titleText || 'Please wait';
         overlay.classList.add('is-open');
         overlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function setCombinedRefreshButtonState(disabled, text) {
+        var button = document.getElementById('refresh-all-btn');
+        if (!button) {
+            return;
+        }
+        button.disabled = !!disabled;
+        button.textContent = text || 'Refresh Media Data';
     }
 
     function formatLastUpdatedText(isoString) {
@@ -603,6 +624,7 @@ $(document).ready(function() {
     }
 
     function updateLifetimeSyncStatus(status) {
+        lifetimeStatus = status || {};
         var button = document.getElementById('lifetime-sync-btn');
         var progress = document.getElementById('lifetime-sync-progress');
         var lastSyncLabel = document.getElementById('lifetime-last-sync-label');
@@ -613,7 +635,7 @@ $(document).ready(function() {
         }
 
         lastSyncLabel.textContent = formatLastUpdatedText(status.last_sync_date);
-        button.textContent = status.has_data ? 'Refresh Lifetime Play Counts' : 'Load Lifetime Play Counts';
+        button.textContent = status.has_data ? 'Refresh Lifetime Play Counts Only' : 'Load Lifetime Play Counts Only';
 
         if (status.status === 'running') {
             lifetimeSyncWasRunning = true;
@@ -638,9 +660,15 @@ $(document).ready(function() {
         }
 
         if (lifetimeSyncWasRunning) {
+            if (combinedRefreshRequested) {
+                combinedRefreshRequested = false;
+                combinedWaitingForLifetime = false;
+                setCombinedRefreshButtonState(false);
+            }
             lifetimeSyncWasRunning = false;
             if (status.status === 'success') {
                 window.location.reload();
+                return;
             } else if (status.status === 'failed' && status.error_message) {
                 alert('Lifetime play count sync failed: ' + status.error_message);
             }
@@ -686,6 +714,11 @@ $(document).ready(function() {
             alert(error.message);
             button.disabled = false;
             progress.style.display = 'none';
+            if (combinedRefreshRequested) {
+                combinedRefreshRequested = false;
+                combinedWaitingForLifetime = false;
+                setCombinedRefreshButtonState(false);
+            }
         });
     }
 
@@ -1037,12 +1070,17 @@ $(document).ready(function() {
         var progressDiv = document.getElementById('sync-progress');
         var loadBtn = document.getElementById('load-media-btn');
         var reloadBtn = document.getElementById('reload-media-btn');
+        var lifetimeBtn = document.getElementById('lifetime-sync-btn');
 
         if (status.status === 'running') {
             progressDiv.style.display = 'block';
             loadBtn.disabled = true;
             loadBtn.textContent = 'Loading...';
             if (reloadBtn) reloadBtn.disabled = true;
+            if (lifetimeBtn) lifetimeBtn.disabled = true;
+            if (combinedRefreshRequested) {
+                setCombinedRefreshButtonState(true, 'Refreshing Media Library...');
+            }
 
             // Render per-server progress bars
             if (status.servers && status.servers.length > 0) {
@@ -1055,13 +1093,27 @@ $(document).ready(function() {
             progressDiv.style.display = 'none';
             loadBtn.disabled = false;
             if (reloadBtn) reloadBtn.disabled = false;
+            if (lifetimeBtn && lifetimeStatus.status !== 'running') {
+                lifetimeBtn.disabled = false;
+            }
 
             if (status.status === 'success') {
-                // Reload page to show new data
-                window.location.reload();
+                if (combinedRefreshRequested && !combinedWaitingForLifetime) {
+                    combinedWaitingForLifetime = true;
+                    setCombinedRefreshButtonState(true, 'Refreshing Lifetime Play Counts...');
+                    startLifetimeSync();
+                } else {
+                    // Reload page to show new data
+                    window.location.reload();
+                }
             } else if (status.status === 'failed' && status.error_message) {
                 alert('Media load failed: ' + status.error_message);
                 loadBtn.textContent = status.has_data ? 'Reload Media Library' : 'Load Media';
+                if (combinedRefreshRequested) {
+                    combinedRefreshRequested = false;
+                    combinedWaitingForLifetime = false;
+                    setCombinedRefreshButtonState(false);
+                }
             }
 
             if (pollInterval) {
@@ -1112,7 +1164,26 @@ $(document).ready(function() {
             loadBtn.textContent = '{{ "Reload Media Library" if sync_status.has_data else "Load Media" }}';
             if (reloadBtn) reloadBtn.disabled = false;
             document.getElementById('sync-progress').style.display = 'none';
+            if (combinedRefreshRequested) {
+                combinedRefreshRequested = false;
+                combinedWaitingForLifetime = false;
+                setCombinedRefreshButtonState(false);
+            }
         });
+    }
+
+    function startCombinedRefresh() {
+        if (combinedRefreshRequested) {
+            return;
+        }
+        if (lifetimeStatus && lifetimeStatus.status === 'running') {
+            alert('Lifetime play count sync is already running. Please wait for it to complete.');
+            return;
+        }
+        combinedRefreshRequested = true;
+        combinedWaitingForLifetime = false;
+        setCombinedRefreshButtonState(true, 'Refreshing Media Library...');
+        startMediaLoad();
     }
 
     // Bind click handlers
@@ -1121,6 +1192,11 @@ $(document).ready(function() {
     var reloadBtn = document.getElementById('reload-media-btn');
     if (reloadBtn) {
         reloadBtn.addEventListener('click', startMediaLoad);
+    }
+
+    var refreshAllBtn = document.getElementById('refresh-all-btn');
+    if (refreshAllBtn) {
+        refreshAllBtn.addEventListener('click', startCombinedRefresh);
     }
 
     var lifetimeSyncButton = document.getElementById('lifetime-sync-btn');
