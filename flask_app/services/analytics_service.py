@@ -3,9 +3,10 @@ Analytics service that bridges Flask to the existing multiplex_stats package.
 """
 import os
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import pandas as pd
+from sqlalchemy import func, or_
 
 from multiplex_stats import TautulliClient
 from multiplex_stats.data_processing import (
@@ -824,6 +825,75 @@ class AnalyticsService:
 
         return 'Unknown'
 
+    @staticmethod
+    def _safe_int(value: Any) -> Optional[int]:
+        """Convert incoming API values to int where possible."""
+        try:
+            if value in (None, ''):
+                return None
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _normalize_title(value: Any) -> str:
+        """Normalize titles for case-insensitive exact matching."""
+        return str(value or '').strip().lower()
+
+    def _resolve_history_id_for_stream(
+        self,
+        server_name: str,
+        media_type: str,
+        rating_key: Any,
+        grandparent_rating_key: Any,
+        title: str,
+        grandparent_title: str
+    ) -> Optional[int]:
+        """
+        Resolve a local ViewingHistory row for an active stream so dashboard links
+        can route to the content detail page.
+        """
+        is_episode = (media_type or '').lower() == 'episode'
+        target_key = self._safe_int(grandparent_rating_key if is_episode else rating_key)
+        target_title = self._normalize_title(grandparent_title if is_episode else title)
+
+        base_query = ViewingHistory.query.filter(ViewingHistory.server_name == server_name)
+
+        def pick_best(query) -> Optional[int]:
+            candidates = query.order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc()).limit(20).all()
+            if not candidates:
+                return None
+            if target_title:
+                for candidate in candidates:
+                    candidate_title = (
+                        candidate.grandparent_title if is_episode else candidate.title or candidate.full_title
+                    )
+                    if self._normalize_title(candidate_title) == target_title:
+                        return candidate.id
+            return candidates[0].id
+
+        if target_key is not None:
+            key_column = ViewingHistory.grandparent_rating_key if is_episode else ViewingHistory.rating_key
+            matched_id = pick_best(base_query.filter(key_column == target_key))
+            if matched_id is not None:
+                return matched_id
+
+        if target_title:
+            if is_episode:
+                title_query = base_query.filter(func.lower(ViewingHistory.grandparent_title) == target_title)
+            else:
+                title_query = base_query.filter(
+                    or_(
+                        func.lower(ViewingHistory.title) == target_title,
+                        func.lower(ViewingHistory.full_title) == target_title
+                    )
+                )
+            matched_id = pick_best(title_query)
+            if matched_id is not None:
+                return matched_id
+
+        return None
+
     def get_current_activity(self) -> list:
         """
         Get current streaming activity from all configured servers.
@@ -938,7 +1008,15 @@ class AnalyticsService:
                         'bandwidth_mbps': bandwidth_mbps,
                         'ip_address': ip_address,
                         'location': location,
-                        'poster_url': poster_url
+                        'poster_url': poster_url,
+                        'history_id': self._resolve_history_id_for_stream(
+                            server_name=server_a_config.name,
+                            media_type=media_type,
+                            rating_key=session.get('rating_key'),
+                            grandparent_rating_key=session.get('grandparent_rating_key'),
+                            title=session.get('title', title),
+                            grandparent_title=grandparent_title
+                        )
                     })
         except Exception as e:
             print(f"Error fetching activity from {server_a_config.name}: {e}")
@@ -1041,7 +1119,15 @@ class AnalyticsService:
                             'bandwidth_mbps': bandwidth_mbps,
                             'ip_address': ip_address,
                             'location': location,
-                            'poster_url': poster_url
+                            'poster_url': poster_url,
+                            'history_id': self._resolve_history_id_for_stream(
+                                server_name=server_b_config.name,
+                                media_type=media_type,
+                                rating_key=session.get('rating_key'),
+                                grandparent_rating_key=session.get('grandparent_rating_key'),
+                                title=session.get('title', title),
+                                grandparent_title=grandparent_title
+                            )
                         })
             except Exception as e:
                 print(f"Error fetching activity from {server_b_config.name}: {e}")

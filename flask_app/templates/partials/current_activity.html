@@ -16,6 +16,7 @@
     </thead>
     <tbody>
         {% for stream in current_activity %}
+        {% set content_href = url_for('main.content_details', history_id=stream.history_id) if stream.history_id else None %}
         <tr>
             <td>{{ loop.index }}</td>
 
@@ -44,7 +45,11 @@
                                         <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
                                     </svg>
                                 {% endif %}
-                                <span class="content-title">{{ stream.title }}</span>
+                                {% if content_href %}
+                                    <a class="content-title content-link" href="{{ content_href }}">{{ stream.title }}</a>
+                                {% else %}
+                                    <span class="content-title">{{ stream.title }}</span>
+                                {% endif %}
                             </div>
                             {% if stream.subtitle %}
                                 <div class="content-subtitle">{{ stream.subtitle }}</div>
@@ -65,7 +70,11 @@
                                     <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
                                 </svg>
                             {% endif %}
-                            <span class="content-title">{{ stream.title }}</span>
+                            {% if content_href %}
+                                <a class="content-title content-link" href="{{ content_href }}">{{ stream.title }}</a>
+                            {% else %}
+                                <span class="content-title">{{ stream.title }}</span>
+                            {% endif %}
                         </div>
                         {% if stream.subtitle %}
                             <div class="content-subtitle">{{ stream.subtitle }}</div>

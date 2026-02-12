@@ -320,6 +320,16 @@
     </div>
 </div>
 
+<div class="nav-loading-overlay" id="nav-loading-overlay" aria-hidden="true">
+    <div class="nav-loading-card" role="status" aria-live="polite">
+        <div class="nav-loading-title" id="nav-loading-title">Loading content details...</div>
+        <div class="nav-loading-subtitle" id="nav-loading-subtitle">Please wait</div>
+        <div class="nav-loading-bar-track">
+            <div class="nav-loading-bar-fill"></div>
+        </div>
+    </div>
+</div>
+
 {% endif %}
 {% endblock %}
 
@@ -338,10 +348,20 @@
     cursor: pointer;
 }
 
-.title-with-preview span {
+.title-with-preview .content-title {
     text-decoration: underline;
     text-decoration-style: dotted;
     text-decoration-color: #f18a3d;
+}
+
+.content-link {
+    color: #f18a3d;
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(241, 138, 61, 0.6);
+}
+
+.content-link:hover {
+    color: #ffaf6e;
 }
 
 .poster-preview {
@@ -397,6 +417,68 @@
 .current-activity-last-updated {
     color: #888;
     font-size: 0.9em;
+}
+
+.nav-loading-overlay {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 13000;
+    backdrop-filter: blur(2px);
+}
+
+.nav-loading-overlay.is-open {
+    display: flex;
+}
+
+.nav-loading-card {
+    width: min(420px, 86vw);
+    background: #1b1b1b;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.nav-loading-title {
+    color: #fff;
+    font-size: 1.02em;
+    font-weight: 600;
+}
+
+.nav-loading-subtitle {
+    margin-top: 4px;
+    color: #bdbdbd;
+    font-size: 0.9em;
+}
+
+.nav-loading-bar-track {
+    margin-top: 14px;
+    width: 100%;
+    height: 4px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.nav-loading-bar-fill {
+    width: 38%;
+    height: 100%;
+    background: linear-gradient(90deg, #e6b413 0%, #f18a3d 70%, #ed542c 100%);
+    border-radius: 999px;
+    animation: nav-loading-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes nav-loading-slide {
+    0% {
+        transform: translateX(-120%);
+    }
+    100% {
+        transform: translateX(280%);
+    }
 }
 
 /* Chart range controls */
@@ -515,6 +597,21 @@ $(document).ready(function() {
     var lastUpdatedTimer = null;
     var lastActivityUpdateAt = Date.now();
     var posterPreviewBound = false;
+    var navigationInProgress = false;
+
+    function showNavigationLoading(titleText) {
+        var overlay = document.getElementById('nav-loading-overlay');
+        var titleEl = document.getElementById('nav-loading-title');
+        var subtitleEl = document.getElementById('nav-loading-subtitle');
+        if (!overlay || !titleEl || !subtitleEl) {
+            return;
+        }
+
+        titleEl.textContent = 'Loading content details...';
+        subtitleEl.textContent = titleText || 'Please wait';
+        overlay.classList.add('is-open');
+        overlay.setAttribute('aria-hidden', 'false');
+    }
 
     function preloadPosterPreviews(scope) {
         var $scope = scope ? $(scope) : $(document);
@@ -623,6 +720,36 @@ $(document).ready(function() {
 
         refreshTimer = setInterval(refreshCurrentActivity, minutes * 60 * 1000);
     }
+
+    $(document).on('click', '#current-activity-container a.content-link', function(event) {
+        var href = this.getAttribute('href');
+        if (!href) {
+            return;
+        }
+
+        if (
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey ||
+            (typeof event.button === 'number' && event.button !== 0)
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+        if (navigationInProgress) {
+            return;
+        }
+
+        navigationInProgress = true;
+        var titleText = (this.textContent || '').trim();
+        showNavigationLoading(titleText);
+
+        window.setTimeout(function() {
+            window.location.href = href;
+        }, 35);
+    });
 
     bindPosterPreviewHandlers();
     preloadPosterPreviews(document);
