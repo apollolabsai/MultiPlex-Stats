@@ -74,7 +74,7 @@ function renderStackedBarChart(containerId, chartData) {
  */
 function renderGradientBarChart(containerId, chartData) {
     var height = getDynamicBarHeight(chartData.categories ? chartData.categories.length : 0, 700, 22, 220);
-    Highcharts.chart(containerId, {
+    return Highcharts.chart(containerId, {
         chart: {
             type: 'bar',
             height: height

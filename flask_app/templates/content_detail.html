@@ -299,7 +299,16 @@
     });
 
     if (playsByUserPayload && document.getElementById('plays-by-user-chart')) {
-        renderGradientBarChart('plays-by-user-chart', playsByUserPayload);
+        var playsByUserChart = renderGradientBarChart('plays-by-user-chart', playsByUserPayload);
+        if (playsByUserChart) {
+            playsByUserChart.update({
+                xAxis: {
+                    labels: {
+                        enabled: false
+                    }
+                }
+            }, true, true, false);
+        }
     }
 
     $('#detailHistoryTable').DataTable({
