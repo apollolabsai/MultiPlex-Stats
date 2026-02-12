@@ -228,10 +228,11 @@
     var watchHistoryRows = {{ watch_history | tojson }};
 
     var chartPayload = {{ plays_chart | tojson }};
+    var endpointTotalPlays = {{ total_plays | tojson }};
     var overallTotal = chartPayload.overall_total || 0;
     var totalLabel = document.getElementById('plays-chart-total');
     if (totalLabel) {
-        totalLabel.textContent = 'Total Plays (All Servers): ' + overallTotal.toLocaleString();
+        totalLabel.textContent = 'Total Plays (All-Time, All Servers): ' + endpointTotalPlays.toLocaleString();
     }
 
     Highcharts.chart('plays-by-year-chart', {

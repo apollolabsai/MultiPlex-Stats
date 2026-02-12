@@ -478,9 +478,9 @@ class ContentService:
 
         endpoint_total_plays = 0
         unique_user_tokens: set[str] = set()
-        watch_servers_processed = 0
         user_servers_processed = 0
         item_media_type = 'movie' if is_movie else 'show'
+        endpoint_play_sources = 0
 
         for server_name, rating_key in server_rating_keys.items():
             server = server_lookup.get(server_name)
@@ -489,19 +489,22 @@ class ContentService:
 
             try:
                 client = TautulliClient(server.to_multiplex_config())
+                user_stats = self._fetch_item_user_stats(client, int(rating_key), item_media_type)
+                if user_stats is not None:
+                    endpoint_total_plays += user_stats['total_plays']
+                    unique_user_tokens.update(user_stats['tokens'])
+                    user_servers_processed += 1
+                    endpoint_play_sources += 1
+                    continue
+
                 total_plays = self._fetch_watch_total_plays(client, int(rating_key), item_media_type)
                 if total_plays is not None:
                     endpoint_total_plays += total_plays
-                    watch_servers_processed += 1
-
-                user_tokens = self._fetch_item_user_tokens(client, int(rating_key), item_media_type)
-                if user_tokens is not None:
-                    unique_user_tokens.update(user_tokens)
-                    user_servers_processed += 1
+                    endpoint_play_sources += 1
             except Exception:
                 continue
 
-        total_plays = endpoint_total_plays if watch_servers_processed > 0 else local_total_plays
+        total_plays = endpoint_total_plays if endpoint_play_sources > 0 else local_total_plays
         unique_users = len(unique_user_tokens) if user_servers_processed > 0 else local_unique_users
 
         return {
@@ -535,12 +538,12 @@ class ContentService:
 
         return None
 
-    def _fetch_item_user_tokens(
+    def _fetch_item_user_stats(
         self,
         client: TautulliClient,
         rating_key: int,
         item_media_type: str,
-    ) -> set[str] | None:
+    ) -> dict[str, Any] | None:
         attempts = [
             {},
             {'media_type': item_media_type},
@@ -555,7 +558,10 @@ class ContentService:
             if not self._is_tautulli_success_response(response):
                 continue
 
-            return self._extract_item_user_tokens(response)
+            return {
+                'tokens': self._extract_item_user_tokens(response),
+                'total_plays': self._extract_item_user_total_plays(response),
+            }
 
         return None
 
@@ -632,17 +638,7 @@ class ContentService:
 
     @staticmethod
     def _extract_item_user_tokens(response: dict[str, Any]) -> set[str]:
-        data = response.get('response', {}).get('data', [])
-        if isinstance(data, dict):
-            if 'data' in data and isinstance(data.get('data'), list):
-                rows = data.get('data', [])
-            else:
-                rows = [data]
-        elif isinstance(data, list):
-            rows = data
-        else:
-            rows = []
-
+        rows = ContentService._extract_item_user_rows(response)
         tokens: set[str] = set()
         for row in rows:
             if not isinstance(row, dict):
@@ -657,6 +653,32 @@ class ContentService:
                 tokens.add(token)
 
         return tokens
+
+    @staticmethod
+    def _extract_item_user_total_plays(response: dict[str, Any]) -> int:
+        rows = ContentService._extract_item_user_rows(response)
+        total = 0
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            value = ContentService._to_int(row.get('total_plays'))
+            if value is not None and value > 0:
+                total += value
+        return total
+
+    @staticmethod
+    def _extract_item_user_rows(response: dict[str, Any]) -> list[dict[str, Any]]:
+        data = response.get('response', {}).get('data', [])
+        if isinstance(data, dict):
+            if 'data' in data and isinstance(data.get('data'), list):
+                rows = data.get('data', [])
+            else:
+                rows = [data]
+        elif isinstance(data, list):
+            rows = data
+        else:
+            rows = []
+        return [row for row in rows if isinstance(row, dict)]
 
     @staticmethod
     def _build_user_token(row: dict[str, Any]) -> str:
@@ -676,7 +698,12 @@ class ContentService:
     def _to_int(value: Any) -> int | None:
         if value in (None, ''):
             return None
+        if isinstance(value, str):
+            value = value.replace(',', '').strip()
         try:
             return int(value)
         except (TypeError, ValueError):
-            return None
+            try:
+                return int(float(value))
+            except (TypeError, ValueError):
+                return None

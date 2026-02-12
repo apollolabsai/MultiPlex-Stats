@@ -156,14 +156,8 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertIsNotNone(details)
         self.assertEqual(details['total_plays'], 17)
         self.assertEqual(details['unique_users'], 3)
-        client_by_server['Server A'].get_item_watch_time_stats.assert_called_with(
-            111,
-            query_days=0,
-        )
-        client_by_server['Server B'].get_item_watch_time_stats.assert_called_with(
-            222,
-            query_days=0,
-        )
+        client_by_server['Server A'].get_item_user_stats.assert_called_with(111)
+        client_by_server['Server B'].get_item_user_stats.assert_called_with(222)
 
     def test_content_details_uses_show_parent_rating_key_for_stats(self):
         self._add_server('Server A', 0)
@@ -215,10 +209,7 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertIsNotNone(details)
         self.assertEqual(details['total_plays'], 25)
         self.assertEqual(details['unique_users'], 2)
-        client.get_item_watch_time_stats.assert_called_with(
-            9001,
-            query_days=0,
-        )
+        client.get_item_user_stats.assert_called_with(9001)
 
     def test_content_details_falls_back_to_local_counts_on_endpoint_failure(self):
         self._add_server('Server A', 0)
@@ -313,6 +304,63 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertIsNotNone(details)
         self.assertEqual(details['total_plays'], 20)
         self.assertEqual(details['unique_users'], 1)
+
+    def test_content_details_total_plays_can_come_from_user_stats(self):
+        self._add_server('Server A', 0)
+        self._add_server('Server B', 1)
+
+        clicked = self._add_history(
+            row_id=40,
+            server_name='Server A',
+            server_order=0,
+            media_type='movie',
+            title='The Matrix',
+            full_title='The Matrix',
+            year=1999,
+            rating_key=910,
+            user='Neo',
+            started=1700600000,
+            date_played=date(2024, 4, 1),
+        )
+        self._add_history(
+            row_id=41,
+            server_name='Server B',
+            server_order=1,
+            media_type='movie',
+            title='The Matrix',
+            full_title='The Matrix',
+            year=1999,
+            rating_key=920,
+            user='Trinity',
+            started=1700700000,
+            date_played=date(2024, 4, 2),
+        )
+
+        def build_client(config):
+            client = MagicMock()
+            client.get_item_watch_time_stats.side_effect = RuntimeError('watch stats unavailable')
+            if config.name == 'Server A':
+                client.get_item_user_stats.return_value = {
+                    'response': {'result': 'success', 'data': [
+                        {'friendly_name': 'Neo', 'total_plays': '5'},
+                        {'friendly_name': 'Morpheus', 'total_plays': '2'},
+                    ]}
+                }
+            else:
+                client.get_item_user_stats.return_value = {
+                    'response': {'result': 'success', 'data': [
+                        {'friendly_name': 'Trinity', 'total_plays': '4'},
+                    ]}
+                }
+            return client
+
+        with patch.object(ContentService, '_get_metadata_for_record', return_value={'summary': 'ok'}):
+            with patch('flask_app.services.content_service.TautulliClient', side_effect=build_client):
+                details = ContentService().get_content_details(clicked.id)
+
+        self.assertIsNotNone(details)
+        self.assertEqual(details['total_plays'], 11)
+        self.assertEqual(details['unique_users'], 3)
 
 
 if __name__ == '__main__':
