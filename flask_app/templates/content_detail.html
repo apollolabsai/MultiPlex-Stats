@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}{{ content_title }} - MultiPlex Stats{% endblock %}
+
+{% block content %}
+<header>
+    <h1 class="settings-title">{{ content_title }}</h1>
+    <div class="subtitle">{{ "Movie Details" if is_movie else "TV Show Details" }}</div>
+    <a href="{{ url_for('main.viewing_history') }}" class="btn btn-secondary back-btn">Back to Viewing History</a>
+</header>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-number">{{ "{:,}".format(total_plays) }}</div>
+        <div class="stat-label">Total Plays</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ "{:,}".format(unique_users) }}</div>
+        <div class="stat-label">Unique Users</div>
+    </div>
+</div>
+
+<section class="content-hero{% if metadata.banner_url %} has-banner{% endif %}"{% if metadata.banner_url %} style="background-image: url('{{ metadata.banner_url }}');"{% endif %}>
+    <div class="content-hero-overlay"></div>
+    <div class="content-hero-inner">
+        <div class="content-poster-wrap">
+            {% if metadata.poster_url %}
+            <img src="{{ metadata.poster_url }}" alt="{{ content_title }} poster" class="content-poster">
+            {% else %}
+            <div class="content-poster-placeholder">No Poster</div>
+            {% endif %}
+        </div>
+        <div class="content-meta">
+            <h2>{{ content_title }}</h2>
+            <p class="summary">{{ metadata.summary }}</p>
+
+            {% if is_movie %}
+            <div class="meta-grid">
+                <div class="meta-item"><span class="meta-label">Directed by</span><span class="meta-value">{{ metadata.director or "Unknown" }}</span></div>
+                <div class="meta-item"><span class="meta-label">Studio</span><span class="meta-value">{{ metadata.studio or "Unknown" }}</span></div>
+                <div class="meta-item"><span class="meta-label">Year</span><span class="meta-value">{{ metadata.year or "Unknown" }}</span></div>
+                <div class="meta-item"><span class="meta-label">Runtime</span><span class="meta-value">{{ metadata.runtime or "Unknown" }}</span></div>
+                <div class="meta-item"><span class="meta-label">Rated</span><span class="meta-value">{{ metadata.rated or "Unknown" }}</span></div>
+                <div class="meta-item"><span class="meta-label">Video Codec</span><span class="meta-value">{{ metadata.video_codec or "Unknown" }}</span></div>
+                <div class="meta-item"><span class="meta-label">Resolution</span><span class="meta-value">{{ metadata.resolution or "Unknown" }}</span></div>
+                <div class="meta-item"><span class="meta-label">Audio</span><span class="meta-value">{{ metadata.audio or "Unknown" }}</span></div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<div class="section">
+    <h2 class="section-title">Plays by Year (All Servers)</h2>
+    <div class="chart-container" id="plays-by-year-chart"></div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">Detailed Watch History</h2>
+    <div class="table-container">
+        <table class="display detail-history-table" style="width:100%">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Server</th>
+                    <th>User</th>
+                    {% if not is_movie %}
+                    <th>Episode</th>
+                    {% endif %}
+                    <th>Platform</th>
+                    <th>Quality</th>
+                    <th>Progress</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in watch_history %}
+                <tr>
+                    <td>{{ row.played_at }}</td>
+                    <td>{{ row.server }}</td>
+                    <td>{{ row.user }}</td>
+                    {% if not is_movie %}
+                    <td>{{ row.detail }}</td>
+                    {% endif %}
+                    <td>{{ row.platform }}</td>
+                    <td>{{ row.quality }}</td>
+                    <td>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill orange" style="width: {{ row.progress }}%;"></div>
+                        </div>
+                        <div class="progress-text">{{ row.progress }}%</div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.back-btn {
+    margin-top: 12px;
+}
+
+.content-hero {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: linear-gradient(135deg, #141414 0%, #222 100%);
+    background-size: cover;
+    background-position: center;
+}
+
+.content-hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.content-hero.has-banner .content-hero-overlay {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.content-hero-inner {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 24px;
+    padding: 22px;
+}
+
+.content-poster-wrap {
+    width: 240px;
+}
+
+.content-poster {
+    width: 100%;
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.content-poster-placeholder {
+    width: 100%;
+    height: 360px;
+    border-radius: 10px;
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.content-meta h2 {
+    margin: 0 0 12px 0;
+    color: #fff;
+}
+
+.summary {
+    color: #ddd;
+    line-height: 1.5;
+    margin-bottom: 16px;
+}
+
+.meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px 16px;
+}
+
+.meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.meta-label {
+    color: #f18a3d;
+    font-size: 0.82em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.meta-value {
+    color: #fff;
+}
+
+.detail-history-table td,
+.detail-history-table th {
+    vertical-align: middle;
+}
+
+@media (max-width: 900px) {
+    .content-hero-inner {
+        grid-template-columns: 1fr;
+    }
+    .content-poster-wrap {
+        width: 200px;
+    }
+}
+</style>
+
+<script>
+(function() {
+    var chartPayload = {{ plays_chart | tojson }};
+    Highcharts.chart('plays-by-year-chart', {
+        chart: {
+            type: 'column',
+            height: 420
+        },
+        title: {
+            text: chartPayload.title
+        },
+        xAxis: {
+            categories: chartPayload.categories,
+            title: { text: 'Year' }
+        },
+        yAxis: {
+            min: 0,
+            allowDecimals: false,
+            title: { text: 'Play Count' }
+        },
+        legend: { enabled: false },
+        tooltip: {
+            pointFormat: '<b>{point.y}</b> plays'
+        },
+        plotOptions: {
+            column: {
+                borderWidth: 0,
+                color: '#f18a3d'
+            }
+        },
+        series: [{
+            name: 'Plays',
+            data: chartPayload.series
+        }]
+    });
+})();
+</script>
+{% endblock %}

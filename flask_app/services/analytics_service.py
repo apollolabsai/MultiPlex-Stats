@@ -598,6 +598,7 @@ class AnalyticsService:
                     quality = record.transcode_decision.title()
 
             table_data.append({
+                'history_id': record.id,
                 'date_pt': date_str,
                 'time_pt': time_str,
                 'sortable_datetime': sortable_datetime,
@@ -762,6 +763,7 @@ class AnalyticsService:
                     quality = record.transcode_decision.title()
 
             data.append({
+                'history_id': record.id,
                 'date_pt': date_str,
                 'time_pt': time_str,
                 'sortable_datetime': sortable_datetime,

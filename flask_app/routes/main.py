@@ -3,10 +3,11 @@ Main application routes for dashboard and analytics execution.
 """
 import json
 from datetime import datetime, timezone
-from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, abort
 from flask_app.models import db, AnalyticsRun, ViewingHistory
 from flask_app.services.analytics_service import AnalyticsService
 from flask_app.services.media_service import MediaService
+from flask_app.services.content_service import ContentService
 from flask_app.services.config_service import ConfigService
 from multiplex_stats.timezone_utils import get_local_timezone
 
@@ -367,6 +368,16 @@ def api_tv_chart():
 def viewing_history():
     """Display viewing history page with DataTables."""
     return render_template('viewing_history.html')
+
+
+@main_bp.route('/content/<int:history_id>')
+def content_details(history_id):
+    """Display detail page for clicked movie/show history entry."""
+    service = ContentService()
+    details = service.get_content_details(history_id)
+    if not details:
+        abort(404)
+    return render_template('content_detail.html', **details)
 
 
 @main_bp.route('/api/viewing-history-stats')
