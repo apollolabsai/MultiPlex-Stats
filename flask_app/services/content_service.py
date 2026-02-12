@@ -56,7 +56,7 @@ class ContentService:
         if not metadata.get('summary'):
             metadata['summary'] = 'No summary available.'
 
-        watch_history = [self._format_watch_history_row(item, is_movie, content_title) for item in plays]
+        watch_history = [self._format_watch_history_row(item, content_title) for item in plays]
         plays_chart = self._build_plays_by_year_chart(plays, details_title)
 
         unique_users = len({(item.user or '').strip().lower() for item in plays if item.user})
@@ -329,19 +329,21 @@ class ContentService:
     def _format_watch_history_row(
         self,
         item: ViewingHistory,
-        is_movie: bool,
         content_title: str,
     ) -> dict[str, Any]:
-        played_at = ''
+        date_str = ''
+        time_str = ''
+        sortable_datetime = ''
         if item.started:
             try:
-                played_at = (
-                    datetime.fromtimestamp(item.started, tz=timezone.utc)
-                    .astimezone(self.local_tz)
-                    .strftime('%Y-%m-%d %I:%M %p')
-                )
+                local_dt = datetime.fromtimestamp(item.started, tz=timezone.utc).astimezone(self.local_tz)
+                date_str = local_dt.strftime('%Y-%m-%d')
+                time_str = local_dt.strftime('%-I:%M%p').lower()
+                sortable_datetime = local_dt.strftime('%Y-%m-%d %H:%M')
             except (ValueError, OSError, TypeError):
-                played_at = ''
+                date_str = ''
+                time_str = ''
+                sortable_datetime = ''
 
         quality = ''
         if item.transcode_decision:
@@ -355,30 +357,46 @@ class ContentService:
             else:
                 quality = item.transcode_decision.title()
 
-        detail_label = ''
-        if not is_movie:
+        title = item.full_title or item.title or ''
+        subtitle = ''
+        media_type = item.media_type or ''
+        media_type_lower = media_type.lower()
+
+        if media_type_lower in ['tv', 'episode', 'show']:
+            if item.grandparent_title:
+                title = item.grandparent_title
             season = item.parent_media_index
             episode = item.media_index
             if season not in (None, '') and episode not in (None, ''):
                 try:
-                    detail_label = f"S{int(season):02d}E{int(episode):02d}"
+                    subtitle = f"S{int(season):02d}E{int(episode):02d}"
+                    if item.title and item.title.lower() != content_title.lower():
+                        subtitle += f" - {item.title}"
                 except (ValueError, TypeError):
-                    detail_label = ''
+                    subtitle = ''
+        else:
+            if item.year:
+                subtitle = f"({item.year})"
 
-            episode_title = (item.title or '').strip()
-            if episode_title and episode_title.lower() != content_title.lower():
-                detail_label = f"{detail_label} - {episode_title}" if detail_label else episode_title
-
-        platform = item.platform or ''
-        if item.product:
-            platform = f"{platform} / {item.product}" if platform else item.product
+        server_order_class = ''
+        if item.server_order == 0:
+            server_order_class = 'server-a'
+        elif item.server_order == 1:
+            server_order_class = 'server-b'
 
         return {
-            'played_at': played_at,
-            'server': item.server_name or '',
+            'date_pt': date_str,
+            'time_pt': time_str,
+            'sortable_datetime': sortable_datetime,
+            'Server': item.server_name or '',
+            'server_order': server_order_class,
             'user': item.user or '',
-            'detail': detail_label,
-            'platform': platform,
+            'ip_address': item.ip_address or '',
+            'media_type': media_type,
+            'title': title,
+            'subtitle': subtitle,
+            'platform': item.platform or '',
+            'product': item.product or '',
             'quality': quality,
-            'progress': item.percent_complete or 0,
+            'percent_complete': item.percent_complete or 0,
         }
