@@ -7,14 +7,11 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from typing import Optional, Any
+from typing import Optional
 
 from flask import current_app
-from sqlalchemy import func, or_
-
-from flask_app.models import db, MediaSyncStatus, CachedMedia, ViewingHistory
+from flask_app.models import db, MediaSyncStatus, CachedMedia
 from flask_app.services.config_service import ConfigService
-from flask_app.services.content_service import ContentService
 from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
 
@@ -246,18 +243,6 @@ class MediaService:
         status = self.get_or_create_status()
         status.current_step = 'Saving media data...'
         db.session.commit()
-
-        status.current_step = 'Resolving all-time play counts...'
-        db.session.commit()
-        self._apply_endpoint_play_counts(
-            movies_data=movies_data,
-            tv_data=tv_data,
-            server_a_config=server_a_config,
-            server_b_config=server_b_config,
-        )
-
-        status.current_step = 'Saving media data...'
-        db.session.commit()
         self._save_aggregated_media(movies_data, tv_data)
 
         status.current_step = 'Finalizing...'
@@ -351,12 +336,12 @@ class MediaService:
 
         for lib in movie_libraries:
             self._fetch_library_play_stats_parallel(
-                client, server_config.name, lib['id'], 'movie', movies_data, data_lock
+                client, lib['id'], 'movie', movies_data, data_lock
             )
 
         for lib in tv_libraries:
             self._fetch_library_play_stats_parallel(
-                client, server_config.name, lib['id'], 'show', tv_data, data_lock
+                client, lib['id'], 'show', tv_data, data_lock
             )
 
         # Mark server as complete
@@ -590,6 +575,7 @@ class MediaService:
                     existing = data_dict[key]
 
                     existing['file_size'] += file_size
+                    existing['play_count'] += play_count
 
                     if added_at:
                         if existing['added_at']:
@@ -632,7 +618,6 @@ class MediaService:
                         'year': year,
                         'file_size': file_size,
                         'play_count': play_count,
-                        'library_play_count': 0,
                         'added_at': added_at,
                         'last_played': last_played,
                         'video_codecs': {video_codec} if video_codec else set(),
@@ -642,7 +627,6 @@ class MediaService:
                         'rating_image': rating_image,
                         'audience_rating': audience_rating,
                         'audience_rating_image': audience_rating_image,
-                        'server_rating_keys': {},
                     }
 
             records_processed += 1
@@ -659,7 +643,6 @@ class MediaService:
     def _fetch_library_play_stats_parallel(
         self,
         client: TautulliClient,
-        server_name: str,
         section_id: int,
         media_type: str,
         data_dict: dict,
@@ -705,12 +688,11 @@ class MediaService:
                 last_played = int(item.get('last_played', 0) or 0)
                 video_codec = item.get('video_codec', '') or ''
                 video_resolution = item.get('video_resolution', '') or ''
-                rating_key = self._to_int(item.get('rating_key') or item.get('ratingKey'))
 
                 existing = data_dict[key]
 
                 existing['file_size'] += file_size
-                existing['library_play_count'] = existing.get('library_play_count', 0) + play_count
+                existing['play_count'] += play_count
 
                 if last_played:
                     existing['last_played'] = max(existing['last_played'] or 0, last_played)
@@ -721,71 +703,6 @@ class MediaService:
                     existing['video_resolutions'].add(video_resolution)
                 if file_size:
                     existing['file_sizes'].add(file_size)
-                if rating_key is not None:
-                    server_keys = existing.setdefault('server_rating_keys', {})
-                    server_keys.setdefault(server_name, set()).add(rating_key)
-
-    def _apply_endpoint_play_counts(
-        self,
-        movies_data: dict,
-        tv_data: dict,
-        server_a_config: Any,
-        server_b_config: Any | None,
-    ) -> None:
-        """Populate play_count using the same endpoint strategy as content detail."""
-        content_service = ContentService()
-        server_configs = [config for config in (server_a_config, server_b_config) if config]
-        server_lookup = {config.name: config for config in server_configs if getattr(config, 'name', None)}
-        client_cache: dict[str, TautulliClient] = {}
-
-        def get_client(server_name: str) -> TautulliClient | None:
-            config = server_lookup.get(server_name)
-            if not config:
-                return None
-            if server_name not in client_cache:
-                try:
-                    client_cache[server_name] = TautulliClient(config)
-                except Exception:
-                    return None
-            return client_cache.get(server_name)
-
-        def resolve_item_play_count(item: dict, item_media_type: str) -> int:
-            fallback_total = int(item.get('library_play_count', 0) or 0)
-            endpoint_total = 0
-            endpoint_sources = 0
-
-            server_rating_keys = item.get('server_rating_keys') or {}
-            if not server_rating_keys and fallback_total <= 0:
-                return 0
-
-            for server_name, rating_keys in server_rating_keys.items():
-                if not rating_keys:
-                    continue
-
-                client = get_client(server_name)
-                if not client:
-                    continue
-
-                for rating_key in sorted(rating_keys):
-                    total_plays = content_service._fetch_watch_total_plays(client, int(rating_key), item_media_type)
-                    user_stats = content_service._fetch_item_user_stats(client, int(rating_key), item_media_type)
-
-                    if total_plays is not None:
-                        endpoint_total += total_plays
-                        endpoint_sources += 1
-                    elif user_stats is not None:
-                        endpoint_total += int(user_stats.get('total_plays', 0) or 0)
-                        endpoint_sources += 1
-
-            if endpoint_sources > 0:
-                return endpoint_total
-            return fallback_total
-
-        for item in movies_data.values():
-            item['play_count'] = resolve_item_play_count(item, 'movie')
-
-        for item in tv_data.values():
-            item['play_count'] = resolve_item_play_count(item, 'show')
 
     def _save_aggregated_media(self, movies_data: dict, tv_data: dict):
         """Save aggregated media data to the database."""
@@ -883,7 +800,6 @@ class MediaService:
                 'file_size_versions': movie.file_size_versions or '',
                 'last_played': last_played_str,
                 'play_count': movie.play_count,
-                'history_id': self._find_movie_history_id(movie.title, movie.year),
                 'rating': movie.rating or '',
                 'rating_image': movie.rating_image or '',
                 'audience_rating': movie.audience_rating or '',
@@ -918,7 +834,6 @@ class MediaService:
                 'file_size': round(file_size_gb, 2),
                 'last_played': last_played_str,
                 'play_count': show.play_count,
-                'history_id': self._find_show_history_id(show.title),
                 'rating': show.rating or '',
                 'rating_image': show.rating_image or '',
                 'audience_rating': show.audience_rating or '',
@@ -926,47 +841,3 @@ class MediaService:
             })
 
         return result
-
-    @staticmethod
-    def _to_int(value: Any) -> int | None:
-        """Safely parse integers from API payloads."""
-        try:
-            if value in (None, ''):
-                return None
-            return int(value)
-        except (TypeError, ValueError):
-            return None
-
-    def _find_movie_history_id(self, title: str, year: int | None) -> int | None:
-        """Return the newest matching movie ViewingHistory record id for deep links."""
-        normalized_title = (title or '').strip().lower()
-        if not normalized_title:
-            return None
-
-        query = ViewingHistory.query.filter(func.lower(ViewingHistory.media_type) == 'movie')
-        query = query.filter(
-            or_(
-                func.lower(ViewingHistory.title) == normalized_title,
-                func.lower(ViewingHistory.full_title) == normalized_title,
-            )
-        )
-        if year:
-            query = query.filter(ViewingHistory.year == year)
-
-        record = query.order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc()).first()
-        return record.id if record else None
-
-    def _find_show_history_id(self, title: str) -> int | None:
-        """Return the newest matching TV show ViewingHistory record id for deep links."""
-        normalized_title = (title or '').strip().lower()
-        if not normalized_title:
-            return None
-
-        query = ViewingHistory.query.filter(
-            func.lower(ViewingHistory.media_type).in_(['episode', 'tv', 'show'])
-        ).filter(
-            func.lower(ViewingHistory.grandparent_title) == normalized_title
-        )
-
-        record = query.order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc()).first()
-        return record.id if record else None
