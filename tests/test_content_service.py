@@ -106,8 +106,8 @@ class ContentServiceChartTests(unittest.TestCase):
         chart = service._build_plays_by_user_chart(plays, 'Family Guy')
 
         self.assertEqual(chart['categories'], ['Alice', 'Bob', 'Carol'])
-        self.assertEqual(chart['series'][0]['name'], 'Plays')
-        self.assertEqual(chart['series'][0]['data'], [2, 2, 1])
+        self.assertEqual([point['y'] for point in chart['data']], [2, 2, 1])
+        self.assertTrue(all('color' in point for point in chart['data']))
         self.assertEqual(chart['overall_total'], 5)
 
     def test_content_details_uses_endpoint_totals_across_servers(self):

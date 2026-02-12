@@ -89,6 +89,7 @@
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
 <style>
 .back-btn {
     margin-top: 12px;
@@ -298,41 +299,7 @@
     });
 
     if (playsByUserPayload && document.getElementById('plays-by-user-chart')) {
-        Highcharts.chart('plays-by-user-chart', {
-            chart: {
-                type: 'bar',
-                height: 420
-            },
-            title: {
-                text: playsByUserPayload.title
-            },
-            xAxis: {
-                categories: playsByUserPayload.categories || [],
-                title: { text: 'User' }
-            },
-            yAxis: {
-                min: 0,
-                allowDecimals: false,
-                title: { text: 'Play Count' }
-            },
-            legend: {
-                enabled: false
-            },
-            tooltip: {
-                pointFormat: '<b>{point.y:,.0f}</b> plays'
-            },
-            plotOptions: {
-                series: {
-                    dataLabels: {
-                        enabled: true,
-                        formatter: function() {
-                            return Highcharts.numberFormat(this.y, 0, '', ',');
-                        }
-                    }
-                }
-            },
-            series: playsByUserPayload.series || []
-        });
+        renderGradientBarChart('plays-by-user-chart', playsByUserPayload);
     }
 
     $('#detailHistoryTable').DataTable({

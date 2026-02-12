@@ -393,18 +393,42 @@ class ContentService:
         )
 
         categories = [display_names[key] for key, _ in sorted_users]
-        data = [count for _, count in sorted_users]
+        raw_counts = [count for _, count in sorted_users]
+        max_count = max(raw_counts) if raw_counts else 1
+        min_count = min(raw_counts) if raw_counts else 0
+
+        data = []
+        for count in raw_counts:
+            ratio = (count - min_count) / (max_count - min_count) if max_count > min_count else 0
+            data.append({
+                'y': int(count),
+                'color': self._interpolate_color('#ff9800', '#ed542c', ratio),
+            })
 
         return {
             'categories': categories,
-            'series': [{
-                'name': 'Plays',
-                'data': data,
-                'color': '#f18a3d',
-            }],
-            'overall_total': sum(data),
+            'data': data,
+            'overall_total': sum(raw_counts),
             'title': f'Plays by User - {title}',
         }
+
+    @staticmethod
+    def _interpolate_color(color1: str, color2: str, ratio: float) -> str:
+        def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+            hex_color = hex_color.lstrip('#')
+            return tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+
+        def rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+            return '#{:02x}{:02x}{:02x}'.format(*rgb)
+
+        r1, g1, b1 = hex_to_rgb(color1)
+        r2, g2, b2 = hex_to_rgb(color2)
+
+        r = int(r1 + (r2 - r1) * ratio)
+        g = int(g1 + (g2 - g1) * ratio)
+        b = int(b1 + (b2 - b1) * ratio)
+
+        return rgb_to_hex((r, g, b))
 
     def _format_watch_history_row(
         self,
