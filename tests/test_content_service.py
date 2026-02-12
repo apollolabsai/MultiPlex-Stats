@@ -230,6 +230,58 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertEqual(details['unique_users'], 2)
         client.get_item_user_stats.assert_called_with(9001)
 
+    def test_tv_user_chart_uses_endpoint_user_counts(self):
+        self._add_server('Server A', 0)
+
+        clicked = self._add_history(
+            row_id=12,
+            server_name='Server A',
+            server_order=0,
+            media_type='episode',
+            title='Episode One',
+            full_title='Family Guy - Episode One',
+            grandparent_title='Family Guy',
+            rating_key=3101,
+            grandparent_rating_key=9101,
+            user='alice',
+            started=1700000000,
+            date_played=date(2024, 2, 1),
+        )
+        self._add_history(
+            row_id=13,
+            server_name='Server A',
+            server_order=0,
+            media_type='episode',
+            title='Episode Two',
+            full_title='Family Guy - Episode Two',
+            grandparent_title='Family Guy',
+            rating_key=3102,
+            grandparent_rating_key=9101,
+            user='alice',
+            started=1700100000,
+            date_played=date(2024, 2, 2),
+        )
+
+        client = MagicMock()
+        client.get_item_watch_time_stats.return_value = {
+            'response': {'result': 'success', 'data': [{'query_days': 0, 'total_plays': 12}]}
+        }
+        client.get_item_user_stats.return_value = {
+            'response': {'result': 'success', 'data': [
+                {'friendly_name': 'alice', 'total_plays': 5},
+                {'friendly_name': 'bob', 'total_plays': 7},
+            ]}
+        }
+
+        with patch.object(ContentService, '_get_metadata_for_record', return_value={'summary': 'ok'}):
+            with patch('flask_app.services.content_service.TautulliClient', return_value=client):
+                details = ContentService().get_content_details(clicked.id)
+
+        self.assertIsNotNone(details)
+        self.assertEqual(details['unique_users'], 2)
+        self.assertEqual(details['plays_by_user_chart']['categories'], ['bob', 'alice'])
+        self.assertEqual([point['y'] for point in details['plays_by_user_chart']['data']], [7, 5])
+
     def test_content_details_falls_back_to_local_counts_on_endpoint_failure(self):
         self._add_server('Server A', 0)
 

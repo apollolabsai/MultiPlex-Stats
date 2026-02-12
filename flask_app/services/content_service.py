@@ -56,15 +56,27 @@ class ContentService:
         if not metadata.get('summary'):
             metadata['summary'] = 'No summary available.'
 
-        watch_history = [self._format_watch_history_row(item, content_title) for item in plays]
-        plays_chart = self._build_plays_by_year_chart(plays, details_title)
-        plays_by_user_chart = self._build_plays_by_user_chart(plays, details_title) if not is_movie else None
         lifetime_stats = self._get_lifetime_content_stats(
             record=record,
             plays=plays,
             is_movie=is_movie,
             content_title=content_title,
         )
+        watch_history = [self._format_watch_history_row(item, content_title) for item in plays]
+        plays_chart = self._build_plays_by_year_chart(plays, details_title)
+
+        plays_by_user_chart = None
+        if not is_movie:
+            endpoint_user_counts = lifetime_stats.get('user_play_counts', {})
+            endpoint_user_labels = lifetime_stats.get('user_display_names', {})
+            if endpoint_user_counts:
+                plays_by_user_chart = self._build_plays_by_user_chart_from_counts(
+                    user_play_counts=endpoint_user_counts,
+                    user_display_names=endpoint_user_labels,
+                    title=details_title,
+                )
+            else:
+                plays_by_user_chart = self._build_plays_by_user_chart(plays, details_title)
 
         return {
             'content_kind': content_kind,
@@ -412,6 +424,37 @@ class ContentService:
             'title': f'Plays by User - {title}',
         }
 
+    def _build_plays_by_user_chart_from_counts(
+        self,
+        user_play_counts: dict[str, int],
+        user_display_names: dict[str, str],
+        title: str,
+    ) -> dict[str, Any]:
+        sorted_users = sorted(
+            user_play_counts.items(),
+            key=lambda pair: (-pair[1], user_display_names.get(pair[0], pair[0]).lower()),
+        )
+
+        categories = [user_display_names.get(token, token) for token, _ in sorted_users]
+        raw_counts = [count for _, count in sorted_users]
+        max_count = max(raw_counts) if raw_counts else 1
+        min_count = min(raw_counts) if raw_counts else 0
+
+        data = []
+        for count in raw_counts:
+            ratio = (count - min_count) / (max_count - min_count) if max_count > min_count else 0
+            data.append({
+                'y': int(count),
+                'color': self._interpolate_color('#ff9800', '#ed542c', ratio),
+            })
+
+        return {
+            'categories': categories,
+            'data': data,
+            'overall_total': sum(raw_counts),
+            'title': f'Plays by User - {title}',
+        }
+
     @staticmethod
     def _interpolate_color(color1: str, color2: str, ratio: float) -> str:
         def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
@@ -511,7 +554,7 @@ class ContentService:
         plays: list[ViewingHistory],
         is_movie: bool,
         content_title: str,
-    ) -> dict[str, int]:
+    ) -> dict[str, Any]:
         local_total_plays = len(plays)
         local_unique_users = len({(item.user or '').strip().lower() for item in plays if item.user})
 
@@ -536,7 +579,8 @@ class ContentService:
             }
 
         endpoint_total_plays = 0
-        unique_user_tokens: set[str] = set()
+        user_play_counts: dict[str, int] = {}
+        user_display_names: dict[str, str] = {}
         user_key_sources = 0
         item_media_type = 'movie' if is_movie else 'show'
         endpoint_play_sources = 0
@@ -560,17 +604,23 @@ class ContentService:
                         endpoint_play_sources += 1
 
                     if user_stats is not None:
-                        unique_user_tokens.update(user_stats['tokens'])
+                        for token, count in user_stats['play_counts'].items():
+                            user_play_counts[token] = user_play_counts.get(token, 0) + count
+                        for token, display_name in user_stats['display_names'].items():
+                            if token not in user_display_names and display_name:
+                                user_display_names[token] = display_name
                         user_key_sources += 1
             except Exception:
                 continue
 
         total_plays = endpoint_total_plays if endpoint_play_sources > 0 else local_total_plays
-        unique_users = len(unique_user_tokens) if user_key_sources > 0 else local_unique_users
+        unique_users = len(user_play_counts) if user_key_sources > 0 else local_unique_users
 
         return {
             'total_plays': total_plays,
             'unique_users': unique_users,
+            'user_play_counts': user_play_counts if user_key_sources > 0 else {},
+            'user_display_names': user_display_names if user_key_sources > 0 else {},
         }
 
     def _fetch_watch_total_plays(
@@ -622,6 +672,8 @@ class ContentService:
             return {
                 'tokens': self._extract_item_user_tokens(response),
                 'total_plays': self._extract_item_user_total_plays(response),
+                'play_counts': self._extract_item_user_play_counts(response),
+                'display_names': self._extract_item_user_display_names(response),
             }
 
         return None
@@ -860,6 +912,53 @@ class ContentService:
             if value is not None and value > 0:
                 total += value
         return total
+
+    @staticmethod
+    def _extract_item_user_play_counts(response: dict[str, Any]) -> dict[str, int]:
+        rows = ContentService._extract_item_user_rows(response)
+        play_counts: dict[str, int] = {}
+
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+
+            value = ContentService._to_int(row.get('total_plays'))
+            if value is None or value <= 0:
+                continue
+
+            token = ContentService._build_user_token(row)
+            if not token:
+                continue
+
+            play_counts[token] = play_counts.get(token, 0) + value
+
+        return play_counts
+
+    @staticmethod
+    def _extract_item_user_display_names(response: dict[str, Any]) -> dict[str, str]:
+        rows = ContentService._extract_item_user_rows(response)
+        display_names: dict[str, str] = {}
+
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+
+            token = ContentService._build_user_token(row)
+            if not token or token in display_names:
+                continue
+
+            display_name = (
+                row.get('friendly_name')
+                or row.get('username')
+                or row.get('user')
+                or row.get('email')
+            )
+            if display_name:
+                display_names[token] = str(display_name)
+            else:
+                display_names[token] = token.replace('name:', '').replace('id:', '')
+
+        return display_names
 
     @staticmethod
     def _extract_item_user_rows(response: dict[str, Any]) -> list[dict[str, Any]]:
