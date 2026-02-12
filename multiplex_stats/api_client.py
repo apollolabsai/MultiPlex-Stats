@@ -118,7 +118,11 @@ class TautulliClient:
         self,
         start: int = 0,
         length: int = 1000,
-        after: Optional[str] = None
+        after: Optional[str] = None,
+        search: Optional[str] = None,
+        rating_key: Optional[int] = None,
+        parent_rating_key: Optional[int] = None,
+        grandparent_rating_key: Optional[int] = None,
     ) -> dict[str, Any]:
         """
         Get play history with pagination support.
@@ -127,6 +131,10 @@ class TautulliClient:
             start: Row offset to start from (for pagination)
             length: Number of records to return per page (max 1000 recommended)
             after: Optional date string in YYYY-MM-DD format to filter records after this date
+            search: Optional search text filter
+            rating_key: Optional item rating key filter
+            parent_rating_key: Optional season/parent rating key filter
+            grandparent_rating_key: Optional show/series rating key filter
 
         Returns:
             API response containing:
@@ -137,6 +145,14 @@ class TautulliClient:
         params = {'start': start, 'length': length}
         if after:
             params['after'] = after
+        if search:
+            params['search'] = search
+        if rating_key is not None:
+            params['rating_key'] = rating_key
+        if parent_rating_key is not None:
+            params['parent_rating_key'] = parent_rating_key
+        if grandparent_rating_key is not None:
+            params['grandparent_rating_key'] = grandparent_rating_key
         return self._make_request('get_history', **params)
 
     def get_activity(self) -> dict[str, Any]:

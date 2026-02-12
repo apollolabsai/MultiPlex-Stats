@@ -362,6 +362,97 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertEqual(details['total_plays'], 11)
         self.assertEqual(details['unique_users'], 3)
 
+    def test_content_details_aggregates_multiple_show_keys_per_server(self):
+        self._add_server('Server A', 0)
+
+        clicked = self._add_history(
+            row_id=50,
+            server_name='Server A',
+            server_order=0,
+            media_type='episode',
+            title='Pilot',
+            full_title='Family Guy - Pilot',
+            grandparent_title='Family Guy',
+            rating_key=5001,
+            grandparent_rating_key=9001,
+            user='alice',
+            started=1700800000,
+            date_played=date(2024, 5, 1),
+        )
+
+        client = MagicMock()
+
+        def history_page(**kwargs):
+            start = kwargs.get('start', 0)
+            if start == 0:
+                return {
+                    'response': {
+                        'result': 'success',
+                        'data': {
+                            'recordsFiltered': 2,
+                            'data': [
+                                {
+                                    'media_type': 'episode',
+                                    'grandparent_title': 'Family Guy',
+                                    'grandparent_rating_key': 9001,
+                                },
+                                {
+                                    'media_type': 'episode',
+                                    'grandparent_title': 'Family Guy',
+                                    'grandparent_rating_key': 9002,
+                                },
+                            ],
+                        },
+                    }
+                }
+            return {
+                'response': {
+                    'result': 'success',
+                    'data': {
+                        'recordsFiltered': 2,
+                        'data': [],
+                    },
+                }
+            }
+
+        def watch_stats(rating_key, **kwargs):
+            if rating_key == 9001:
+                total = 10
+            elif rating_key == 9002:
+                total = 20
+            else:
+                total = 0
+            return {'response': {'result': 'success', 'data': [{'query_days': 0, 'total_plays': total}]}}
+
+        def user_stats(rating_key, **kwargs):
+            if rating_key == 9001:
+                rows = [
+                    {'friendly_name': 'alice', 'total_plays': 6},
+                    {'friendly_name': 'bob', 'total_plays': 4},
+                ]
+            elif rating_key == 9002:
+                rows = [
+                    {'friendly_name': 'alice', 'total_plays': 7},
+                    {'friendly_name': 'charlie', 'total_plays': 13},
+                ]
+            else:
+                rows = []
+            return {'response': {'result': 'success', 'data': rows}}
+
+        client.get_history_paginated.side_effect = history_page
+        client.get_item_watch_time_stats.side_effect = watch_stats
+        client.get_item_user_stats.side_effect = user_stats
+
+        with patch.object(ContentService, '_get_metadata_for_record', return_value={'summary': 'ok'}):
+            with patch('flask_app.services.content_service.TautulliClient', return_value=client):
+                details = ContentService().get_content_details(clicked.id)
+
+        self.assertIsNotNone(details)
+        self.assertEqual(details['total_plays'], 30)
+        self.assertEqual(details['unique_users'], 3)
+        watched_keys = {call.args[0] for call in client.get_item_watch_time_stats.call_args_list}
+        self.assertEqual(watched_keys, {9001, 9002})
+
 
 if __name__ == '__main__':
     unittest.main()

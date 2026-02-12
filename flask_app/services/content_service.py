@@ -62,6 +62,7 @@ class ContentService:
             record=record,
             plays=plays,
             is_movie=is_movie,
+            content_title=content_title,
         )
 
         return {
@@ -451,14 +452,24 @@ class ContentService:
         record: ViewingHistory,
         plays: list[ViewingHistory],
         is_movie: bool,
+        content_title: str,
     ) -> dict[str, int]:
         local_total_plays = len(plays)
         local_unique_users = len({(item.user or '').strip().lower() for item in plays if item.user})
+
+        active_servers = (
+            ServerConfig.query
+            .filter(ServerConfig.is_active.is_(True))
+            .all()
+        )
+        server_lookup = {server.name: server for server in active_servers if server.name}
 
         server_rating_keys = self._resolve_server_rating_keys(
             record=record,
             plays=plays,
             is_movie=is_movie,
+            content_title=content_title,
+            active_servers=active_servers,
         )
         if not server_rating_keys:
             return {
@@ -466,46 +477,38 @@ class ContentService:
                 'unique_users': local_unique_users,
             }
 
-        active_servers = (
-            ServerConfig.query
-            .filter(
-                ServerConfig.is_active.is_(True),
-                ServerConfig.name.in_(list(server_rating_keys.keys()))
-            )
-            .all()
-        )
-        server_lookup = {server.name: server for server in active_servers}
-
         endpoint_total_plays = 0
         unique_user_tokens: set[str] = set()
-        user_servers_processed = 0
+        user_key_sources = 0
         item_media_type = 'movie' if is_movie else 'show'
         endpoint_play_sources = 0
 
-        for server_name, rating_key in server_rating_keys.items():
+        for server_name, rating_keys in server_rating_keys.items():
             server = server_lookup.get(server_name)
             if not server:
                 continue
 
             try:
                 client = TautulliClient(server.to_multiplex_config())
-                user_stats = self._fetch_item_user_stats(client, int(rating_key), item_media_type)
-                if user_stats is not None:
-                    endpoint_total_plays += user_stats['total_plays']
-                    unique_user_tokens.update(user_stats['tokens'])
-                    user_servers_processed += 1
-                    endpoint_play_sources += 1
-                    continue
+                for rating_key in sorted(rating_keys):
+                    total_plays = self._fetch_watch_total_plays(client, int(rating_key), item_media_type)
+                    user_stats = self._fetch_item_user_stats(client, int(rating_key), item_media_type)
 
-                total_plays = self._fetch_watch_total_plays(client, int(rating_key), item_media_type)
-                if total_plays is not None:
-                    endpoint_total_plays += total_plays
-                    endpoint_play_sources += 1
+                    if total_plays is not None:
+                        endpoint_total_plays += total_plays
+                        endpoint_play_sources += 1
+                    elif user_stats is not None:
+                        endpoint_total_plays += user_stats['total_plays']
+                        endpoint_play_sources += 1
+
+                    if user_stats is not None:
+                        unique_user_tokens.update(user_stats['tokens'])
+                        user_key_sources += 1
             except Exception:
                 continue
 
         total_plays = endpoint_total_plays if endpoint_play_sources > 0 else local_total_plays
-        unique_users = len(unique_user_tokens) if user_servers_processed > 0 else local_unique_users
+        unique_users = len(unique_user_tokens) if user_key_sources > 0 else local_unique_users
 
         return {
             'total_plays': total_plays,
@@ -576,32 +579,166 @@ class ContentService:
             return True
         return str(result).strip().lower() == 'success'
 
-    @staticmethod
     def _resolve_server_rating_keys(
+        self,
         record: ViewingHistory,
         plays: list[ViewingHistory],
         is_movie: bool,
-    ) -> dict[str, int]:
-        key_by_server: dict[str, int] = {}
+        content_title: str,
+        active_servers: list[ServerConfig],
+    ) -> dict[str, set[int]]:
+        keys_by_server: dict[str, set[int]] = {}
 
         for item in plays:
             server_name = (item.server_name or '').strip()
-            if not server_name or server_name in key_by_server:
+            if not server_name:
                 continue
 
             rating_key = item.rating_key if is_movie else (item.grandparent_rating_key or item.rating_key)
             parsed_key = ContentService._to_int(rating_key)
             if parsed_key is not None:
-                key_by_server[server_name] = parsed_key
+                keys_by_server.setdefault(server_name, set()).add(parsed_key)
 
         source_server_name = (record.server_name or '').strip()
-        if source_server_name and source_server_name not in key_by_server:
+        if source_server_name:
             source_rating_key = record.rating_key if is_movie else (record.grandparent_rating_key or record.rating_key)
             parsed_source_key = ContentService._to_int(source_rating_key)
             if parsed_source_key is not None:
-                key_by_server[source_server_name] = parsed_source_key
+                keys_by_server.setdefault(source_server_name, set()).add(parsed_source_key)
 
-        return key_by_server
+        for server in active_servers:
+            if not server.name:
+                continue
+            discovered_keys = self._discover_server_content_rating_keys(
+                server=server,
+                content_title=content_title,
+                is_movie=is_movie,
+                content_year=record.year if is_movie else None,
+            )
+            if discovered_keys:
+                keys_by_server.setdefault(server.name, set()).update(discovered_keys)
+
+        return {
+            server_name: keys
+            for server_name, keys in keys_by_server.items()
+            if keys
+        }
+
+    def _discover_server_content_rating_keys(
+        self,
+        server: ServerConfig,
+        content_title: str,
+        is_movie: bool,
+        content_year: int | None,
+    ) -> set[int]:
+        normalized_title = self._normalize_content_title(content_title)
+        if not normalized_title:
+            return set()
+
+        try:
+            client = TautulliClient(server.to_multiplex_config())
+        except Exception:
+            return set()
+
+        page_size = 1000
+        max_pages = 250
+        start = 0
+        pages = 0
+        discovered: set[int] = set()
+
+        while pages < max_pages:
+            try:
+                response = client.get_history_paginated(
+                    start=start,
+                    length=page_size,
+                    search=content_title,
+                )
+            except Exception:
+                break
+
+            rows, records_filtered = self._extract_history_page(response)
+            if rows is None:
+                break
+
+            for row in rows:
+                key = self._extract_matching_rating_key(
+                    row=row,
+                    normalized_title=normalized_title,
+                    is_movie=is_movie,
+                    content_year=content_year,
+                )
+                if key is not None:
+                    discovered.add(key)
+
+            pages += 1
+            fetched = len(rows)
+            start += fetched
+            if fetched == 0:
+                break
+            if records_filtered is not None and start >= records_filtered:
+                break
+
+        return discovered
+
+    @staticmethod
+    def _extract_history_page(response: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, int | None]:
+        if not isinstance(response, dict):
+            return None, None
+
+        envelope = response.get('response', {})
+        if not isinstance(envelope, dict):
+            return None, None
+
+        data = envelope.get('data', {})
+        if not isinstance(data, dict):
+            return None, None
+
+        rows = data.get('data', [])
+        if not isinstance(rows, list):
+            rows = []
+
+        parsed_rows = [row for row in rows if isinstance(row, dict)]
+        records_filtered = ContentService._to_int(data.get('recordsFiltered'))
+        return parsed_rows, records_filtered
+
+    def _extract_matching_rating_key(
+        self,
+        row: dict[str, Any],
+        normalized_title: str,
+        is_movie: bool,
+        content_year: int | None,
+    ) -> int | None:
+        media_type = self._normalize_content_title(row.get('media_type'))
+
+        if is_movie:
+            if media_type != 'movie':
+                return None
+
+            row_title = self._normalize_content_title(row.get('title') or row.get('full_title'))
+            if row_title != normalized_title:
+                return None
+
+            if content_year is not None:
+                row_year = self._to_int(row.get('year'))
+                if row_year is not None and row_year != content_year:
+                    return None
+
+            return self._to_int(row.get('rating_key'))
+
+        if media_type not in {'episode', 'tv', 'show'}:
+            return None
+
+        row_title = self._normalize_content_title(row.get('grandparent_title') or row.get('title'))
+        if row_title != normalized_title:
+            return None
+
+        return self._to_int(row.get('grandparent_rating_key') or row.get('rating_key'))
+
+    @staticmethod
+    def _normalize_content_title(value: Any) -> str:
+        if not value:
+            return ''
+        return ' '.join(str(value).strip().lower().split())
 
     @staticmethod
     def _extract_watch_stats_total_plays(response: dict[str, Any]) -> int | None:
