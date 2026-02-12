@@ -795,6 +795,7 @@ class MediaService:
             file_size_gb = movie.file_size / (1024 ** 3) if movie.file_size else 0
 
             result.append({
+                'media_id': movie.id,
                 'title': title_with_year,
                 'content_title': movie.title,
                 'content_year': movie.year,
@@ -836,6 +837,7 @@ class MediaService:
             file_size_gb = show.file_size / (1024 ** 3) if show.file_size else 0
 
             result.append({
+                'media_id': show.id,
                 'title': show.title,
                 'content_title': show.title,
                 'content_year': None,

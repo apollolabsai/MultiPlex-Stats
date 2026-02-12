@@ -154,7 +154,7 @@ def start_history_backfill():
             db.session.commit()
 
         sync_service = HistorySyncService()
-        if not sync_service.start_backfill(days):
+        if not sync_service.start_backfill_async(days):
             flash('A sync is already in progress.', 'error')
         else:
             flash(f'Started loading {days} days of history. Check progress below.', 'info')

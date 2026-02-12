@@ -33,21 +33,25 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.ctx.pop()
 
     def _add_movie(self, title: str, year: int | None = None):
-        db.session.add(CachedMedia(
+        media = CachedMedia(
             media_type='movie',
             title=title,
             year=year,
             play_count=0,
-        ))
+        )
+        db.session.add(media)
         db.session.commit()
+        return media
 
     def _add_show(self, title: str):
-        db.session.add(CachedMedia(
+        media = CachedMedia(
             media_type='show',
             title=title,
             play_count=0,
-        ))
+        )
+        db.session.add(media)
         db.session.commit()
+        return media
 
     def _add_history(self, **kwargs) -> ViewingHistory:
         kwargs.setdefault('server_name', 'Server A')
@@ -121,6 +125,12 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.assertNotEqual(rows[0]['history_id'], older.id)
 
     def test_get_tv_shows_history_id_none_when_no_match(self):
-        self._add_show('Unknown Show')
+        show = self._add_show('Unknown Show')
         rows = MediaService().get_tv_shows()
         self.assertIsNone(rows[0]['history_id'])
+        self.assertEqual(rows[0]['media_id'], show.id)
+
+    def test_get_movies_always_includes_media_id(self):
+        movie = self._add_movie('No History Movie', 2024)
+        rows = MediaService().get_movies()
+        self.assertEqual(rows[0]['media_id'], movie.id)

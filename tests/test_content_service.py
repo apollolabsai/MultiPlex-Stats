@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from flask import Flask
 
-from flask_app.models import db, ServerConfig, ViewingHistory
+from flask_app.models import CachedMedia, db, ServerConfig, ViewingHistory
 from flask_app.services.content_service import ContentService
 
 
@@ -26,6 +26,7 @@ class ContentServiceChartTests(unittest.TestCase):
     def setUp(self):
         self.ctx = self.app.app_context()
         self.ctx.push()
+        CachedMedia.query.delete()
         ViewingHistory.query.delete()
         ServerConfig.query.delete()
         db.session.commit()
@@ -46,6 +47,12 @@ class ContentServiceChartTests(unittest.TestCase):
 
     def _add_history(self, **kwargs) -> ViewingHistory:
         record = ViewingHistory(**kwargs)
+        db.session.add(record)
+        db.session.commit()
+        return record
+
+    def _add_cached_media(self, **kwargs) -> CachedMedia:
+        record = CachedMedia(**kwargs)
         db.session.add(record)
         db.session.commit()
         return record
@@ -523,6 +530,61 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertEqual(details['unique_users'], 3)
         watched_keys = {call.args[0] for call in client.get_item_watch_time_stats.call_args_list}
         self.assertEqual(watched_keys, {9001, 9002})
+
+    def test_media_content_details_works_without_local_history(self):
+        self._add_server('Server A', 0)
+        media = self._add_cached_media(
+            media_type='movie',
+            title='Fresh Movie',
+            year=2024,
+            play_count=0,
+        )
+
+        client = MagicMock()
+        client.get_history_paginated.return_value = {
+            'response': {
+                'result': 'success',
+                'data': {
+                    'recordsFiltered': 1,
+                    'data': [
+                        {
+                            'media_type': 'movie',
+                            'title': 'Fresh Movie',
+                            'year': 2024,
+                            'rating_key': 555,
+                        }
+                    ],
+                },
+            }
+        }
+        client.get_metadata.return_value = {
+            'response': {
+                'result': 'success',
+                'data': {
+                    'summary': 'A brand new movie.',
+                    'year': 2024,
+                },
+            }
+        }
+        client.get_item_watch_time_stats.return_value = {
+            'response': {'result': 'success', 'data': [{'query_days': 0, 'total_plays': 9}]}
+        }
+        client.get_item_user_stats.return_value = {
+            'response': {'result': 'success', 'data': [
+                {'friendly_name': 'alice', 'total_plays': 4},
+                {'friendly_name': 'bob', 'total_plays': 5},
+            ]}
+        }
+
+        with patch('flask_app.services.content_service.TautulliClient', return_value=client):
+            details = ContentService().get_content_details_for_media(media.id)
+
+        self.assertIsNotNone(details)
+        self.assertEqual(details['content_kind'], 'movie')
+        self.assertEqual(details['total_plays'], 9)
+        self.assertEqual(details['unique_users'], 2)
+        self.assertEqual(details['watch_history'], [])
+        self.assertIsNone(details['source_record_id'])
 
 
 if __name__ == '__main__':

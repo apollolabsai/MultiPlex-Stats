@@ -381,6 +381,16 @@ def content_details(history_id):
     return render_template('content_detail.html', **details)
 
 
+@main_bp.route('/content/media/<int:media_id>')
+def media_content_details(media_id):
+    """Display detail page for clicked media-library row."""
+    service = ContentService()
+    details = service.get_content_details_for_media(media_id)
+    if not details:
+        abort(404)
+    return render_template('content_detail.html', **details)
+
+
 @main_bp.route('/api/viewing-history-stats')
 def api_viewing_history_stats():
     """Get statistics from the viewing history database table."""

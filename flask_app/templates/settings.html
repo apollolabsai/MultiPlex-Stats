@@ -161,8 +161,8 @@
                 <div class="sync-progress" id="sync-progress" style="display: none;">
                     <div class="progress-header">
                         <span class="progress-title">Loading history...</span>
-                        <span class="progress-server" id="progress-server"></span>
                     </div>
+                    <div id="history-server-progress-container"></div>
                     <div class="progress-bar-container large">
                         <div class="progress-bar-fill orange" id="progress-bar" style="width: 0%;"></div>
                     </div>
@@ -202,9 +202,50 @@
     var pollInterval = null;
     var syncStatus = {{ sync_status | tojson }};
 
+    function renderServerProgress(servers) {
+        var container = document.getElementById('history-server-progress-container');
+        if (!container) {
+            return;
+        }
+
+        var html = '';
+        (servers || []).forEach(function(server) {
+            var percent = 0;
+            if (server.total && server.total > 0) {
+                percent = Math.min(100, (server.fetched / server.total) * 100);
+            } else if (server.status === 'success') {
+                percent = 100;
+            }
+
+            var fillClass = '';
+            if (server.status === 'success') fillClass = 'success';
+            else if (server.status === 'failed') fillClass = 'failed';
+
+            html += '<div class="history-server-progress">';
+            html += '<div class="history-server-header">';
+            html += '<span class="history-server-name">' + (server.name || 'Server');
+            html += '<span class="history-status-badge ' + (server.status || 'idle') + '">' + (server.status || 'idle') + '</span>';
+            html += '</span>';
+            html += '<span class="history-server-step">' + (server.step || '') + '</span>';
+            html += '</div>';
+            html += '<div class="history-server-bar">';
+            html += '<div class="history-server-fill ' + fillClass + '" style="width: ' + percent + '%;"></div>';
+            html += '</div>';
+            html += '<div class="history-server-fetched">' + ((server.fetched || 0).toLocaleString()) + ' records';
+            if (server.total) {
+                html += ' / ' + server.total.toLocaleString() + ' total';
+            }
+            html += ' (' + ((server.inserted || 0).toLocaleString()) + ' new, ' + ((server.skipped || 0).toLocaleString()) + ' duplicates)</div>';
+            if (server.error) {
+                html += '<div class="history-server-error">' + server.error + '</div>';
+            }
+            html += '</div>';
+        });
+        container.innerHTML = html;
+    }
+
     function updateProgress(status) {
         var progressDiv = document.getElementById('sync-progress');
-        var statusDiv = document.getElementById('history-status');
         var backfillBtn = document.getElementById('backfill-btn');
 
         if (status.status === 'running') {
@@ -213,7 +254,7 @@
             backfillBtn.textContent = 'Loading...';
 
             // Update progress
-            document.getElementById('progress-server').textContent = status.current_server ? 'Server: ' + status.current_server : '';
+            renderServerProgress(status.servers || []);
             document.getElementById('progress-fetched').textContent = status.records_fetched.toLocaleString();
             document.getElementById('progress-total').textContent = status.records_total ? status.records_total.toLocaleString() : '?';
             document.getElementById('progress-inserted').textContent = status.records_inserted.toLocaleString();
@@ -228,6 +269,7 @@
             progressDiv.style.display = 'none';
             backfillBtn.disabled = false;
             backfillBtn.textContent = status.total_records_in_db > 0 ? 'Reload History Data' : 'Load History Data';
+            renderServerProgress(status.servers || []);
 
             if (status.status === 'success') {
                 // Reload page to show updated stats
@@ -319,9 +361,97 @@
     color: #f18a3d;
 }
 
-.progress-server {
+.history-server-progress {
+    margin-bottom: 12px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.18);
+    border-radius: 8px;
+}
+
+.history-server-progress:last-child {
+    margin-bottom: 16px;
+}
+
+.history-server-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.history-server-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #fff;
+    font-weight: 600;
+}
+
+.history-status-badge {
+    font-size: 0.75em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+}
+
+.history-status-badge.pending {
+    background: rgba(150, 150, 150, 0.3);
     color: #aaa;
-    font-size: 0.9em;
+}
+
+.history-status-badge.running {
+    background: rgba(241, 138, 61, 0.3);
+    color: #f18a3d;
+}
+
+.history-status-badge.success {
+    background: rgba(76, 175, 80, 0.3);
+    color: #4caf50;
+}
+
+.history-status-badge.failed {
+    background: rgba(244, 67, 54, 0.3);
+    color: #f44336;
+}
+
+.history-server-step {
+    color: #f18a3d;
+    font-size: 0.85em;
+}
+
+.history-server-bar {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.history-server-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #f18a3d, #ed542c);
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+
+.history-server-fill.success {
+    background: linear-gradient(90deg, #4caf50, #45a049);
+}
+
+.history-server-fill.failed {
+    background: linear-gradient(90deg, #f44336, #d32f2f);
+}
+
+.history-server-fetched {
+    color: #aaa;
+    font-size: 0.8em;
+}
+
+.history-server-error {
+    margin-top: 4px;
+    color: #f44336;
+    font-size: 0.8em;
 }
 
 .progress-bar-container.large {

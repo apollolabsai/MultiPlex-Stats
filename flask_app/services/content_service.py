@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 from sqlalchemy import func, or_
 
-from flask_app.models import ServerConfig, ViewingHistory
+from flask_app.models import CachedMedia, ServerConfig, ViewingHistory
 from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
 
@@ -61,6 +61,7 @@ class ContentService:
             plays=plays,
             is_movie=is_movie,
             content_title=content_title,
+            content_year=record.year if is_movie else None,
         )
         watch_history = [self._format_watch_history_row(item, content_title) for item in plays]
         plays_chart = self._build_plays_by_year_chart(plays, details_title)
@@ -89,6 +90,90 @@ class ContentService:
             'total_plays': lifetime_stats['total_plays'],
             'unique_users': lifetime_stats['unique_users'],
             'source_record_id': record.id,
+        }
+
+    def get_content_details_for_media(self, media_id: int) -> dict[str, Any] | None:
+        """
+        Build content detail page data from CachedMedia id.
+        This keeps media-page links available even when local history cache is limited.
+        """
+        media = CachedMedia.query.get(media_id)
+        if not media:
+            return None
+
+        is_movie = (media.media_type or '').lower() == 'movie'
+        content_title = (media.title or 'Unknown').strip()
+        content_kind = 'movie' if is_movie else 'show'
+        details_title = content_title
+        if is_movie and media.year:
+            details_title = f"{content_title} ({media.year})"
+
+        if is_movie:
+            query = (
+                ViewingHistory.query
+                .filter(func.lower(ViewingHistory.media_type) == 'movie')
+                .filter(
+                    or_(
+                        func.lower(ViewingHistory.title) == content_title.lower(),
+                        func.lower(ViewingHistory.full_title) == content_title.lower(),
+                    )
+                )
+            )
+            if media.year:
+                query = query.filter(ViewingHistory.year == media.year)
+        else:
+            query = (
+                ViewingHistory.query
+                .filter(func.lower(ViewingHistory.media_type).in_(['episode', 'tv', 'show']))
+                .filter(func.lower(ViewingHistory.grandparent_title) == content_title.lower())
+            )
+
+        plays = query.order_by(ViewingHistory.started.desc()).all()
+        source_record = plays[0] if plays else None
+        metadata = self._get_metadata_for_media(
+            media=media,
+            source_record=source_record,
+            is_movie=is_movie,
+            content_title=content_title,
+        )
+
+        if not metadata.get('summary'):
+            metadata['summary'] = 'No summary available.'
+
+        lifetime_stats = self._get_lifetime_content_stats(
+            record=source_record,
+            plays=plays,
+            is_movie=is_movie,
+            content_title=content_title,
+            content_year=media.year if is_movie else None,
+        )
+        watch_history = [self._format_watch_history_row(item, content_title) for item in plays]
+        plays_chart = self._build_plays_by_year_chart(plays, details_title)
+
+        plays_by_user_chart = None
+        if not is_movie:
+            endpoint_user_counts = lifetime_stats.get('user_play_counts', {})
+            endpoint_user_labels = lifetime_stats.get('user_display_names', {})
+            if endpoint_user_counts:
+                plays_by_user_chart = self._build_plays_by_user_chart_from_counts(
+                    user_play_counts=endpoint_user_counts,
+                    user_display_names=endpoint_user_labels,
+                    title=details_title,
+                )
+            else:
+                plays_by_user_chart = self._build_plays_by_user_chart(plays, details_title)
+
+        return {
+            'content_kind': content_kind,
+            'content_title': details_title,
+            'is_movie': is_movie,
+            'metadata': metadata,
+            'plays_chart': plays_chart,
+            'plays_by_user_chart': plays_by_user_chart,
+            'watch_history': watch_history,
+            'total_plays': lifetime_stats['total_plays'],
+            'unique_users': lifetime_stats['unique_users'],
+            'source_record_id': source_record.id if source_record else None,
         }
 
     def _build_movie_query(self, record: ViewingHistory, content_title: str):
@@ -196,6 +281,71 @@ class ContentService:
             height=500,
             fallback='art',
         )
+
+        return metadata
+
+    def _get_metadata_for_media(
+        self,
+        media: CachedMedia,
+        source_record: ViewingHistory | None,
+        is_movie: bool,
+        content_title: str,
+    ) -> dict[str, Any]:
+        """Get content metadata for media-page links, even when local history is sparse."""
+        if source_record:
+            metadata = self._get_metadata_for_record(source_record, is_movie)
+        else:
+            metadata = {
+                'summary': '',
+                'poster_url': '',
+                'banner_url': '',
+                'director': '',
+                'studio': '',
+                'year': media.year or '',
+                'runtime': '',
+                'rated': '',
+                'video_codec': '',
+                'resolution': '',
+                'audio': '',
+            }
+
+            active_servers = (
+                ServerConfig.query
+                .filter(ServerConfig.is_active.is_(True))
+                .order_by(ServerConfig.server_order)
+                .all()
+            )
+
+            content_year = media.year if is_movie else None
+            for server in active_servers:
+                discovered_keys = self._discover_server_content_rating_keys(
+                    server=server,
+                    content_title=content_title,
+                    is_movie=is_movie,
+                    content_year=content_year,
+                )
+                if not discovered_keys:
+                    continue
+
+                selected_key = sorted(discovered_keys)[0]
+                proxy_record = ViewingHistory(
+                    server_name=server.name,
+                    media_type='movie' if is_movie else 'episode',
+                    title=content_title if is_movie else '',
+                    grandparent_title='' if is_movie else content_title,
+                    year=media.year if is_movie else None,
+                    rating_key=selected_key,
+                    grandparent_rating_key=selected_key if not is_movie else None,
+                )
+                metadata = self._get_metadata_for_record(proxy_record, is_movie)
+                break
+
+        if not metadata.get('year') and media.year:
+            metadata['year'] = media.year
+        if not metadata.get('video_codec') and media.video_codec:
+            metadata['video_codec'] = media.video_codec
+        if not metadata.get('resolution') and media.video_resolution:
+            metadata['resolution'] = media.video_resolution
 
         return metadata
 
@@ -550,10 +700,11 @@ class ContentService:
 
     def _get_lifetime_content_stats(
         self,
-        record: ViewingHistory,
+        record: ViewingHistory | None,
         plays: list[ViewingHistory],
         is_movie: bool,
         content_title: str,
+        content_year: int | None = None,
     ) -> dict[str, Any]:
         local_total_plays = len(plays)
         local_unique_users = len({(item.user or '').strip().lower() for item in plays if item.user})
@@ -570,6 +721,7 @@ class ContentService:
             plays=plays,
             is_movie=is_movie,
             content_title=content_title,
+            content_year=content_year,
             active_servers=active_servers,
         )
         if not server_rating_keys:
@@ -691,10 +843,11 @@ class ContentService:
 
     def _resolve_server_rating_keys(
         self,
-        record: ViewingHistory,
+        record: ViewingHistory | None,
         plays: list[ViewingHistory],
         is_movie: bool,
         content_title: str,
+        content_year: int | None,
         active_servers: list[ServerConfig],
     ) -> dict[str, set[int]]:
         keys_by_server: dict[str, set[int]] = {}
@@ -709,12 +862,13 @@ class ContentService:
             if parsed_key is not None:
                 keys_by_server.setdefault(server_name, set()).add(parsed_key)
 
-        source_server_name = (record.server_name or '').strip()
-        if source_server_name:
-            source_rating_key = record.rating_key if is_movie else (record.grandparent_rating_key or record.rating_key)
-            parsed_source_key = ContentService._to_int(source_rating_key)
-            if parsed_source_key is not None:
-                keys_by_server.setdefault(source_server_name, set()).add(parsed_source_key)
+        if record:
+            source_server_name = (record.server_name or '').strip()
+            if source_server_name:
+                source_rating_key = record.rating_key if is_movie else (record.grandparent_rating_key or record.rating_key)
+                parsed_source_key = ContentService._to_int(source_rating_key)
+                if parsed_source_key is not None:
+                    keys_by_server.setdefault(source_server_name, set()).add(parsed_source_key)
 
         for server in active_servers:
             if not server.name:
@@ -723,7 +877,7 @@ class ContentService:
                 server=server,
                 content_title=content_title,
                 is_movie=is_movie,
-                content_year=record.year if is_movie else None,
+                content_year=content_year if is_movie else None,
             )
             if discovered_keys:
                 keys_by_server.setdefault(server.name, set()).update(discovered_keys)

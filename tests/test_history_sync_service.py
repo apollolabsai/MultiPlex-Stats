@@ -52,6 +52,7 @@ class HistorySyncServiceTests(unittest.TestCase):
         ViewingHistory.query.delete()
         ServerConfig.query.delete()
         HistorySyncStatus.query.delete()
+        HistorySyncService._server_progress = {}
         db.session.commit()
 
     def tearDown(self):
@@ -98,6 +99,14 @@ class HistorySyncServiceTests(unittest.TestCase):
         self.assertEqual(status.records_inserted, 4)
         self.assertEqual(status.records_skipped, 0)
         self.assertEqual(ViewingHistory.query.count(), 4)
+        sync_status = HistorySyncService().get_sync_status()
+        self.assertEqual(len(sync_status['servers']), 2)
+        self.assertEqual(sync_status['servers'][0]['name'], 'Server A')
+        self.assertEqual(sync_status['servers'][1]['name'], 'Server B')
+        self.assertEqual(sync_status['servers'][0]['status'], 'success')
+        self.assertEqual(sync_status['servers'][1]['status'], 'success')
+        self.assertEqual(sync_status['servers'][0]['fetched'], 2)
+        self.assertEqual(sync_status['servers'][1]['fetched'], 2)
 
     def test_backfill_skips_duplicate_row_ids_between_servers(self):
         self._add_server('Server A', 0)
@@ -121,3 +130,6 @@ class HistorySyncServiceTests(unittest.TestCase):
         self.assertEqual(status.records_inserted, 1)
         self.assertEqual(status.records_skipped, 1)
         self.assertEqual(ViewingHistory.query.count(), 1)
+        sync_status = HistorySyncService().get_sync_status()
+        self.assertEqual(sync_status['servers'][0]['inserted'], 1)
+        self.assertEqual(sync_status['servers'][1]['skipped'], 1)

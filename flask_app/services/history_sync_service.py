@@ -18,6 +18,7 @@ class HistorySyncService:
 
     PAGE_SIZE = 1000  # Records per API request
     _status_write_lock = threading.Lock()
+    _server_progress = {}
 
     def __init__(self):
         self.local_tz = get_local_timezone()
@@ -52,8 +53,46 @@ class HistorySyncService:
             'error_message': status.error_message,
             'last_sync_date': last_sync_date,
             'last_sync_record_count': status.last_sync_record_count,
-            'total_records_in_db': ViewingHistory.query.count()
+            'total_records_in_db': ViewingHistory.query.count(),
+            'servers': self._get_server_progress_list(),
         }
+
+    @classmethod
+    def _reset_server_progress(cls, server_a_config, server_b_config) -> None:
+        """Reset in-memory per-server progress snapshot used by polling UI."""
+        progress = {}
+        if server_a_config:
+            progress['a'] = {
+                'name': server_a_config.name,
+                'status': 'pending',
+                'step': '',
+                'fetched': 0,
+                'total': None,
+                'inserted': 0,
+                'skipped': 0,
+                'error': None,
+            }
+        if server_b_config:
+            progress['b'] = {
+                'name': server_b_config.name,
+                'status': 'pending',
+                'step': '',
+                'fetched': 0,
+                'total': None,
+                'inserted': 0,
+                'skipped': 0,
+                'error': None,
+            }
+        cls._server_progress = progress
+
+    @classmethod
+    def _get_server_progress_list(cls) -> list[dict]:
+        """Return per-server progress in stable Server A -> Server B order."""
+        return [
+            dict(cls._server_progress[key])
+            for key in ('a', 'b')
+            if key in cls._server_progress
+        ]
 
     def start_backfill(self, days: int) -> bool:
         """
@@ -71,6 +110,7 @@ class HistorySyncService:
             return False
 
         # Reset status for new backfill
+        server_a_config, server_b_config = ConfigService.get_server_configs()
         status.status = 'running'
         status.sync_type = 'backfill'
         status.started_at = datetime.utcnow()
@@ -82,6 +122,8 @@ class HistorySyncService:
         status.current_server = None
         status.error_message = None
         db.session.commit()
+        with self._status_write_lock:
+            self._reset_server_progress(server_a_config, server_b_config)
 
         # Truncate existing history for fresh start
         ViewingHistory.query.delete()
@@ -104,6 +146,71 @@ class HistorySyncService:
 
         db.session.commit()
         return True
+
+    def start_backfill_async(self, days: int, app=None) -> bool:
+        """
+        Start a full backfill sync in a background thread.
+
+        Args:
+            days: Number of days of history to fetch
+            app: Flask application instance for app context in thread
+
+        Returns:
+            True if backfill started, False if already running
+        """
+        status = self.get_or_create_status()
+
+        if status.status == 'running':
+            return False
+
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        if not server_a_config:
+            raise ValueError("No server configuration found")
+
+        status.status = 'running'
+        status.sync_type = 'backfill'
+        status.started_at = datetime.utcnow()
+        status.completed_at = None
+        status.records_fetched = 0
+        status.records_total = None
+        status.records_inserted = 0
+        status.records_skipped = 0
+        status.current_server = None
+        status.error_message = None
+        db.session.commit()
+        with self._status_write_lock:
+            self._reset_server_progress(server_a_config, server_b_config)
+
+        ViewingHistory.query.delete()
+        db.session.commit()
+
+        after_date = datetime.now(self.local_tz) - timedelta(days=days)
+        after_str = after_date.strftime("%Y-%m-%d")
+
+        if app is None:
+            app = current_app._get_current_object()
+
+        thread = threading.Thread(target=self._run_backfill_thread, args=(app, after_str))
+        thread.daemon = True
+        thread.start()
+        return True
+
+    def _run_backfill_thread(self, app, after_str: str) -> None:
+        """Run backfill in a background thread with app context."""
+        with app.app_context():
+            status = self.get_or_create_status()
+            try:
+                self._run_sync(after_str, is_backfill=True)
+                status.status = 'success'
+                status.completed_at = datetime.utcnow()
+                status.last_sync_date = datetime.utcnow()
+                status.last_sync_record_count = ViewingHistory.query.count()
+            except Exception as exc:
+                status.status = 'failed'
+                status.completed_at = datetime.utcnow()
+                status.error_message = str(exc)
+            db.session.commit()
+            db.session.remove()
 
     def start_incremental_sync(self) -> bool:
         """
@@ -133,6 +240,7 @@ class HistorySyncService:
         after_str = latest_date.strftime("%Y-%m-%d")
 
         # Reset status for incremental sync
+        server_a_config, server_b_config = ConfigService.get_server_configs()
         status.status = 'running'
         status.sync_type = 'incremental'
         status.started_at = datetime.utcnow()
@@ -144,6 +252,8 @@ class HistorySyncService:
         status.current_server = None
         status.error_message = None
         db.session.commit()
+        with self._status_write_lock:
+            self._reset_server_progress(server_a_config, server_b_config)
 
         try:
             self._run_sync(after_str, is_backfill=False)
@@ -185,11 +295,28 @@ class HistorySyncService:
             db.session.commit()
 
         def sync_worker(server_config, server_order):
+            server_key = 'a' if server_order == 0 else 'b'
             with app.app_context():
                 try:
-                    self._sync_server(server_config, after_date, server_order)
+                    with self._status_write_lock:
+                        server_state = self._server_progress.get(server_key)
+                        if server_state is not None:
+                            server_state['status'] = 'running'
+                            server_state['step'] = 'Fetching history...'
+                    self._sync_server(server_config, after_date, server_order, server_key)
+                    with self._status_write_lock:
+                        server_state = self._server_progress.get(server_key)
+                        if server_state is not None:
+                            server_state['status'] = 'success'
+                            server_state['step'] = 'Complete'
                 except Exception as exc:
                     db.session.rollback()
+                    with self._status_write_lock:
+                        server_state = self._server_progress.get(server_key)
+                        if server_state is not None:
+                            server_state['status'] = 'failed'
+                            server_state['step'] = 'Failed'
+                            server_state['error'] = str(exc)
                     with errors_lock:
                         errors.append(f"{server_config.name}: {exc}")
                 finally:
@@ -216,7 +343,7 @@ class HistorySyncService:
         if errors:
             raise ValueError(" | ".join(errors))
 
-    def _sync_server(self, server_config, after_date: str, server_order: int):
+    def _sync_server(self, server_config, after_date: str, server_order: int, server_key: str):
         """
         Sync history from a single server.
 
@@ -250,6 +377,10 @@ class HistorySyncService:
                 with self._status_write_lock:
                     status = self.get_or_create_status()
                     status.records_total = (status.records_total or 0) + total_records
+                    server_state = self._server_progress.get(server_key)
+                    if server_state is not None:
+                        server_state['total'] = total_records
+                        server_state['step'] = 'Fetching history...'
                     db.session.commit()
 
             if not records:
@@ -272,6 +403,12 @@ class HistorySyncService:
                 status.records_fetched += len(records)
                 status.records_inserted += page_inserted
                 status.records_skipped += page_skipped
+                server_state = self._server_progress.get(server_key)
+                if server_state is not None:
+                    server_state['fetched'] += len(records)
+                    server_state['inserted'] += page_inserted
+                    server_state['skipped'] += page_skipped
+                    server_state['step'] = 'Processing rows...'
                 db.session.commit()
 
             # Check if we've fetched all records
