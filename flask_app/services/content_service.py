@@ -489,34 +489,86 @@ class ContentService:
 
             try:
                 client = TautulliClient(server.to_multiplex_config())
-
-                watch_response = client.get_item_watch_time_stats(
-                    int(rating_key),
-                    media_type=item_media_type,
-                    query_days=0,
-                )
-                total_plays = self._extract_watch_stats_total_plays(watch_response)
+                total_plays = self._fetch_watch_total_plays(client, int(rating_key), item_media_type)
                 if total_plays is not None:
                     endpoint_total_plays += total_plays
                     watch_servers_processed += 1
 
-                user_response = client.get_item_user_stats(
-                    int(rating_key),
-                    media_type=item_media_type,
-                )
-                unique_user_tokens.update(self._extract_item_user_tokens(user_response))
-                user_servers_processed += 1
+                user_tokens = self._fetch_item_user_tokens(client, int(rating_key), item_media_type)
+                if user_tokens is not None:
+                    unique_user_tokens.update(user_tokens)
+                    user_servers_processed += 1
             except Exception:
                 continue
 
-        expected_servers = len(server_rating_keys)
-        total_plays = endpoint_total_plays if watch_servers_processed == expected_servers else local_total_plays
-        unique_users = len(unique_user_tokens) if user_servers_processed == expected_servers else local_unique_users
+        total_plays = endpoint_total_plays if watch_servers_processed > 0 else local_total_plays
+        unique_users = len(unique_user_tokens) if user_servers_processed > 0 else local_unique_users
 
         return {
             'total_plays': total_plays,
             'unique_users': unique_users,
         }
+
+    def _fetch_watch_total_plays(
+        self,
+        client: TautulliClient,
+        rating_key: int,
+        item_media_type: str,
+    ) -> int | None:
+        attempts = [
+            {'query_days': 0},
+            {'media_type': item_media_type, 'query_days': 0},
+        ]
+
+        for params in attempts:
+            try:
+                response = client.get_item_watch_time_stats(rating_key, **params)
+            except Exception:
+                continue
+
+            if not self._is_tautulli_success_response(response):
+                continue
+
+            total_plays = self._extract_watch_stats_total_plays(response)
+            if total_plays is not None:
+                return total_plays
+
+        return None
+
+    def _fetch_item_user_tokens(
+        self,
+        client: TautulliClient,
+        rating_key: int,
+        item_media_type: str,
+    ) -> set[str] | None:
+        attempts = [
+            {},
+            {'media_type': item_media_type},
+        ]
+
+        for params in attempts:
+            try:
+                response = client.get_item_user_stats(rating_key, **params)
+            except Exception:
+                continue
+
+            if not self._is_tautulli_success_response(response):
+                continue
+
+            return self._extract_item_user_tokens(response)
+
+        return None
+
+    @staticmethod
+    def _is_tautulli_success_response(response: dict[str, Any]) -> bool:
+        envelope = response.get('response', {})
+        if not isinstance(envelope, dict):
+            return False
+
+        result = envelope.get('result')
+        if result is None:
+            return True
+        return str(result).strip().lower() == 'success'
 
     @staticmethod
     def _resolve_server_rating_keys(

@@ -158,12 +158,10 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertEqual(details['unique_users'], 3)
         client_by_server['Server A'].get_item_watch_time_stats.assert_called_with(
             111,
-            media_type='movie',
             query_days=0,
         )
         client_by_server['Server B'].get_item_watch_time_stats.assert_called_with(
             222,
-            media_type='movie',
             query_days=0,
         )
 
@@ -219,7 +217,6 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertEqual(details['unique_users'], 2)
         client.get_item_watch_time_stats.assert_called_with(
             9001,
-            media_type='show',
             query_days=0,
         )
 
@@ -263,6 +260,59 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertIsNotNone(details)
         self.assertEqual(details['total_plays'], 2)
         self.assertEqual(details['unique_users'], 2)
+
+    def test_content_details_uses_endpoint_totals_when_one_server_fails(self):
+        self._add_server('Server A', 0)
+        self._add_server('Server B', 1)
+
+        clicked = self._add_history(
+            row_id=30,
+            server_name='Server A',
+            server_order=0,
+            media_type='movie',
+            title='Interstellar',
+            full_title='Interstellar',
+            year=2014,
+            rating_key=123,
+            user='Alice',
+            started=1700400000,
+            date_played=date(2024, 3, 3),
+        )
+        self._add_history(
+            row_id=31,
+            server_name='Server B',
+            server_order=1,
+            media_type='movie',
+            title='Interstellar',
+            full_title='Interstellar',
+            year=2014,
+            rating_key=456,
+            user='Bob',
+            started=1700500000,
+            date_played=date(2024, 3, 4),
+        )
+
+        def build_client(config):
+            client = MagicMock()
+            if config.name == 'Server A':
+                client.get_item_watch_time_stats.return_value = {
+                    'response': {'data': [{'query_days': 0, 'total_plays': 20}]}
+                }
+                client.get_item_user_stats.return_value = {
+                    'response': {'data': [{'friendly_name': 'Alice', 'total_plays': 20}]}
+                }
+            else:
+                client.get_item_watch_time_stats.side_effect = RuntimeError('server unavailable')
+                client.get_item_user_stats.side_effect = RuntimeError('server unavailable')
+            return client
+
+        with patch.object(ContentService, '_get_metadata_for_record', return_value={'summary': 'ok'}):
+            with patch('flask_app.services.content_service.TautulliClient', side_effect=build_client):
+                details = ContentService().get_content_details(clicked.id)
+
+        self.assertIsNotNone(details)
+        self.assertEqual(details['total_plays'], 20)
+        self.assertEqual(details['unique_users'], 1)
 
 
 if __name__ == '__main__':
