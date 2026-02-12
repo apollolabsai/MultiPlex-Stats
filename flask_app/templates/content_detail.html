@@ -24,6 +24,12 @@
                     <span class="hero-stat-number">{{ "{:,}".format(unique_users) }}</span>
                     <span class="hero-stat-label">Unique Users</span>
                 </div>
+                {% if not is_movie %}
+                <div class="hero-stat">
+                    <span class="hero-stat-number">{{ metadata.year or "Unknown" }}</span>
+                    <span class="hero-stat-label">Aired Year</span>
+                </div>
+                {% endif %}
             </div>
             <p class="summary">{{ metadata.summary }}</p>
 
