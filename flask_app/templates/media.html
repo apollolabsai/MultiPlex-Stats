@@ -8,8 +8,8 @@
     <div class="subtitle">Movies and TV Shows from all servers</div>
 </header>
 
-<!-- Load Media Section (shown when no data) -->
-<div class="media-load-section" id="media-load-section" {% if sync_status.has_data and sync_status.status != 'running' %}style="display: none;"{% endif %}>
+<!-- Load/Refresh Section -->
+<div class="media-load-section" id="media-load-section">
     <div class="form-card load-card">
         <div class="load-header">
             <svg class="load-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -17,13 +17,20 @@
                 <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
             </svg>
             <div class="load-text">
-                <h3>Load Media Library</h3>
-                <p>Fetch movie and TV show information from your Plex servers via Tautulli.</p>
+                <h3>Load and Refresh Media Data</h3>
+                <p>One action runs media import first, then builds the lifetime play count cache.</p>
             </div>
         </div>
 
-        <!-- Sync Progress (shown when running) -->
+        <div class="load-process-copy">
+            <p><strong>Step 1:</strong> Import movies and TV shows from each configured server.</p>
+            <p><strong>Step 2:</strong> Build lifetime play counts from full history so titles with multiple keys are merged correctly.</p>
+            <p>Both steps include per-server progress polling.</p>
+        </div>
+
+        <!-- Step 1 Progress -->
         <div class="sync-progress" id="sync-progress" {% if sync_status.status != 'running' %}style="display: none;"{% endif %}>
+            <div class="progress-phase-title">Step 1 of 2: Media Library Sync</div>
             <div id="server-progress-container">
                 <!-- Server progress bars will be dynamically inserted here -->
             </div>
@@ -32,20 +39,41 @@
             </div>
         </div>
 
-        <button type="button" class="btn btn-primary btn-large" id="load-media-btn" {% if sync_status.status == 'running' %}disabled{% endif %}>
+        <!-- Step 2 Progress -->
+        <div class="sync-progress" id="lifetime-sync-progress" {% if lifetime_sync_status.status != 'running' %}style="display: none;"{% endif %}>
+            <div class="progress-phase-title">Step 2 of 2: Lifetime Play Count Cache</div>
+            <div id="lifetime-server-progress-container"></div>
+            <div class="progress-stats">
+                <span id="lifetime-progress-fetched">{{ lifetime_sync_status.records_fetched or 0 }}</span> history rows processed
+            </div>
+        </div>
+
+        <button type="button" class="btn btn-primary btn-large" id="run-full-refresh-btn" {% if sync_status.status == 'running' or lifetime_sync_status.status == 'running' %}disabled{% endif %}>
             {% if sync_status.status == 'running' %}
-            Loading...
+            Loading Media Library...
+            {% elif lifetime_sync_status.status == 'running' %}
+            Building Lifetime Play Counts...
             {% elif sync_status.has_data %}
-            Reload Media Library
+            Refresh Media Data
             {% else %}
-            Load Media
+            Load Media Data
             {% endif %}
         </button>
         <div class="last-sync-info">This can take over 5 minutes depending on library size.</div>
-
-        {% if sync_status.last_sync_date %}
-        <div class="last-sync-info">Last loaded: {{ sync_status.last_sync_date }}</div>
-        {% endif %}
+        <div class="last-sync-info" id="media-last-sync-label">
+            {% if sync_status.last_sync_date %}
+            Last media load: {{ sync_status.last_sync_date }}
+            {% else %}
+            Last media load: Never
+            {% endif %}
+        </div>
+        <div class="last-sync-info" id="lifetime-last-sync-label">
+            {% if lifetime_sync_status.last_sync_date %}
+            Last lifetime cache refresh: {{ lifetime_sync_status.last_sync_date }}
+            {% else %}
+            Last lifetime cache refresh: Never
+            {% endif %}
+        </div>
     </div>
 </div>
 
@@ -67,60 +95,6 @@
         <div class="stat-number">{{ "{:,}".format(total_tv_plays) }}</div>
         <div class="stat-label">TV Plays</div>
     </div>
-</div>
-
-<div class="form-card lifetime-stats-section" id="lifetime-stats-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
-    <div class="lifetime-stats-header">
-        <h3>Lifetime Play Count Cache</h3>
-        <p>
-            Some Tautulli servers assign multiple keys to the same title over time.
-            We build a full-history cache so media page play counts are merged across those keys
-            without slowing page load. This cache refreshes automatically at 1:00 AM local time,
-            and you can run a manual refresh anytime.
-        </p>
-    </div>
-
-    <button type="button" class="btn btn-secondary" id="lifetime-sync-btn">
-        {% if lifetime_sync_status.has_data %}
-        Refresh Lifetime Play Counts Only
-        {% else %}
-        Load Lifetime Play Counts Only
-        {% endif %}
-    </button>
-    <div class="last-sync-info" id="lifetime-last-sync-label">
-        {% if lifetime_sync_status.last_sync_date %}
-        Last updated: {{ lifetime_sync_status.last_sync_date }}
-        {% else %}
-        Last updated: Never
-        {% endif %}
-    </div>
-
-    <div class="sync-progress" id="lifetime-sync-progress" {% if lifetime_sync_status.status != 'running' %}style="display: none;"{% endif %}>
-        <div id="lifetime-server-progress-container"></div>
-        <div class="progress-stats">
-            <span id="lifetime-progress-fetched">{{ lifetime_sync_status.records_fetched or 0 }}</span> history rows processed
-        </div>
-    </div>
-</div>
-
-<!-- Reload button when data exists -->
-<div class="reload-section" id="reload-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
-    <button type="button" class="btn btn-primary" id="refresh-all-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M23 4v6h-6"></path>
-            <path d="M1 20v-6h6"></path>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-        </svg>
-        Refresh Media Data
-    </button>
-    <button type="button" class="btn btn-secondary" id="reload-media-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M23 4v6h-6"></path>
-            <path d="M1 20v-6h6"></path>
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-        </svg>
-        Reload Media Library Only
-    </button>
 </div>
 
 <div class="media-table-toggle" id="media-table-toggle" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
@@ -231,6 +205,24 @@
 .load-text p {
     margin: 0;
     color: #aaa;
+}
+
+.load-process-copy {
+    margin: 0 auto 18px;
+    max-width: 680px;
+    text-align: left;
+    color: #bdbdbd;
+    line-height: 1.45;
+}
+
+.load-process-copy p {
+    margin: 0 0 8px;
+}
+
+.progress-phase-title {
+    font-weight: 600;
+    color: #f5b27f;
+    margin-bottom: 10px;
 }
 
 .btn-large {
@@ -391,20 +383,6 @@
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.reload-section {
-    display: flex;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 20px;
-}
-
-.reload-section .btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
 .media-table-toggle {
     display: flex;
     gap: 12px;
@@ -436,21 +414,6 @@
 
 .section {
     margin-bottom: 40px;
-}
-
-.lifetime-stats-section {
-    margin-bottom: 20px;
-}
-
-.lifetime-stats-header h3 {
-    margin: 0 0 8px;
-    color: #fff;
-}
-
-.lifetime-stats-header p {
-    margin: 0 0 14px;
-    color: #bdbdbd;
-    line-height: 1.45;
 }
 
 .content-link {
@@ -530,12 +493,13 @@
 $(document).ready(function() {
     var moviesData = {{ movies | tojson }};
     var tvShowsData = {{ tv_shows | tojson }};
+    var mediaStatus = {{ sync_status | tojson }};
+    var lifetimeStatus = {{ lifetime_sync_status | tojson }};
     var pollInterval = null;
     var lifetimePollInterval = null;
     var lifetimeSyncWasRunning = false;
     var combinedRefreshRequested = false;
     var combinedWaitingForLifetime = false;
-    var lifetimeStatus = {{ lifetime_sync_status | tojson }};
     var navigationInProgress = false;
     var contentDetailBase = '{{ url_for("main.content_details", history_id=0) }}';
 
@@ -561,24 +525,28 @@ $(document).ready(function() {
         overlay.setAttribute('aria-hidden', 'false');
     }
 
+    function getRunButtonLabel(hasData) {
+        return hasData ? 'Refresh Media Data' : 'Load Media Data';
+    }
+
     function setCombinedRefreshButtonState(disabled, text) {
-        var button = document.getElementById('refresh-all-btn');
+        var button = document.getElementById('run-full-refresh-btn');
         if (!button) {
             return;
         }
         button.disabled = !!disabled;
-        button.textContent = text || 'Refresh Media Data';
+        button.textContent = text || getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data));
     }
 
-    function formatLastUpdatedText(isoString) {
+    function formatLastUpdatedValue(isoString) {
         if (!isoString) {
-            return 'Last updated: Never';
+            return 'Never';
         }
         var parsed = new Date(isoString);
         if (isNaN(parsed.getTime())) {
-            return 'Last updated: ' + isoString;
+            return isoString;
         }
-        return 'Last updated: ' + parsed.toLocaleString();
+        return parsed.toLocaleString();
     }
 
     function renderLifetimeServerProgress(servers) {
@@ -624,23 +592,22 @@ $(document).ready(function() {
     }
 
     function updateLifetimeSyncStatus(status) {
-        lifetimeStatus = status || {};
-        var button = document.getElementById('lifetime-sync-btn');
+        status = status || {};
+        lifetimeStatus = status;
         var progress = document.getElementById('lifetime-sync-progress');
         var lastSyncLabel = document.getElementById('lifetime-last-sync-label');
         var fetchedLabel = document.getElementById('lifetime-progress-fetched');
 
-        if (!button || !progress || !lastSyncLabel || !fetchedLabel) {
+        if (!progress || !lastSyncLabel || !fetchedLabel) {
             return;
         }
 
-        lastSyncLabel.textContent = formatLastUpdatedText(status.last_sync_date);
-        button.textContent = status.has_data ? 'Refresh Lifetime Play Counts Only' : 'Load Lifetime Play Counts Only';
+        lastSyncLabel.textContent = 'Last lifetime cache refresh: ' + formatLastUpdatedValue(status.last_sync_date);
 
         if (status.status === 'running') {
             lifetimeSyncWasRunning = true;
             progress.style.display = 'block';
-            button.disabled = true;
+            setCombinedRefreshButtonState(true, 'Building Lifetime Play Counts...');
             fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
             renderLifetimeServerProgress(status.servers || []);
 
@@ -651,7 +618,6 @@ $(document).ready(function() {
         }
 
         progress.style.display = 'none';
-        button.disabled = false;
         renderLifetimeServerProgress(status.servers || []);
 
         if (lifetimePollInterval) {
@@ -663,7 +629,7 @@ $(document).ready(function() {
             if (combinedRefreshRequested) {
                 combinedRefreshRequested = false;
                 combinedWaitingForLifetime = false;
-                setCombinedRefreshButtonState(false);
+                setCombinedRefreshButtonState(false, getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data)));
             }
             lifetimeSyncWasRunning = false;
             if (status.status === 'success') {
@@ -683,13 +649,12 @@ $(document).ready(function() {
     }
 
     function startLifetimeSync() {
-        var button = document.getElementById('lifetime-sync-btn');
         var progress = document.getElementById('lifetime-sync-progress');
-        if (!button || !progress) {
+        if (!progress) {
             return;
         }
 
-        button.disabled = true;
+        setCombinedRefreshButtonState(true, 'Building Lifetime Play Counts...');
         progress.style.display = 'block';
 
         fetch('{{ url_for("main.api_media_lifetime_stats_start") }}', {
@@ -712,12 +677,11 @@ $(document).ready(function() {
         })
         .catch(function(error) {
             alert(error.message);
-            button.disabled = false;
             progress.style.display = 'none';
             if (combinedRefreshRequested) {
                 combinedRefreshRequested = false;
                 combinedWaitingForLifetime = false;
-                setCombinedRefreshButtonState(false);
+                setCombinedRefreshButtonState(false, getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data)));
             }
         });
     }
@@ -1067,59 +1031,54 @@ $(document).ready(function() {
     }
 
     function updateProgress(status) {
+        mediaStatus = status || {};
         var progressDiv = document.getElementById('sync-progress');
-        var loadBtn = document.getElementById('load-media-btn');
-        var reloadBtn = document.getElementById('reload-media-btn');
-        var lifetimeBtn = document.getElementById('lifetime-sync-btn');
+        var mediaLastSyncLabel = document.getElementById('media-last-sync-label');
+        if (!progressDiv) {
+            return;
+        }
+
+        if (mediaLastSyncLabel) {
+            mediaLastSyncLabel.textContent = 'Last media load: ' + formatLastUpdatedValue(status.last_sync_date);
+        }
 
         if (status.status === 'running') {
             progressDiv.style.display = 'block';
-            loadBtn.disabled = true;
-            loadBtn.textContent = 'Loading...';
-            if (reloadBtn) reloadBtn.disabled = true;
-            if (lifetimeBtn) lifetimeBtn.disabled = true;
-            if (combinedRefreshRequested) {
-                setCombinedRefreshButtonState(true, 'Refreshing Media Library...');
-            }
+            setCombinedRefreshButtonState(true, 'Loading Media Library...');
 
-            // Render per-server progress bars
             if (status.servers && status.servers.length > 0) {
                 renderServerProgress(status.servers);
             }
 
-            // Update total fetched
             document.getElementById('progress-fetched').textContent = (status.records_fetched || 0).toLocaleString();
+            return;
+        }
+
+        progressDiv.style.display = 'none';
+
+        if (status.status === 'success') {
+            if ((combinedRefreshRequested || !lifetimeStatus.has_data) && !combinedWaitingForLifetime) {
+                combinedRefreshRequested = true;
+                combinedWaitingForLifetime = true;
+                setCombinedRefreshButtonState(true, 'Building Lifetime Play Counts...');
+                startLifetimeSync();
+            } else {
+                window.location.reload();
+            }
+        } else if (status.status === 'failed' && status.error_message) {
+            alert('Media load failed: ' + status.error_message);
+            if (combinedRefreshRequested) {
+                combinedRefreshRequested = false;
+                combinedWaitingForLifetime = false;
+            }
+            setCombinedRefreshButtonState(false, getRunButtonLabel(!!status.has_data));
         } else {
-            progressDiv.style.display = 'none';
-            loadBtn.disabled = false;
-            if (reloadBtn) reloadBtn.disabled = false;
-            if (lifetimeBtn && lifetimeStatus.status !== 'running') {
-                lifetimeBtn.disabled = false;
-            }
+            setCombinedRefreshButtonState(false, getRunButtonLabel(!!status.has_data));
+        }
 
-            if (status.status === 'success') {
-                if (combinedRefreshRequested && !combinedWaitingForLifetime) {
-                    combinedWaitingForLifetime = true;
-                    setCombinedRefreshButtonState(true, 'Refreshing Lifetime Play Counts...');
-                    startLifetimeSync();
-                } else {
-                    // Reload page to show new data
-                    window.location.reload();
-                }
-            } else if (status.status === 'failed' && status.error_message) {
-                alert('Media load failed: ' + status.error_message);
-                loadBtn.textContent = status.has_data ? 'Reload Media Library' : 'Load Media';
-                if (combinedRefreshRequested) {
-                    combinedRefreshRequested = false;
-                    combinedWaitingForLifetime = false;
-                    setCombinedRefreshButtonState(false);
-                }
-            }
-
-            if (pollInterval) {
-                clearInterval(pollInterval);
-                pollInterval = null;
-            }
+        if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
         }
     }
 
@@ -1131,44 +1090,40 @@ $(document).ready(function() {
     }
 
     function startMediaLoad() {
-        var loadBtn = document.getElementById('load-media-btn');
-        var reloadBtn = document.getElementById('reload-media-btn');
-
-        loadBtn.disabled = true;
-        loadBtn.textContent = 'Loading...';
-        if (reloadBtn) reloadBtn.disabled = true;
-
-        // Show load section if hidden
-        document.getElementById('media-load-section').style.display = 'block';
-        document.getElementById('sync-progress').style.display = 'block';
+        setCombinedRefreshButtonState(true, 'Loading Media Library...');
+        var progressDiv = document.getElementById('sync-progress');
+        if (progressDiv) {
+            progressDiv.style.display = 'block';
+        }
 
         fetch('{{ url_for("main.api_media_start_load") }}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         })
         .then(function(response) {
-            if (!response.ok) {
-                return response.json().then(function(data) {
-                    throw new Error(data.error || 'Failed to start media load');
-                });
-            }
-            return response.json();
+            return response.json().then(function(payload) {
+                if (!response.ok && response.status !== 409) {
+                    throw new Error(payload.error || 'Failed to start media load');
+                }
+                return payload;
+            });
         })
-        .then(function(data) {
-            // Start polling for status
-            pollInterval = setInterval(pollStatus, 1000);
+        .then(function() {
+            if (!pollInterval) {
+                pollInterval = setInterval(pollStatus, 1000);
+            }
+            pollStatus();
         })
         .catch(function(error) {
             alert(error.message);
-            loadBtn.disabled = false;
-            loadBtn.textContent = '{{ "Reload Media Library" if sync_status.has_data else "Load Media" }}';
-            if (reloadBtn) reloadBtn.disabled = false;
-            document.getElementById('sync-progress').style.display = 'none';
+            if (progressDiv) {
+                progressDiv.style.display = 'none';
+            }
             if (combinedRefreshRequested) {
                 combinedRefreshRequested = false;
                 combinedWaitingForLifetime = false;
-                setCombinedRefreshButtonState(false);
             }
+            setCombinedRefreshButtonState(false, getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data)));
         });
     }
 
@@ -1176,40 +1131,62 @@ $(document).ready(function() {
         if (combinedRefreshRequested) {
             return;
         }
-        if (lifetimeStatus && lifetimeStatus.status === 'running') {
-            alert('Lifetime play count sync is already running. Please wait for it to complete.');
+
+        if (mediaStatus && mediaStatus.status === 'running') {
+            combinedRefreshRequested = true;
+            combinedWaitingForLifetime = false;
+            setCombinedRefreshButtonState(true, 'Loading Media Library...');
+            if (!pollInterval) {
+                pollInterval = setInterval(pollStatus, 1000);
+            }
+            pollStatus();
             return;
         }
+
+        if (lifetimeStatus && lifetimeStatus.status === 'running') {
+            combinedRefreshRequested = true;
+            combinedWaitingForLifetime = true;
+            setCombinedRefreshButtonState(true, 'Building Lifetime Play Counts...');
+            if (!lifetimePollInterval) {
+                lifetimePollInterval = setInterval(pollLifetimeStatus, 1000);
+            }
+            pollLifetimeStatus();
+            return;
+        }
+
         combinedRefreshRequested = true;
         combinedWaitingForLifetime = false;
-        setCombinedRefreshButtonState(true, 'Refreshing Media Library...');
+        setCombinedRefreshButtonState(true, 'Loading Media Library...');
         startMediaLoad();
     }
 
     // Bind click handlers
-    document.getElementById('load-media-btn').addEventListener('click', startMediaLoad);
-
-    var reloadBtn = document.getElementById('reload-media-btn');
-    if (reloadBtn) {
-        reloadBtn.addEventListener('click', startMediaLoad);
+    var runFullRefreshButton = document.getElementById('run-full-refresh-btn');
+    if (runFullRefreshButton) {
+        runFullRefreshButton.addEventListener('click', startCombinedRefresh);
     }
 
-    var refreshAllBtn = document.getElementById('refresh-all-btn');
-    if (refreshAllBtn) {
-        refreshAllBtn.addEventListener('click', startCombinedRefresh);
+    if (mediaStatus && mediaStatus.status === 'running') {
+        combinedRefreshRequested = true;
+        combinedWaitingForLifetime = false;
+        setCombinedRefreshButtonState(true, 'Loading Media Library...');
+        pollInterval = setInterval(pollStatus, 1000);
     }
 
-    var lifetimeSyncButton = document.getElementById('lifetime-sync-btn');
-    if (lifetimeSyncButton) {
-        lifetimeSyncButton.addEventListener('click', startLifetimeSync);
+    if (lifetimeStatus && lifetimeStatus.status === 'running') {
+        combinedRefreshRequested = true;
+        combinedWaitingForLifetime = true;
+        setCombinedRefreshButtonState(true, 'Building Lifetime Play Counts...');
+        if (!lifetimePollInterval) {
+            lifetimePollInterval = setInterval(pollLifetimeStatus, 1000);
+        }
     }
-
-    // Check if we should start polling (sync already running)
-    {% if sync_status.status == 'running' %}
-    pollInterval = setInterval(pollStatus, 1000);
-    {% endif %}
 
     updateLifetimeSyncStatus(lifetimeStatus);
+
+    if (!combinedRefreshRequested) {
+        setCombinedRefreshButtonState(false, getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data)));
+    }
 
     $('#moviesTable, #tvShowsTable').on('click', 'a.content-link', function(event) {
         var href = this.getAttribute('href');

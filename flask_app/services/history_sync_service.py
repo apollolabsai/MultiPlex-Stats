@@ -2,10 +2,12 @@
 Service for syncing viewing history from Tautulli to local database.
 Supports both full backfill and incremental sync.
 """
+import threading
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Tuple
 
-from flask_app.models import db, ViewingHistory, HistorySyncStatus, ServerConfig
+from flask import current_app
+
+from flask_app.models import db, ViewingHistory, HistorySyncStatus
 from flask_app.services.config_service import ConfigService
 from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
@@ -15,6 +17,7 @@ class HistorySyncService:
     """Service for managing viewing history sync operations."""
 
     PAGE_SIZE = 1000  # Records per API request
+    _status_write_lock = threading.Lock()
 
     def __init__(self):
         self.local_tz = get_local_timezone()
@@ -164,25 +167,54 @@ class HistorySyncService:
             after_date: Date string in YYYY-MM-DD format
             is_backfill: Whether this is a full backfill (affects progress reporting)
         """
-        status = self.get_or_create_status()
         server_a_config, server_b_config = ConfigService.get_server_configs()
 
         if not server_a_config:
             raise ValueError("No server configuration found")
 
-        # Process Server A
-        status.current_server = server_a_config.name
-        db.session.commit()
-        self._sync_server(server_a_config, after_date, server_order=0)
+        app = current_app._get_current_object()
+        errors = []
+        errors_lock = threading.Lock()
 
-        # Process Server B if configured
-        if server_b_config:
-            status.current_server = server_b_config.name
+        with self._status_write_lock:
+            status = self.get_or_create_status()
+            if server_b_config:
+                status.current_server = f"{server_a_config.name} + {server_b_config.name} (parallel)"
+            else:
+                status.current_server = server_a_config.name
             db.session.commit()
-            self._sync_server(server_b_config, after_date, server_order=1)
 
-        status.current_server = None
-        db.session.commit()
+        def sync_worker(server_config, server_order):
+            with app.app_context():
+                try:
+                    self._sync_server(server_config, after_date, server_order)
+                except Exception as exc:
+                    db.session.rollback()
+                    with errors_lock:
+                        errors.append(f"{server_config.name}: {exc}")
+                finally:
+                    db.session.remove()
+
+        threads = []
+        thread_a = threading.Thread(target=sync_worker, args=(server_a_config, 0))
+        thread_a.start()
+        threads.append(thread_a)
+
+        if server_b_config:
+            thread_b = threading.Thread(target=sync_worker, args=(server_b_config, 1))
+            thread_b.start()
+            threads.append(thread_b)
+
+        for thread in threads:
+            thread.join()
+
+        with self._status_write_lock:
+            status = self.get_or_create_status()
+            status.current_server = None
+            db.session.commit()
+
+        if errors:
+            raise ValueError(" | ".join(errors))
 
     def _sync_server(self, server_config, after_date: str, server_order: int):
         """
@@ -193,7 +225,6 @@ class HistorySyncService:
             after_date: Date string in YYYY-MM-DD format
             server_order: 0 for ServerA, 1 for ServerB
         """
-        status = self.get_or_create_status()
         client = TautulliClient(server_config)
 
         start = 0
@@ -216,30 +247,39 @@ class HistorySyncService:
             # Get total on first request
             if total_records is None:
                 total_records = data.get('recordsFiltered', 0)
-                # Update status with estimated total (accumulate across servers)
-                if status.records_total is None:
-                    status.records_total = total_records
-                else:
-                    status.records_total += total_records
-                db.session.commit()
+                with self._status_write_lock:
+                    status = self.get_or_create_status()
+                    status.records_total = (status.records_total or 0) + total_records
+                    db.session.commit()
 
             if not records:
                 break
 
             # Process and insert records
-            for record in records:
-                self._insert_record(record, server_config.name, server_order)
+            page_inserted = 0
+            page_skipped = 0
 
-            # Update progress
-            status.records_fetched += len(records)
-            db.session.commit()
+            with self._status_write_lock:
+                for record in records:
+                    result = self._insert_record(record, server_config.name, server_order)
+                    if result == 'inserted':
+                        page_inserted += 1
+                    elif result == 'skipped':
+                        page_skipped += 1
+
+                status = self.get_or_create_status()
+                status.current_server = server_config.name
+                status.records_fetched += len(records)
+                status.records_inserted += page_inserted
+                status.records_skipped += page_skipped
+                db.session.commit()
 
             # Check if we've fetched all records
             start += len(records)
             if start >= total_records:
                 break
 
-    def _insert_record(self, record: dict, server_name: str, server_order: int):
+    def _insert_record(self, record: dict, server_name: str, server_order: int) -> str:
         """
         Insert a single history record, handling duplicates.
 
@@ -247,18 +287,19 @@ class HistorySyncService:
             record: History record from Tautulli API
             server_name: Name of the server
             server_order: 0 for ServerA, 1 for ServerB
+
+        Returns:
+            'inserted' when a row is added, 'skipped' for duplicates, 'ignored' when row_id is missing.
         """
-        status = self.get_or_create_status()
         row_id = record.get('row_id')
 
         if not row_id:
-            return
+            return 'ignored'
 
         # Check for existing record (deduplication)
         existing = ViewingHistory.query.filter_by(row_id=row_id).first()
         if existing:
-            status.records_skipped += 1
-            return
+            return 'skipped'
 
         # Calculate PT date/time from started timestamp
         started_ts = record.get('started')
@@ -311,11 +352,7 @@ class HistorySyncService:
         )
 
         db.session.add(history_record)
-        status.records_inserted += 1
-
-        # Commit in batches for performance
-        if status.records_inserted % 100 == 0:
-            db.session.commit()
+        return 'inserted'
 
     def has_history_data(self) -> bool:
         """Check if there's any history data in the database."""
