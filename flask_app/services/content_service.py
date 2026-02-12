@@ -58,8 +58,11 @@ class ContentService:
 
         watch_history = [self._format_watch_history_row(item, content_title) for item in plays]
         plays_chart = self._build_plays_by_year_chart(plays, details_title)
-
-        unique_users = len({(item.user or '').strip().lower() for item in plays if item.user})
+        lifetime_stats = self._get_lifetime_content_stats(
+            record=record,
+            plays=plays,
+            is_movie=is_movie,
+        )
 
         return {
             'content_kind': content_kind,
@@ -68,8 +71,8 @@ class ContentService:
             'metadata': metadata,
             'plays_chart': plays_chart,
             'watch_history': watch_history,
-            'total_plays': len(plays),
-            'unique_users': unique_users,
+            'total_plays': lifetime_stats['total_plays'],
+            'unique_users': lifetime_stats['unique_users'],
             'source_record_id': record.id,
         }
 
@@ -301,7 +304,15 @@ class ContentService:
         return f"{protocol}://{server_address}/pms_image_proxy?{urlencode(params)}"
 
     def _build_plays_by_year_chart(self, plays: list[ViewingHistory], title: str) -> dict[str, Any]:
-        counts: dict[int, int] = {}
+        configured_servers = (
+            ServerConfig.query
+            .filter_by(is_active=True)
+            .order_by(ServerConfig.server_order)
+            .all()
+        )
+        configured_names = [server.name for server in configured_servers if server.name]
+
+        counts: dict[int, dict[str, int]] = {}
         for item in plays:
             year = None
             if item.date_played:
@@ -317,12 +328,46 @@ class ContentService:
                     year = None
 
             if year is not None:
-                counts[year] = counts.get(year, 0) + 1
+                server_name = item.server_name or 'Unknown'
+                if year not in counts:
+                    counts[year] = {}
+                counts[year][server_name] = counts[year].get(server_name, 0) + 1
 
         years = sorted(counts.keys())
+        discovered_names = sorted({
+            server_name
+            for server_counts in counts.values()
+            for server_name in server_counts.keys()
+        })
+
+        # MultiPlex supports up to 2 servers; keep chart components to Server A/B.
+        if configured_names:
+            ordered_names = configured_names[:2]
+        else:
+            ordered_names = discovered_names[:2]
+
+        if not ordered_names:
+            ordered_names = ['Server A', 'Server B']
+
+        default_colors = ['#E6B413', '#e36414', '#7cb5ec', '#90ed7d']
+        series = []
+        for index, name in enumerate(ordered_names):
+            series.append({
+                'name': name,
+                'data': [counts.get(year, {}).get(name, 0) for year in years],
+                'color': default_colors[index % len(default_colors)],
+            })
+
+        totals = []
+        for index, _year in enumerate(years):
+            year_total = sum(series_item['data'][index] for series_item in series)
+            totals.append(year_total)
+
         return {
             'categories': [str(year) for year in years],
-            'series': [counts[year] for year in years],
+            'series': series,
+            'totals': totals,
+            'overall_total': sum(totals),
             'title': f'Plays by Year - {title}',
         }
 
@@ -400,3 +445,186 @@ class ContentService:
             'quality': quality,
             'percent_complete': item.percent_complete or 0,
         }
+
+    def _get_lifetime_content_stats(
+        self,
+        record: ViewingHistory,
+        plays: list[ViewingHistory],
+        is_movie: bool,
+    ) -> dict[str, int]:
+        local_total_plays = len(plays)
+        local_unique_users = len({(item.user or '').strip().lower() for item in plays if item.user})
+
+        server_rating_keys = self._resolve_server_rating_keys(
+            record=record,
+            plays=plays,
+            is_movie=is_movie,
+        )
+        if not server_rating_keys:
+            return {
+                'total_plays': local_total_plays,
+                'unique_users': local_unique_users,
+            }
+
+        active_servers = (
+            ServerConfig.query
+            .filter(
+                ServerConfig.is_active.is_(True),
+                ServerConfig.name.in_(list(server_rating_keys.keys()))
+            )
+            .all()
+        )
+        server_lookup = {server.name: server for server in active_servers}
+
+        endpoint_total_plays = 0
+        unique_user_tokens: set[str] = set()
+        watch_servers_processed = 0
+        user_servers_processed = 0
+        item_media_type = 'movie' if is_movie else 'show'
+
+        for server_name, rating_key in server_rating_keys.items():
+            server = server_lookup.get(server_name)
+            if not server:
+                continue
+
+            try:
+                client = TautulliClient(server.to_multiplex_config())
+
+                watch_response = client.get_item_watch_time_stats(
+                    int(rating_key),
+                    media_type=item_media_type,
+                    query_days=0,
+                )
+                total_plays = self._extract_watch_stats_total_plays(watch_response)
+                if total_plays is not None:
+                    endpoint_total_plays += total_plays
+                    watch_servers_processed += 1
+
+                user_response = client.get_item_user_stats(
+                    int(rating_key),
+                    media_type=item_media_type,
+                )
+                unique_user_tokens.update(self._extract_item_user_tokens(user_response))
+                user_servers_processed += 1
+            except Exception:
+                continue
+
+        expected_servers = len(server_rating_keys)
+        total_plays = endpoint_total_plays if watch_servers_processed == expected_servers else local_total_plays
+        unique_users = len(unique_user_tokens) if user_servers_processed == expected_servers else local_unique_users
+
+        return {
+            'total_plays': total_plays,
+            'unique_users': unique_users,
+        }
+
+    @staticmethod
+    def _resolve_server_rating_keys(
+        record: ViewingHistory,
+        plays: list[ViewingHistory],
+        is_movie: bool,
+    ) -> dict[str, int]:
+        key_by_server: dict[str, int] = {}
+
+        for item in plays:
+            server_name = (item.server_name or '').strip()
+            if not server_name or server_name in key_by_server:
+                continue
+
+            rating_key = item.rating_key if is_movie else (item.grandparent_rating_key or item.rating_key)
+            parsed_key = ContentService._to_int(rating_key)
+            if parsed_key is not None:
+                key_by_server[server_name] = parsed_key
+
+        source_server_name = (record.server_name or '').strip()
+        if source_server_name and source_server_name not in key_by_server:
+            source_rating_key = record.rating_key if is_movie else (record.grandparent_rating_key or record.rating_key)
+            parsed_source_key = ContentService._to_int(source_rating_key)
+            if parsed_source_key is not None:
+                key_by_server[source_server_name] = parsed_source_key
+
+        return key_by_server
+
+    @staticmethod
+    def _extract_watch_stats_total_plays(response: dict[str, Any]) -> int | None:
+        data = response.get('response', {}).get('data', {})
+
+        if isinstance(data, dict):
+            if 'data' in data and isinstance(data.get('data'), list):
+                data = data.get('data')
+            else:
+                return ContentService._to_int(data.get('total_plays'))
+
+        if not isinstance(data, list):
+            return None
+
+        zero_day_total: int | None = None
+        highest_total: int | None = None
+
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+
+            total_plays = ContentService._to_int(row.get('total_plays'))
+            if total_plays is None:
+                continue
+
+            if highest_total is None or total_plays > highest_total:
+                highest_total = total_plays
+
+            query_days = ContentService._to_int(row.get('query_days'))
+            if query_days == 0:
+                zero_day_total = total_plays
+
+        return zero_day_total if zero_day_total is not None else highest_total
+
+    @staticmethod
+    def _extract_item_user_tokens(response: dict[str, Any]) -> set[str]:
+        data = response.get('response', {}).get('data', [])
+        if isinstance(data, dict):
+            if 'data' in data and isinstance(data.get('data'), list):
+                rows = data.get('data', [])
+            else:
+                rows = [data]
+        elif isinstance(data, list):
+            rows = data
+        else:
+            rows = []
+
+        tokens: set[str] = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+
+            total_plays = ContentService._to_int(row.get('total_plays'))
+            if total_plays is not None and total_plays <= 0:
+                continue
+
+            token = ContentService._build_user_token(row)
+            if token:
+                tokens.add(token)
+
+        return tokens
+
+    @staticmethod
+    def _build_user_token(row: dict[str, Any]) -> str:
+        for key in ('friendly_name', 'username', 'user', 'email'):
+            value = row.get(key)
+            if value:
+                return f"name:{str(value).strip().lower()}"
+
+        user_id = row.get('user_id')
+        parsed_user_id = ContentService._to_int(user_id)
+        if parsed_user_id is not None:
+            return f"id:{parsed_user_id}"
+
+        return ''
+
+    @staticmethod
+    def _to_int(value: Any) -> int | None:
+        if value in (None, ''):
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None

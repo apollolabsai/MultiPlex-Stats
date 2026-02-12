@@ -310,6 +310,51 @@ class TautulliClient:
         """
         return self._make_request('get_metadata', rating_key=rating_key)
 
+    def get_item_watch_time_stats(
+        self,
+        rating_key: int,
+        media_type: Optional[str] = None,
+        query_days: int = 0
+    ) -> dict[str, Any]:
+        """
+        Get watch time/play stats for a specific media item.
+
+        Args:
+            rating_key: The rating key of the media item
+            media_type: Optional item type (movie, show, episode, etc.)
+            query_days: Number of days to query (0 for all-time)
+
+        Returns:
+            API response containing play and watch time stats
+        """
+        params: dict[str, Any] = {
+            'rating_key': rating_key,
+            'query_days': query_days,
+        }
+        if media_type:
+            params['media_type'] = media_type
+        return self._make_request('get_item_watch_time_stats', **params)
+
+    def get_item_user_stats(
+        self,
+        rating_key: int,
+        media_type: Optional[str] = None
+    ) -> dict[str, Any]:
+        """
+        Get user-level stats for a specific media item.
+
+        Args:
+            rating_key: The rating key of the media item
+            media_type: Optional item type (movie, show, episode, etc.)
+
+        Returns:
+            API response containing per-user stats for the item
+        """
+        params: dict[str, Any] = {'rating_key': rating_key}
+        if media_type:
+            params['media_type'] = media_type
+        return self._make_request('get_item_user_stats', **params)
+
     def pms_image_proxy(
         self,
         img: str,

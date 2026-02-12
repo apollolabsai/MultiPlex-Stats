@@ -3,12 +3,6 @@
 {% block title %}{{ content_title }} - MultiPlex Stats{% endblock %}
 
 {% block content %}
-<header>
-    <h1 class="settings-title">{{ content_title }}</h1>
-    <div class="subtitle">{{ "Movie Details" if is_movie else "TV Show Details" }}</div>
-    <a href="{{ url_for('main.viewing_history') }}" class="btn btn-secondary back-btn">Back to Viewing History</a>
-</header>
-
 <section class="content-hero{% if metadata.banner_url %} has-banner{% endif %}"{% if metadata.banner_url %} style="background-image: url('{{ metadata.banner_url }}');"{% endif %}>
     <div class="content-hero-overlay"></div>
     <div class="content-hero-inner">
@@ -51,6 +45,7 @@
 
 <div class="section">
     <h2 class="section-title">Plays by Year (All Servers)</h2>
+    <div class="chart-total-label" id="plays-chart-total"></div>
     <div class="chart-container" id="plays-by-year-chart"></div>
 </div>
 
@@ -178,6 +173,13 @@
     letter-spacing: 0.06em;
 }
 
+.chart-total-label {
+    margin-bottom: 10px;
+    color: #f18a3d;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
 .meta-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -226,6 +228,12 @@
     var watchHistoryRows = {{ watch_history | tojson }};
 
     var chartPayload = {{ plays_chart | tojson }};
+    var overallTotal = chartPayload.overall_total || 0;
+    var totalLabel = document.getElementById('plays-chart-total');
+    if (totalLabel) {
+        totalLabel.textContent = 'Total Plays (All Servers): ' + overallTotal.toLocaleString();
+    }
+
     Highcharts.chart('plays-by-year-chart', {
         chart: {
             type: 'column',
@@ -241,22 +249,37 @@
         yAxis: {
             min: 0,
             allowDecimals: false,
-            title: { text: 'Play Count' }
+            title: { text: 'Play Count' },
+            stackLabels: {
+                enabled: true,
+                style: {
+                    color: '#fff',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    textOutline: 'none'
+                },
+                formatter: function() {
+                    return Highcharts.numberFormat(this.total, 0, '', ',');
+                }
+            }
         },
-        legend: { enabled: false },
+        legend: {
+            enabled: true,
+            align: 'center',
+            verticalAlign: 'bottom',
+            layout: 'horizontal'
+        },
         tooltip: {
-            pointFormat: '<b>{point.y}</b> plays'
+            headerFormat: '<b>{point.category}</b><br/>',
+            pointFormat: '{series.name}: {point.y:,.0f}<br/>Total: {point.stackTotal:,.0f}'
         },
         plotOptions: {
             column: {
-                borderWidth: 0,
-                color: '#f18a3d'
+                stacking: 'normal',
+                borderWidth: 0
             }
         },
-        series: [{
-            name: 'Plays',
-            data: chartPayload.series
-        }]
+        series: chartPayload.series || []
     });
 
     $('#detailHistoryTable').DataTable({
