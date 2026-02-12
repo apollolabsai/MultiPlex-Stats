@@ -107,7 +107,6 @@ class ContentService:
             title_filters.append(func.lower(ViewingHistory.grandparent_title) == record.grandparent_title.lower())
         if content_title:
             title_filters.append(func.lower(ViewingHistory.grandparent_title) == content_title.lower())
-            title_filters.append(func.lower(ViewingHistory.title) == content_title.lower())
 
         if title_filters:
             query = query.filter(or_(*title_filters))
@@ -728,8 +727,8 @@ class ContentService:
         if media_type not in {'episode', 'tv', 'show'}:
             return None
 
-        row_title = self._normalize_content_title(row.get('grandparent_title') or row.get('title'))
-        if row_title != normalized_title:
+        show_title = self._normalize_content_title(row.get('grandparent_title'))
+        if show_title != normalized_title:
             return None
 
         return self._to_int(row.get('grandparent_rating_key') or row.get('rating_key'))
