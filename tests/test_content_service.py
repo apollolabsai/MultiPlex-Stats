@@ -91,6 +91,25 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertEqual(chart['totals'], [2, 1])
         self.assertEqual(chart['overall_total'], 3)
 
+    def test_plays_by_user_chart(self):
+        plays = [
+            ViewingHistory(user='Alice'),
+            ViewingHistory(user='alice'),
+            ViewingHistory(user='Bob'),
+            ViewingHistory(user='Bob'),
+            ViewingHistory(user='Carol'),
+            ViewingHistory(user=''),
+            ViewingHistory(user=None),
+        ]
+
+        service = ContentService()
+        chart = service._build_plays_by_user_chart(plays, 'Family Guy')
+
+        self.assertEqual(chart['categories'], ['Alice', 'Bob', 'Carol'])
+        self.assertEqual(chart['series'][0]['name'], 'Plays')
+        self.assertEqual(chart['series'][0]['data'], [2, 2, 1])
+        self.assertEqual(chart['overall_total'], 5)
+
     def test_content_details_uses_endpoint_totals_across_servers(self):
         self._add_server('Server A', 0)
         self._add_server('Server B', 1)

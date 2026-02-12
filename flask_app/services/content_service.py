@@ -58,6 +58,7 @@ class ContentService:
 
         watch_history = [self._format_watch_history_row(item, content_title) for item in plays]
         plays_chart = self._build_plays_by_year_chart(plays, details_title)
+        plays_by_user_chart = self._build_plays_by_user_chart(plays, details_title) if not is_movie else None
         lifetime_stats = self._get_lifetime_content_stats(
             record=record,
             plays=plays,
@@ -71,6 +72,7 @@ class ContentService:
             'is_movie': is_movie,
             'metadata': metadata,
             'plays_chart': plays_chart,
+            'plays_by_user_chart': plays_by_user_chart,
             'watch_history': watch_history,
             'total_plays': lifetime_stats['total_plays'],
             'unique_users': lifetime_stats['unique_users'],
@@ -369,6 +371,39 @@ class ContentService:
             'totals': totals,
             'overall_total': sum(totals),
             'title': f'Plays by Year - {title}',
+        }
+
+    def _build_plays_by_user_chart(self, plays: list[ViewingHistory], title: str) -> dict[str, Any]:
+        counts: dict[str, int] = {}
+        display_names: dict[str, str] = {}
+
+        for item in plays:
+            user_name = (item.user or '').strip()
+            if not user_name:
+                continue
+
+            key = user_name.lower()
+            counts[key] = counts.get(key, 0) + 1
+            if key not in display_names:
+                display_names[key] = user_name
+
+        sorted_users = sorted(
+            counts.items(),
+            key=lambda pair: (-pair[1], display_names[pair[0]].lower()),
+        )
+
+        categories = [display_names[key] for key, _ in sorted_users]
+        data = [count for _, count in sorted_users]
+
+        return {
+            'categories': categories,
+            'series': [{
+                'name': 'Plays',
+                'data': data,
+                'color': '#f18a3d',
+            }],
+            'overall_total': sum(data),
+            'title': f'Plays by User - {title}',
         }
 
     def _format_watch_history_row(
