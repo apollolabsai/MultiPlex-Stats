@@ -7,6 +7,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_app.models import db, AnalyticsRun, ViewingHistory
 from flask_app.services.analytics_service import AnalyticsService
 from flask_app.services.media_service import MediaService
+from flask_app.services.media_lifetime_stats_service import MediaLifetimeStatsService
 from flask_app.services.content_service import ContentService
 from flask_app.services.config_service import ConfigService
 from multiplex_stats.timezone_utils import get_local_timezone
@@ -455,7 +456,9 @@ def media():
         return redirect(url_for('settings.index'))
 
     service = MediaService()
+    lifetime_service = MediaLifetimeStatsService()
     sync_status = service.get_sync_status()
+    lifetime_sync_status = lifetime_service.get_sync_status()
 
     movies = []
     tv_shows = []
@@ -464,11 +467,14 @@ def media():
     if sync_status['has_data']:
         movies = service.get_movies()
         tv_shows = service.get_tv_shows()
+        if lifetime_sync_status['has_data']:
+            movies, tv_shows = lifetime_service.apply_cached_play_counts(movies, tv_shows)
         total_movie_plays = sum(movie.get('play_count', 0) for movie in movies)
         total_tv_plays = sum(show.get('play_count', 0) for show in tv_shows)
 
     return render_template('media.html',
                           sync_status=sync_status,
+                          lifetime_sync_status=lifetime_sync_status,
                           movies=movies,
                           tv_shows=tv_shows,
                           total_movie_plays=total_movie_plays,
@@ -496,6 +502,33 @@ def api_media_status():
     """Get current media load status for polling."""
     try:
         service = MediaService()
+        status = service.get_sync_status()
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@main_bp.route('/api/media/lifetime-stats/start', methods=['POST'])
+def api_media_lifetime_stats_start():
+    """Start lifetime play-count sync across all configured servers."""
+    if not ConfigService.has_valid_config():
+        return jsonify({'error': 'No server configuration found.'}), 400
+
+    try:
+        service = MediaLifetimeStatsService()
+        started = service.start_sync()
+        if not started:
+            return jsonify({'error': 'Lifetime stats sync already in progress.'}), 409
+        return jsonify({'status': 'started'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@main_bp.route('/api/media/lifetime-stats/status')
+def api_media_lifetime_stats_status():
+    """Get current lifetime play-count sync status for polling."""
+    try:
+        service = MediaLifetimeStatsService()
         status = service.get_sync_status()
         return jsonify(status)
     except Exception as e:

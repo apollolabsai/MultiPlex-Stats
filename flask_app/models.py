@@ -237,3 +237,52 @@ class CachedMedia(db.Model):
     __table_args__ = (
         db.UniqueConstraint('title', 'year', 'media_type', name='uq_media_title_year_type'),
     )
+
+
+class LifetimeMediaPlayCount(db.Model):
+    """Cached lifetime play counts aggregated across all keys for media titles."""
+    __tablename__ = 'lifetime_media_play_counts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    media_type = db.Column(db.String(20), nullable=False, index=True)  # movie, show
+    title_normalized = db.Column(db.String(500), nullable=False, index=True)
+    year = db.Column(db.Integer, nullable=True, index=True)  # movies only
+    total_plays = db.Column(db.Integer, default=0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('media_type', 'title_normalized', 'year', name='uq_lifetime_media_key'),
+    )
+
+
+class LifetimeStatsSyncStatus(db.Model):
+    """Track lifetime media play count sync status for progress polling."""
+    __tablename__ = 'lifetime_stats_sync_status'
+
+    id = db.Column(db.Integer, primary_key=True)
+    status = db.Column(db.String(20), default='idle')  # idle, running, success, failed
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    current_step = db.Column(db.String(100), nullable=True)
+    records_fetched = db.Column(db.Integer, default=0)
+    records_total = db.Column(db.Integer, nullable=True)
+    error_message = db.Column(db.Text, nullable=True)
+
+    # Per-server progress tracking (Server A)
+    server_a_name = db.Column(db.String(100), nullable=True)
+    server_a_status = db.Column(db.String(20), default='idle')  # idle, running, success, failed
+    server_a_step = db.Column(db.String(100), nullable=True)
+    server_a_fetched = db.Column(db.Integer, default=0)
+    server_a_total = db.Column(db.Integer, nullable=True)
+    server_a_error = db.Column(db.Text, nullable=True)
+
+    # Per-server progress tracking (Server B)
+    server_b_name = db.Column(db.String(100), nullable=True)
+    server_b_status = db.Column(db.String(20), default='idle')  # idle, running, success, failed
+    server_b_step = db.Column(db.String(100), nullable=True)
+    server_b_fetched = db.Column(db.Integer, default=0)
+    server_b_total = db.Column(db.Integer, nullable=True)
+    server_b_error = db.Column(db.Text, nullable=True)
+
+    # Last successful sync
+    last_sync_date = db.Column(db.DateTime, nullable=True)

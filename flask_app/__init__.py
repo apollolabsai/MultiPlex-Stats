@@ -101,12 +101,18 @@ def create_app(config_name='development'):
         db.create_all()
         _initialize_default_settings()
 
+    # Start background scheduler threads once in the active app process.
+    should_start_background = (not app.debug) or (os.environ.get('WERKZEUG_RUN_MAIN') == 'true')
+    if should_start_background:
+        from flask_app.services.media_lifetime_stats_service import MediaLifetimeStatsService
+        MediaLifetimeStatsService.start_daily_scheduler(app)
+
     return app
 
 
 def _initialize_default_settings():
     """Create default AnalyticsSettings and HistorySyncStatus if none exist."""
-    from flask_app.models import db, AnalyticsSettings, HistorySyncStatus
+    from flask_app.models import db, AnalyticsSettings, HistorySyncStatus, LifetimeStatsSyncStatus
 
     if AnalyticsSettings.query.first() is None:
         default_settings = AnalyticsSettings()
@@ -116,4 +122,9 @@ def _initialize_default_settings():
     if HistorySyncStatus.query.first() is None:
         default_sync_status = HistorySyncStatus()
         db.session.add(default_sync_status)
+        db.session.commit()
+
+    if LifetimeStatsSyncStatus.query.first() is None:
+        default_lifetime_status = LifetimeStatsSyncStatus()
+        db.session.add(default_lifetime_status)
         db.session.commit()

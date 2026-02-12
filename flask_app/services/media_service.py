@@ -796,6 +796,8 @@ class MediaService:
 
             result.append({
                 'title': title_with_year,
+                'content_title': movie.title,
+                'content_year': movie.year,
                 'added_at': added_at_str,
                 'video_codec': movie.video_codec or '',
                 'video_resolution': movie.video_resolution or '',
@@ -835,6 +837,8 @@ class MediaService:
 
             result.append({
                 'title': show.title,
+                'content_title': show.title,
+                'content_year': None,
                 'added_at': added_at_str,
                 'file_size': round(file_size_gb, 2),
                 'last_played': last_played_str,

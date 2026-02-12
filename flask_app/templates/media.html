@@ -69,6 +69,40 @@
     </div>
 </div>
 
+<div class="form-card lifetime-stats-section" id="lifetime-stats-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
+    <div class="lifetime-stats-header">
+        <h3>Lifetime Play Count Cache</h3>
+        <p>
+            Some Tautulli servers assign multiple keys to the same title over time.
+            We build a full-history cache so media page play counts are merged across those keys
+            without slowing page load. This cache refreshes automatically at 1:00 AM local time,
+            and you can run a manual refresh anytime.
+        </p>
+    </div>
+
+    <button type="button" class="btn btn-primary" id="lifetime-sync-btn">
+        {% if lifetime_sync_status.has_data %}
+        Refresh Lifetime Play Counts
+        {% else %}
+        Load Lifetime Play Counts
+        {% endif %}
+    </button>
+    <div class="last-sync-info" id="lifetime-last-sync-label">
+        {% if lifetime_sync_status.last_sync_date %}
+        Last updated: {{ lifetime_sync_status.last_sync_date }}
+        {% else %}
+        Last updated: Never
+        {% endif %}
+    </div>
+
+    <div class="sync-progress" id="lifetime-sync-progress" {% if lifetime_sync_status.status != 'running' %}style="display: none;"{% endif %}>
+        <div id="lifetime-server-progress-container"></div>
+        <div class="progress-stats">
+            <span id="lifetime-progress-fetched">{{ lifetime_sync_status.records_fetched or 0 }}</span> history rows processed
+        </div>
+    </div>
+</div>
+
 <!-- Reload button when data exists -->
 <div class="reload-section" id="reload-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
     <button type="button" class="btn btn-secondary" id="reload-media-btn">
@@ -394,6 +428,21 @@
     margin-bottom: 40px;
 }
 
+.lifetime-stats-section {
+    margin-bottom: 20px;
+}
+
+.lifetime-stats-header h3 {
+    margin: 0 0 8px;
+    color: #fff;
+}
+
+.lifetime-stats-header p {
+    margin: 0 0 14px;
+    color: #bdbdbd;
+    line-height: 1.45;
+}
+
 .content-link {
     color: #f18a3d;
     text-decoration: none;
@@ -472,6 +521,9 @@ $(document).ready(function() {
     var moviesData = {{ movies | tojson }};
     var tvShowsData = {{ tv_shows | tojson }};
     var pollInterval = null;
+    var lifetimePollInterval = null;
+    var lifetimeSyncWasRunning = false;
+    var lifetimeStatus = {{ lifetime_sync_status | tojson }};
     var navigationInProgress = false;
     var contentDetailBase = '{{ url_for("main.content_details", history_id=0) }}';
 
@@ -495,6 +547,146 @@ $(document).ready(function() {
         subtitleEl.textContent = titleText || 'Please wait';
         overlay.classList.add('is-open');
         overlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function formatLastUpdatedText(isoString) {
+        if (!isoString) {
+            return 'Last updated: Never';
+        }
+        var parsed = new Date(isoString);
+        if (isNaN(parsed.getTime())) {
+            return 'Last updated: ' + isoString;
+        }
+        return 'Last updated: ' + parsed.toLocaleString();
+    }
+
+    function renderLifetimeServerProgress(servers) {
+        var container = document.getElementById('lifetime-server-progress-container');
+        if (!container) {
+            return;
+        }
+
+        var html = '';
+        (servers || []).forEach(function(server) {
+            var percent = 0;
+            if (server.total && server.total > 0) {
+                percent = Math.min(100, (server.fetched / server.total) * 100);
+            } else if (server.status === 'success') {
+                percent = 100;
+            }
+
+            var fillClass = '';
+            if (server.status === 'success') fillClass = 'success';
+            else if (server.status === 'failed') fillClass = 'failed';
+
+            html += '<div class="server-progress">';
+            html += '<div class="server-progress-header">';
+            html += '<span class="server-name">' + (server.name || 'Server');
+            html += '<span class="server-status-badge ' + (server.status || 'idle') + '">' + (server.status || 'idle') + '</span>';
+            html += '</span>';
+            html += '<span class="server-step">' + (server.step || '') + '</span>';
+            html += '</div>';
+            html += '<div class="server-progress-bar">';
+            html += '<div class="server-progress-fill ' + fillClass + '" style="width: ' + percent + '%;"></div>';
+            html += '</div>';
+            html += '<div class="server-fetched">' + ((server.fetched || 0).toLocaleString()) + ' rows';
+            if (server.total) {
+                html += ' / ' + server.total.toLocaleString() + ' total';
+            }
+            html += '</div>';
+            if (server.error) {
+                html += '<div class="server-error">' + server.error + '</div>';
+            }
+            html += '</div>';
+        });
+        container.innerHTML = html;
+    }
+
+    function updateLifetimeSyncStatus(status) {
+        var button = document.getElementById('lifetime-sync-btn');
+        var progress = document.getElementById('lifetime-sync-progress');
+        var lastSyncLabel = document.getElementById('lifetime-last-sync-label');
+        var fetchedLabel = document.getElementById('lifetime-progress-fetched');
+
+        if (!button || !progress || !lastSyncLabel || !fetchedLabel) {
+            return;
+        }
+
+        lastSyncLabel.textContent = formatLastUpdatedText(status.last_sync_date);
+        button.textContent = status.has_data ? 'Refresh Lifetime Play Counts' : 'Load Lifetime Play Counts';
+
+        if (status.status === 'running') {
+            lifetimeSyncWasRunning = true;
+            progress.style.display = 'block';
+            button.disabled = true;
+            fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
+            renderLifetimeServerProgress(status.servers || []);
+
+            if (!lifetimePollInterval) {
+                lifetimePollInterval = setInterval(pollLifetimeStatus, 1000);
+            }
+            return;
+        }
+
+        progress.style.display = 'none';
+        button.disabled = false;
+        renderLifetimeServerProgress(status.servers || []);
+
+        if (lifetimePollInterval) {
+            clearInterval(lifetimePollInterval);
+            lifetimePollInterval = null;
+        }
+
+        if (lifetimeSyncWasRunning) {
+            lifetimeSyncWasRunning = false;
+            if (status.status === 'success') {
+                window.location.reload();
+            } else if (status.status === 'failed' && status.error_message) {
+                alert('Lifetime play count sync failed: ' + status.error_message);
+            }
+        }
+    }
+
+    function pollLifetimeStatus() {
+        fetch('{{ url_for("main.api_media_lifetime_stats_status") }}')
+            .then(function(response) { return response.json(); })
+            .then(function(data) { updateLifetimeSyncStatus(data); })
+            .catch(function(error) { console.error('Error polling lifetime status:', error); });
+    }
+
+    function startLifetimeSync() {
+        var button = document.getElementById('lifetime-sync-btn');
+        var progress = document.getElementById('lifetime-sync-progress');
+        if (!button || !progress) {
+            return;
+        }
+
+        button.disabled = true;
+        progress.style.display = 'block';
+
+        fetch('{{ url_for("main.api_media_lifetime_stats_start") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(function(response) {
+            return response.json().then(function(payload) {
+                if (!response.ok && response.status !== 409) {
+                    throw new Error(payload.error || 'Failed to start lifetime sync');
+                }
+                return payload;
+            });
+        })
+        .then(function() {
+            if (!lifetimePollInterval) {
+                lifetimePollInterval = setInterval(pollLifetimeStatus, 1000);
+            }
+            pollLifetimeStatus();
+        })
+        .catch(function(error) {
+            alert(error.message);
+            button.disabled = false;
+            progress.style.display = 'none';
+        });
     }
 
     // Rating display helper functions
@@ -931,10 +1123,17 @@ $(document).ready(function() {
         reloadBtn.addEventListener('click', startMediaLoad);
     }
 
+    var lifetimeSyncButton = document.getElementById('lifetime-sync-btn');
+    if (lifetimeSyncButton) {
+        lifetimeSyncButton.addEventListener('click', startLifetimeSync);
+    }
+
     // Check if we should start polling (sync already running)
     {% if sync_status.status == 'running' %}
     pollInterval = setInterval(pollStatus, 1000);
     {% endif %}
+
+    updateLifetimeSyncStatus(lifetimeStatus);
 
     $('#moviesTable, #tvShowsTable').on('click', 'a.content-link', function(event) {
         var href = this.getAttribute('href');
