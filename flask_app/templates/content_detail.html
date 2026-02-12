@@ -299,7 +299,9 @@
     });
 
     if (playsByUserPayload && document.getElementById('plays-by-user-chart')) {
-        renderGradientBarChart('plays-by-user-chart', playsByUserPayload);
+        renderGradientBarChart('plays-by-user-chart', playsByUserPayload, {
+            minHeight: 300
+        });
     }
 
     $('#detailHistoryTable').DataTable({

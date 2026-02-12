@@ -72,8 +72,12 @@ function renderStackedBarChart(containerId, chartData) {
 /**
  * Render a bar chart with gradient coloring (user/movie/tv)
  */
-function renderGradientBarChart(containerId, chartData) {
-    var height = getDynamicBarHeight(chartData.categories ? chartData.categories.length : 0, 700, 22, 220);
+function renderGradientBarChart(containerId, chartData, options) {
+    options = options || {};
+    var minHeight = typeof options.minHeight === 'number' ? options.minHeight : 700;
+    var rowHeight = typeof options.rowHeight === 'number' ? options.rowHeight : 22;
+    var padding = typeof options.padding === 'number' ? options.padding : 220;
+    var height = getDynamicBarHeight(chartData.categories ? chartData.categories.length : 0, minHeight, rowHeight, padding);
     return Highcharts.chart(containerId, {
         chart: {
             type: 'bar',
