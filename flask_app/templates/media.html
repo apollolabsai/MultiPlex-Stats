@@ -8,8 +8,10 @@
     <div class="subtitle">Movies and TV Shows from all servers</div>
 </header>
 
+{% set initial_load_complete = sync_status.has_data and lifetime_sync_status.has_data and sync_status.status != 'running' and lifetime_sync_status.status != 'running' %}
+
 <!-- Load/Refresh Section -->
-<div class="media-load-section" id="media-load-section">
+<div class="media-load-section" id="media-load-section" {% if initial_load_complete %}style="display: none;"{% endif %}>
     <div class="form-card load-card">
         <div class="load-header">
             <svg class="load-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -75,6 +77,10 @@
             {% endif %}
         </div>
     </div>
+</div>
+
+<div class="media-refresh-compact" id="media-refresh-compact" {% if not initial_load_complete %}style="display: none;"{% endif %}>
+    <button type="button" class="btn btn-primary" id="refresh-media-compact-btn">Refresh Media Data</button>
 </div>
 
 <!-- Stats Grid -->
@@ -177,6 +183,12 @@
 .media-load-section {
     max-width: 700px;
     margin: 40px auto;
+}
+
+.media-refresh-compact {
+    display: flex;
+    justify-content: flex-end;
+    margin: 8px 0 18px;
 }
 
 .load-card {
@@ -500,6 +512,7 @@ $(document).ready(function() {
     var lifetimeSyncWasRunning = false;
     var combinedRefreshRequested = false;
     var combinedWaitingForLifetime = false;
+    var launchedFromCompactRefresh = false;
     var navigationInProgress = false;
     var contentDetailBase = '{{ url_for("main.media_content_details", media_id=0) }}';
 
@@ -523,6 +536,51 @@ $(document).ready(function() {
         subtitleEl.textContent = titleText || 'Please wait';
         overlay.classList.add('is-open');
         overlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function setDataSectionsVisible(visible) {
+        var displayValue = visible ? 'block' : 'none';
+        var statsGrid = document.getElementById('stats-grid');
+        var mediaToggle = document.getElementById('media-table-toggle');
+        var moviesSection = document.getElementById('movies-section');
+        var tvSection = document.getElementById('tv-section');
+
+        if (statsGrid) statsGrid.style.display = displayValue;
+        if (mediaToggle) mediaToggle.style.display = displayValue;
+        if (moviesSection) moviesSection.style.display = displayValue;
+        if (tvSection) tvSection.style.display = 'none';
+
+        if (visible) {
+            setMediaTableView('movies');
+        }
+    }
+
+    function showStarterLoadState() {
+        var loadSection = document.getElementById('media-load-section');
+        var compactSection = document.getElementById('media-refresh-compact');
+        if (loadSection) {
+            loadSection.style.display = 'block';
+        }
+        if (compactSection) {
+            compactSection.style.display = 'none';
+        }
+    }
+
+    function restoreLoadedViewAfterFailedCompactRefresh() {
+        if (!launchedFromCompactRefresh) {
+            return;
+        }
+        launchedFromCompactRefresh = false;
+
+        var loadSection = document.getElementById('media-load-section');
+        var compactSection = document.getElementById('media-refresh-compact');
+        if (loadSection) {
+            loadSection.style.display = 'none';
+        }
+        if (compactSection) {
+            compactSection.style.display = 'flex';
+        }
+        setDataSectionsVisible(true);
     }
 
     function getRunButtonLabel(hasData) {
@@ -637,6 +695,7 @@ $(document).ready(function() {
                 return;
             } else if (status.status === 'failed' && status.error_message) {
                 alert('Lifetime play count sync failed: ' + status.error_message);
+                restoreLoadedViewAfterFailedCompactRefresh();
             }
         }
     }
@@ -683,6 +742,7 @@ $(document).ready(function() {
                 combinedWaitingForLifetime = false;
                 setCombinedRefreshButtonState(false, getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data)));
             }
+            restoreLoadedViewAfterFailedCompactRefresh();
         });
     }
 
@@ -1072,6 +1132,7 @@ $(document).ready(function() {
                 combinedWaitingForLifetime = false;
             }
             setCombinedRefreshButtonState(false, getRunButtonLabel(!!status.has_data));
+            restoreLoadedViewAfterFailedCompactRefresh();
         } else {
             setCombinedRefreshButtonState(false, getRunButtonLabel(!!status.has_data));
         }
@@ -1124,6 +1185,7 @@ $(document).ready(function() {
                 combinedWaitingForLifetime = false;
             }
             setCombinedRefreshButtonState(false, getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data)));
+            restoreLoadedViewAfterFailedCompactRefresh();
         });
     }
 
@@ -1166,9 +1228,20 @@ $(document).ready(function() {
         runFullRefreshButton.addEventListener('click', startCombinedRefresh);
     }
 
+    var compactRefreshButton = document.getElementById('refresh-media-compact-btn');
+    if (compactRefreshButton) {
+        compactRefreshButton.addEventListener('click', function() {
+            launchedFromCompactRefresh = true;
+            showStarterLoadState();
+            setDataSectionsVisible(false);
+            startCombinedRefresh();
+        });
+    }
+
     if (mediaStatus && mediaStatus.status === 'running') {
         combinedRefreshRequested = true;
         combinedWaitingForLifetime = false;
+        showStarterLoadState();
         setCombinedRefreshButtonState(true, 'Loading Media Library...');
         pollInterval = setInterval(pollStatus, 1000);
     }
@@ -1176,6 +1249,7 @@ $(document).ready(function() {
     if (lifetimeStatus && lifetimeStatus.status === 'running') {
         combinedRefreshRequested = true;
         combinedWaitingForLifetime = true;
+        showStarterLoadState();
         setCombinedRefreshButtonState(true, 'Building Lifetime Play Counts...');
         if (!lifetimePollInterval) {
             lifetimePollInterval = setInterval(pollLifetimeStatus, 1000);
