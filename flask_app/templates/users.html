@@ -8,7 +8,7 @@
     <div class="subtitle">User Directory</div>
 </header>
 
-<div class="stats-grid">
+<div class="stats-grid" id="users-stats-grid">
     <div class="stat-card">
         <div class="stat-number">{{ users|length }}</div>
         <div class="stat-label">Total Users</div>
@@ -133,6 +133,21 @@
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 
 <style>
+#users-stats-grid .stat-card {
+    padding: 12px 16px;
+}
+
+#users-stats-grid .stat-number {
+    font-size: 1.5em;
+    margin-bottom: 2px;
+    line-height: 1.1;
+}
+
+#users-stats-grid .stat-label {
+    font-size: 0.72em;
+    letter-spacing: 0.06em;
+}
+
 .user-avatar {
     width: 40px;
     height: 40px;
