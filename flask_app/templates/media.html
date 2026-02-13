@@ -79,10 +79,6 @@
     </div>
 </div>
 
-<div class="media-refresh-compact" id="media-refresh-compact" {% if not initial_load_complete %}style="display: none;"{% endif %}>
-    <button type="button" class="btn btn-primary" id="refresh-media-compact-btn">Refresh Media Data</button>
-</div>
-
 <!-- Stats Grid -->
 <div class="stats-grid" id="stats-grid" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
     <div class="stat-card">
@@ -103,13 +99,15 @@
     </div>
 </div>
 
-<div class="media-table-toggle" id="media-table-toggle" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
-    <button type="button" class="btn btn-secondary media-toggle-btn active" id="media-tab-movies">Movies</button>
-    <button type="button" class="btn btn-secondary media-toggle-btn" id="media-tab-tv">TV Shows</button>
-</div>
-
-<div class="media-actions" id="media-actions" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
-    <button type="button" class="btn btn-secondary" id="export-section-btn">Export Movies CSV</button>
+<div class="media-controls-row" id="media-controls-row" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
+    <div class="media-table-toggle" id="media-table-toggle">
+        <button type="button" class="btn btn-secondary media-toggle-btn active" id="media-tab-movies">Movies</button>
+        <button type="button" class="btn btn-secondary media-toggle-btn" id="media-tab-tv">TV Shows</button>
+    </div>
+    <div class="media-actions" id="media-actions">
+        <button type="button" class="btn btn-secondary" id="export-section-btn">Export Movies CSV</button>
+        <button type="button" class="btn btn-primary" id="refresh-media-inline-btn">Refresh Media Data</button>
+    </div>
 </div>
 
 <!-- Movies Section -->
@@ -189,10 +187,12 @@
     margin: 40px auto;
 }
 
-.media-refresh-compact {
+.media-controls-row {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
     margin: 8px 0 18px;
+    gap: 12px;
 }
 
 .load-card {
@@ -402,13 +402,14 @@
 .media-table-toggle {
     display: flex;
     gap: 12px;
-    margin: 10px 0 20px;
+    margin: 0;
 }
 
 .media-actions {
     display: flex;
     justify-content: flex-end;
-    margin: 0 0 16px;
+    margin: 0;
+    gap: 10px;
 }
 
 .media-toggle-btn {
@@ -509,6 +510,18 @@
         transform: translateX(280%);
     }
 }
+
+@media (max-width: 840px) {
+    .media-controls-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .media-actions {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+}
 </style>
 
 <script>
@@ -552,14 +565,12 @@ $(document).ready(function() {
     function setDataSectionsVisible(visible) {
         var displayValue = visible ? 'block' : 'none';
         var statsGrid = document.getElementById('stats-grid');
-        var mediaToggle = document.getElementById('media-table-toggle');
-        var mediaActions = document.getElementById('media-actions');
+        var mediaControls = document.getElementById('media-controls-row');
         var moviesSection = document.getElementById('movies-section');
         var tvSection = document.getElementById('tv-section');
 
         if (statsGrid) statsGrid.style.display = displayValue;
-        if (mediaToggle) mediaToggle.style.display = displayValue;
-        if (mediaActions) mediaActions.style.display = displayValue;
+        if (mediaControls) mediaControls.style.display = visible ? 'flex' : 'none';
         if (moviesSection) moviesSection.style.display = displayValue;
         if (tvSection) tvSection.style.display = 'none';
 
@@ -570,12 +581,12 @@ $(document).ready(function() {
 
     function showStarterLoadState() {
         var loadSection = document.getElementById('media-load-section');
-        var compactSection = document.getElementById('media-refresh-compact');
+        var mediaControls = document.getElementById('media-controls-row');
         if (loadSection) {
             loadSection.style.display = 'block';
         }
-        if (compactSection) {
-            compactSection.style.display = 'none';
+        if (mediaControls) {
+            mediaControls.style.display = 'none';
         }
     }
 
@@ -586,12 +597,12 @@ $(document).ready(function() {
         launchedFromCompactRefresh = false;
 
         var loadSection = document.getElementById('media-load-section');
-        var compactSection = document.getElementById('media-refresh-compact');
+        var mediaControls = document.getElementById('media-controls-row');
         if (loadSection) {
             loadSection.style.display = 'none';
         }
-        if (compactSection) {
-            compactSection.style.display = 'flex';
+        if (mediaControls) {
+            mediaControls.style.display = 'flex';
         }
         setDataSectionsVisible(true);
     }
@@ -1354,9 +1365,9 @@ $(document).ready(function() {
         exportSectionButton.addEventListener('click', exportCurrentSectionCsv);
     }
 
-    var compactRefreshButton = document.getElementById('refresh-media-compact-btn');
-    if (compactRefreshButton) {
-        compactRefreshButton.addEventListener('click', function() {
+    var inlineRefreshButton = document.getElementById('refresh-media-inline-btn');
+    if (inlineRefreshButton) {
+        inlineRefreshButton.addEventListener('click', function() {
             launchedFromCompactRefresh = true;
             showStarterLoadState();
             setDataSectionsVisible(false);
