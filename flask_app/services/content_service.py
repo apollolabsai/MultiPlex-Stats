@@ -262,6 +262,7 @@ class ContentService:
         metadata['date_added'] = self._format_added_date(
             data.get('added_at') or data.get('addedAt') or data.get('added')
         )
+        metadata_children_count = self._to_int(data.get('children_count') or data.get('child_count'))
         season_count, episode_count = self._extract_show_structure_counts(data)
         if season_count is not None:
             metadata['season_count'] = season_count
@@ -286,7 +287,7 @@ class ContentService:
 
         if not is_movie and (not metadata.get('season_count') or not metadata.get('episode_count')):
             try:
-                children_response = client.get_children_metadata(int(rating_key), media_type='show')
+                children_response = client.get_children_metadata(int(rating_key))
                 child_seasons, child_episodes = self._extract_show_structure_counts_from_children(
                     children_response
                 )
@@ -296,6 +297,15 @@ class ContentService:
                     metadata['episode_count'] = child_episodes
             except Exception:
                 pass
+
+        if (
+            not is_movie
+            and not metadata.get('episode_count')
+            and metadata_children_count is not None
+        ):
+            seasons = self._to_int(metadata.get('season_count'))
+            if seasons is None or metadata_children_count >= seasons:
+                metadata['episode_count'] = metadata_children_count
 
         media_info = self._extract_media_info(data)
         if media_info:
@@ -429,9 +439,14 @@ class ContentService:
         if not isinstance(metadata, dict):
             return None, None
 
+        child_type = str(
+            metadata.get('children_type')
+            or metadata.get('child_type')
+            or ''
+        ).strip().lower()
+
         season_count = ContentService._to_int(
-            metadata.get('child_count')
-            or metadata.get('season_count')
+            metadata.get('season_count')
             or metadata.get('seasons_count')
             or metadata.get('seasons')
         )
@@ -443,17 +458,16 @@ class ContentService:
             or metadata.get('episodes_count')
         )
 
-        children_count = ContentService._to_int(metadata.get('children_count'))
-        children_type = str(metadata.get('children_type') or '').strip().lower()
+        children_count = ContentService._to_int(
+            metadata.get('children_count') or metadata.get('child_count')
+        )
         if children_count is not None:
-            if children_type.startswith('season'):
+            if child_type.startswith('season'):
                 if season_count is None:
                     season_count = children_count
-            elif children_type.startswith('episode'):
+            elif child_type.startswith('episode'):
                 if episode_count is None:
                     episode_count = children_count
-            elif season_count is None:
-                season_count = children_count
 
         return season_count, episode_count
 
@@ -480,10 +494,22 @@ class ContentService:
                 rows = [row for row in nested_rows if isinstance(row, dict)]
 
         if rows:
-            season_count = len(rows)
+            row_types = {
+                str(row.get('media_type') or '').strip().lower()
+                for row in rows
+                if row.get('media_type')
+            }
+            if row_types and row_types.issubset({'episode'}):
+                return None, len(rows)
+
+            season_rows = rows
+            if row_types and 'season' in row_types:
+                season_rows = [row for row in rows if str(row.get('media_type') or '').strip().lower() == 'season']
+            season_count = len(season_rows)
+
             episode_total = 0
             has_episode_total = False
-            for row in rows:
+            for row in season_rows:
                 child_count = ContentService._to_int(
                     row.get('children_count')
                     or row.get('child_count')
