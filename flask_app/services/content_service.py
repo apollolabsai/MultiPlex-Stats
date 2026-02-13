@@ -3,6 +3,7 @@ Service for content detail pages linked from viewing history.
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlencode
@@ -860,33 +861,50 @@ class ContentService:
         item_media_type = 'movie' if is_movie else 'show'
         endpoint_play_sources = 0
 
+        server_jobs: list[tuple[str, ServerConfig, set[int]]] = []
         for server_name, rating_keys in server_rating_keys.items():
             server = server_lookup.get(server_name)
             if not server:
                 continue
+            server_jobs.append((server_name, server, rating_keys))
 
-            try:
-                client = TautulliClient(server.to_multiplex_config())
-                for rating_key in sorted(rating_keys):
-                    total_plays = self._fetch_watch_total_plays(client, int(rating_key), item_media_type)
-                    user_stats = self._fetch_item_user_stats(client, int(rating_key), item_media_type)
+        per_server_results: dict[str, dict[str, Any]] = {}
+        if server_jobs:
+            max_workers = min(len(server_jobs), 2)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_server = {
+                    executor.submit(
+                        self._collect_server_lifetime_stats,
+                        server=server,
+                        rating_keys=rating_keys,
+                        item_media_type=item_media_type,
+                    ): server_name
+                    for server_name, server, rating_keys in server_jobs
+                }
 
-                    if total_plays is not None:
-                        endpoint_total_plays += total_plays
-                        endpoint_play_sources += 1
-                    elif user_stats is not None:
-                        endpoint_total_plays += user_stats['total_plays']
-                        endpoint_play_sources += 1
+                for future in as_completed(future_to_server):
+                    server_name = future_to_server[future]
+                    try:
+                        result = future.result()
+                    except Exception:
+                        result = None
+                    if result is not None:
+                        per_server_results[server_name] = result
 
-                    if user_stats is not None:
-                        for token, count in user_stats['play_counts'].items():
-                            user_play_counts[token] = user_play_counts.get(token, 0) + count
-                        for token, display_name in user_stats['display_names'].items():
-                            if token not in user_display_names and display_name:
-                                user_display_names[token] = display_name
-                        user_key_sources += 1
-            except Exception:
+        for server_name, _server, _rating_keys in server_jobs:
+            result = per_server_results.get(server_name)
+            if result is None:
                 continue
+
+            endpoint_total_plays += result['endpoint_total_plays']
+            endpoint_play_sources += result['endpoint_play_sources']
+            user_key_sources += result['user_key_sources']
+
+            for token, count in result['user_play_counts'].items():
+                user_play_counts[token] = user_play_counts.get(token, 0) + count
+            for token, display_name in result['user_display_names'].items():
+                if token not in user_display_names and display_name:
+                    user_display_names[token] = display_name
 
         total_plays = endpoint_total_plays if endpoint_play_sources > 0 else local_total_plays
         unique_users = len(user_play_counts) if user_key_sources > 0 else local_unique_users
@@ -896,6 +914,55 @@ class ContentService:
             'unique_users': unique_users,
             'user_play_counts': user_play_counts if user_key_sources > 0 else {},
             'user_display_names': user_display_names if user_key_sources > 0 else {},
+        }
+
+    def _collect_server_lifetime_stats(
+        self,
+        server: ServerConfig,
+        rating_keys: set[int],
+        item_media_type: str,
+    ) -> dict[str, Any] | None:
+        """
+        Collect lifetime play stats for one server.
+
+        Calls remain sequential per rating key; callers can execute this method
+        in parallel across servers.
+        """
+        endpoint_total_plays = 0
+        endpoint_play_sources = 0
+        user_key_sources = 0
+        user_play_counts: dict[str, int] = {}
+        user_display_names: dict[str, str] = {}
+
+        try:
+            client = TautulliClient(server.to_multiplex_config())
+            for rating_key in sorted(rating_keys):
+                total_plays = self._fetch_watch_total_plays(client, int(rating_key), item_media_type)
+                user_stats = self._fetch_item_user_stats(client, int(rating_key), item_media_type)
+
+                if total_plays is not None:
+                    endpoint_total_plays += total_plays
+                    endpoint_play_sources += 1
+                elif user_stats is not None:
+                    endpoint_total_plays += user_stats['total_plays']
+                    endpoint_play_sources += 1
+
+                if user_stats is not None:
+                    for token, count in user_stats['play_counts'].items():
+                        user_play_counts[token] = user_play_counts.get(token, 0) + count
+                    for token, display_name in user_stats['display_names'].items():
+                        if token not in user_display_names and display_name:
+                            user_display_names[token] = display_name
+                    user_key_sources += 1
+        except Exception:
+            return None
+
+        return {
+            'endpoint_total_plays': endpoint_total_plays,
+            'endpoint_play_sources': endpoint_play_sources,
+            'user_key_sources': user_key_sources,
+            'user_play_counts': user_play_counts,
+            'user_display_names': user_display_names,
         }
 
     def _fetch_watch_total_plays(
