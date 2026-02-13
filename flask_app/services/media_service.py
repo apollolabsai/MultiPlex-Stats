@@ -10,9 +10,8 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from flask import current_app
-from sqlalchemy import func, or_
 
-from flask_app.models import db, MediaSyncStatus, CachedMedia, ViewingHistory
+from flask_app.models import db, MediaSyncStatus, CachedMedia
 from flask_app.services.config_service import ConfigService
 from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
@@ -774,7 +773,6 @@ class MediaService:
         movies = CachedMedia.query.filter_by(media_type='movie').order_by(
             CachedMedia.added_at.desc()
         ).all()
-        movie_history_ids = self._build_movie_history_lookup(movies)
 
         result = []
         for movie in movies:
@@ -806,7 +804,6 @@ class MediaService:
                 'file_size_versions': movie.file_size_versions or '',
                 'last_played': last_played_str,
                 'play_count': movie.play_count,
-                'history_id': movie_history_ids.get((self._normalize_title(movie.title), movie.year)),
                 'rating': movie.rating or '',
                 'rating_image': movie.rating_image or '',
                 'audience_rating': movie.audience_rating or '',
@@ -820,7 +817,6 @@ class MediaService:
         shows = CachedMedia.query.filter_by(media_type='show').order_by(
             CachedMedia.added_at.desc()
         ).all()
-        show_history_ids = self._build_show_history_lookup(shows)
 
         result = []
         for show in shows:
@@ -845,7 +841,6 @@ class MediaService:
                 'file_size': round(file_size_gb, 2),
                 'last_played': last_played_str,
                 'play_count': show.play_count,
-                'history_id': show_history_ids.get(self._normalize_title(show.title)),
                 'rating': show.rating or '',
                 'rating_image': show.rating_image or '',
                 'audience_rating': show.audience_rating or '',
@@ -853,85 +848,3 @@ class MediaService:
             })
 
         return result
-
-    @staticmethod
-    def _normalize_title(value: str | None) -> str:
-        """Normalize media titles for consistent exact comparisons."""
-        return (value or '').strip().lower()
-
-    def _build_movie_history_lookup(self, movies: list[CachedMedia]) -> dict[tuple[str, int | None], int]:
-        """
-        Build a map of (title, year) -> newest ViewingHistory.id for movies.
-        Uses a single DB query scoped to titles shown on the media page.
-        """
-        movie_keys = {
-            (self._normalize_title(movie.title), movie.year)
-            for movie in movies
-            if self._normalize_title(movie.title)
-        }
-        if not movie_keys:
-            return {}
-
-        title_tokens = {title for title, _ in movie_keys}
-        candidates = (
-            ViewingHistory.query
-            .filter(func.lower(ViewingHistory.media_type) == 'movie')
-            .filter(
-                or_(
-                    func.lower(ViewingHistory.title).in_(title_tokens),
-                    func.lower(ViewingHistory.full_title).in_(title_tokens),
-                )
-            )
-            .order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc())
-            .all()
-        )
-
-        resolved: dict[tuple[str, int | None], int] = {}
-        title_fallback: dict[str, int] = {}
-        for item in candidates:
-            normalized = self._normalize_title(item.title or item.full_title)
-            if not normalized:
-                continue
-
-            year_key = item.year
-            if (normalized, year_key) not in resolved:
-                resolved[(normalized, year_key)] = item.id
-            if normalized not in title_fallback:
-                title_fallback[normalized] = item.id
-
-        for movie_key in movie_keys:
-            if movie_key not in resolved:
-                fallback = title_fallback.get(movie_key[0])
-                if fallback:
-                    resolved[movie_key] = fallback
-
-        return resolved
-
-    def _build_show_history_lookup(self, shows: list[CachedMedia]) -> dict[str, int]:
-        """
-        Build a map of show title -> newest ViewingHistory.id for TV shows.
-        Uses a single DB query scoped to titles shown on the media page.
-        """
-        show_titles = {
-            self._normalize_title(show.title)
-            for show in shows
-            if self._normalize_title(show.title)
-        }
-        if not show_titles:
-            return {}
-
-        candidates = (
-            ViewingHistory.query
-            .filter(func.lower(ViewingHistory.media_type).in_(['episode', 'tv', 'show']))
-            .filter(func.lower(ViewingHistory.grandparent_title).in_(show_titles))
-            .order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc())
-            .all()
-        )
-
-        resolved: dict[str, int] = {}
-        for item in candidates:
-            normalized = self._normalize_title(item.grandparent_title)
-            if normalized and normalized not in resolved:
-                resolved[normalized] = item.id
-
-        return resolved
