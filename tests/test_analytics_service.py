@@ -2,7 +2,7 @@ import unittest
 
 from flask import Flask
 
-from flask_app.models import ViewingHistory, db
+from flask_app.models import CachedMedia, ViewingHistory, db
 from flask_app.services.analytics_service import AnalyticsService
 
 
@@ -24,6 +24,7 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
     def setUp(self):
         self.ctx = self.app.app_context()
         self.ctx.push()
+        CachedMedia.query.delete()
         ViewingHistory.query.delete()
         db.session.commit()
 
@@ -33,6 +34,12 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
 
     def _add_history(self, **kwargs) -> ViewingHistory:
         record = ViewingHistory(**kwargs)
+        db.session.add(record)
+        db.session.commit()
+        return record
+
+    def _add_media(self, **kwargs) -> CachedMedia:
+        record = CachedMedia(**kwargs)
         db.session.add(record)
         db.session.commit()
         return record
@@ -127,3 +134,69 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
 
         self.assertEqual(resolved, expected.id)
 
+    def test_resolve_episode_media_id_by_show_title(self):
+        expected = self._add_media(
+            media_type='show',
+            title='Family Guy',
+            play_count=0,
+        )
+
+        resolved = AnalyticsService()._resolve_media_id_for_stream(
+            media_type='episode',
+            title='Road to the North Pole',
+            grandparent_title='Family Guy',
+            year=None,
+        )
+
+        self.assertEqual(resolved, expected.id)
+
+    def test_resolve_movie_media_id_prefers_exact_year(self):
+        self._add_media(
+            media_type='movie',
+            title='Dune',
+            year=1984,
+            play_count=0,
+            added_at=100,
+        )
+        expected = self._add_media(
+            media_type='movie',
+            title='Dune',
+            year=2021,
+            play_count=0,
+            added_at=200,
+        )
+
+        resolved = AnalyticsService()._resolve_media_id_for_stream(
+            media_type='movie',
+            title='Dune',
+            grandparent_title='',
+            year='2021',
+        )
+
+        self.assertEqual(resolved, expected.id)
+
+    def test_resolve_movie_media_id_falls_back_to_latest_added(self):
+        older = self._add_media(
+            media_type='movie',
+            title='King Kong',
+            year=1933,
+            play_count=0,
+            added_at=100,
+        )
+        newer = self._add_media(
+            media_type='movie',
+            title='King Kong',
+            year=2005,
+            play_count=0,
+            added_at=200,
+        )
+
+        resolved = AnalyticsService()._resolve_media_id_for_stream(
+            media_type='movie',
+            title='King Kong',
+            grandparent_title='',
+            year=None,
+        )
+
+        self.assertEqual(resolved, newer.id)
+        self.assertNotEqual(resolved, older.id)

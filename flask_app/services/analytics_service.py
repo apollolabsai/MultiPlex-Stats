@@ -22,7 +22,7 @@ from multiplex_stats.visualization import (
 )
 from flask_app.services.config_service import ConfigService
 from flask_app.services.history_sync_service import HistorySyncService
-from flask_app.models import ViewingHistory
+from flask_app.models import CachedMedia, ViewingHistory
 
 
 class AnalyticsService:
@@ -894,6 +894,51 @@ class AnalyticsService:
 
         return None
 
+    def _resolve_media_id_for_stream(
+        self,
+        media_type: str,
+        title: str,
+        grandparent_title: str,
+        year: Any = None,
+    ) -> Optional[int]:
+        """
+        Resolve a CachedMedia row for an active stream so dashboard links can
+        route through the media-based content detail endpoint.
+        """
+        is_episode = (media_type or '').lower() == 'episode'
+        target_title = self._normalize_title(grandparent_title if is_episode else title)
+        if not target_title:
+            return None
+
+        if is_episode:
+            record = (
+                CachedMedia.query
+                .filter(CachedMedia.media_type == 'show')
+                .filter(func.lower(CachedMedia.title) == target_title)
+                .first()
+            )
+            return record.id if record else None
+
+        record_query = (
+            CachedMedia.query
+            .filter(CachedMedia.media_type == 'movie')
+            .filter(func.lower(CachedMedia.title) == target_title)
+        )
+
+        target_year = self._safe_int(year)
+        if target_year is not None:
+            exact_year = record_query.filter(CachedMedia.year == target_year).first()
+            if exact_year:
+                return exact_year.id
+
+        matches = record_query.all()
+        if not matches:
+            return None
+
+        # Fallback: choose the most recently added record for this movie title.
+        best = max(matches, key=lambda item: (item.added_at or -1, item.id))
+        return best.id
+
     def get_current_activity(self) -> list:
         """
         Get current streaming activity from all configured servers.
@@ -1009,13 +1054,11 @@ class AnalyticsService:
                         'ip_address': ip_address,
                         'location': location,
                         'poster_url': poster_url,
-                        'history_id': self._resolve_history_id_for_stream(
-                            server_name=server_a_config.name,
+                        'media_id': self._resolve_media_id_for_stream(
                             media_type=media_type,
-                            rating_key=session.get('rating_key'),
-                            grandparent_rating_key=session.get('grandparent_rating_key'),
                             title=session.get('title', title),
-                            grandparent_title=grandparent_title
+                            grandparent_title=grandparent_title,
+                            year=session.get('year'),
                         )
                     })
         except Exception as e:
@@ -1120,13 +1163,11 @@ class AnalyticsService:
                             'ip_address': ip_address,
                             'location': location,
                             'poster_url': poster_url,
-                            'history_id': self._resolve_history_id_for_stream(
-                                server_name=server_b_config.name,
+                            'media_id': self._resolve_media_id_for_stream(
                                 media_type=media_type,
-                                rating_key=session.get('rating_key'),
-                                grandparent_rating_key=session.get('grandparent_rating_key'),
                                 title=session.get('title', title),
-                                grandparent_title=grandparent_title
+                                grandparent_title=grandparent_title,
+                                year=session.get('year'),
                             )
                         })
             except Exception as e:

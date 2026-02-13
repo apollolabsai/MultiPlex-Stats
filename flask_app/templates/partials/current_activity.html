@@ -16,7 +16,7 @@
     </thead>
     <tbody>
         {% for stream in current_activity %}
-        {% set content_href = url_for('main.content_details', history_id=stream.history_id) if stream.history_id else None %}
+        {% set content_href = url_for('main.media_content_details', media_id=stream.media_id) if stream.media_id else None %}
         <tr>
             <td>{{ loop.index }}</td>
 
