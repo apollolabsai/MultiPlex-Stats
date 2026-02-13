@@ -92,20 +92,22 @@
 <header class="dashboard-hero" id="dashboard-hero">
     <div class="dashboard-hero-backdrop" id="dashboard-hero-backdrop" aria-hidden="true"></div>
     <div class="dashboard-hero-overlay" aria-hidden="true"></div>
-    <img src="{{ url_for('static', filename='logo.png') }}" alt="MultiPlex Stats" style="max-width: 400px; height: auto; margin-bottom: 10px;">
-    <div class="subtitle">Plex Server Analytics & Insights</div>
-    <div class="timestamp">
-        Generated: {{ completed_at_pt.strftime('%Y-%m-%d %I:%M:%S %p') }} ({{ timezone_name }})
-    </div>
+    <div class="dashboard-hero-content">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="MultiPlex Stats" style="max-width: 400px; height: auto; margin-bottom: 10px;">
+        <div class="subtitle">Plex Server Analytics & Insights</div>
+        <div class="timestamp">
+            Generated: {{ completed_at_pt.strftime('%Y-%m-%d %I:%M:%S %p') }} ({{ timezone_name }})
+        </div>
 
-    <form method="POST" action="{{ url_for('main.run_analytics') }}" style="margin-top: 20px;">
-        <button type="submit" class="btn btn-primary btn-large">
-            <svg class="button-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-            </svg>
-            Refresh Analytics
-        </button>
-    </form>
+        <form method="POST" action="{{ url_for('main.run_analytics') }}" style="margin-top: 20px;">
+            <button type="submit" class="btn btn-primary btn-large">
+                <svg class="button-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                </svg>
+                Refresh Analytics
+            </button>
+        </form>
+    </div>
 </header>
 
 <div class="section">
@@ -396,7 +398,7 @@
     background: linear-gradient(135deg, rgba(10, 10, 10, 0.9) 0%, rgba(14, 14, 14, 0.68) 55%, rgba(12, 12, 12, 0.86) 100%);
 }
 
-.dashboard-hero > * {
+.dashboard-hero-content {
     position: relative;
     z-index: 2;
 }
