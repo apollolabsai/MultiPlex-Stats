@@ -108,6 +108,10 @@
     <button type="button" class="btn btn-secondary media-toggle-btn" id="media-tab-tv">TV Shows</button>
 </div>
 
+<div class="media-actions" id="media-actions" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
+    <button type="button" class="btn btn-secondary" id="export-section-btn">Export Movies CSV</button>
+</div>
+
 <!-- Movies Section -->
 <div class="section" id="movies-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
     <h2 class="section-header">
@@ -401,6 +405,12 @@
     margin: 10px 0 20px;
 }
 
+.media-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin: 0 0 16px;
+}
+
 .media-toggle-btn {
     min-width: 120px;
 }
@@ -514,6 +524,7 @@ $(document).ready(function() {
     var combinedWaitingForLifetime = false;
     var launchedFromCompactRefresh = false;
     var navigationInProgress = false;
+    var currentMediaView = 'movies';
     var contentDetailBase = '{{ url_for("main.media_content_details", media_id=0) }}';
 
     function escapeHtml(value) {
@@ -542,11 +553,13 @@ $(document).ready(function() {
         var displayValue = visible ? 'block' : 'none';
         var statsGrid = document.getElementById('stats-grid');
         var mediaToggle = document.getElementById('media-table-toggle');
+        var mediaActions = document.getElementById('media-actions');
         var moviesSection = document.getElementById('movies-section');
         var tvSection = document.getElementById('tv-section');
 
         if (statsGrid) statsGrid.style.display = displayValue;
         if (mediaToggle) mediaToggle.style.display = displayValue;
+        if (mediaActions) mediaActions.style.display = displayValue;
         if (moviesSection) moviesSection.style.display = displayValue;
         if (tvSection) tvSection.style.display = 'none';
 
@@ -871,6 +884,111 @@ $(document).ready(function() {
         return meta ? meta.display : '';
     }
 
+    function updateExportButtonLabel() {
+        var button = document.getElementById('export-section-btn');
+        if (!button) {
+            return;
+        }
+        button.textContent = currentMediaView === 'tv' ? 'Export TV Shows CSV' : 'Export Movies CSV';
+    }
+
+    function escapeCsvCell(value) {
+        var text = String(value == null ? '' : value);
+        if (/[",\n]/.test(text)) {
+            return '"' + text.replace(/"/g, '""') + '"';
+        }
+        return text;
+    }
+
+    function downloadCsv(filename, rows) {
+        var csv = rows.map(function(row) {
+            return row.map(escapeCsvCell).join(',');
+        }).join('\n');
+
+        var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+        var url = window.URL.createObjectURL(blob);
+        var link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    }
+
+    function formatMovieSizeForCsv(row) {
+        if (row.file_size_versions) {
+            return row.file_size_versions;
+        }
+        if (row.file_size || row.file_size === 0) {
+            return Number(row.file_size).toFixed(2);
+        }
+        return '';
+    }
+
+    function formatTvSizeForCsv(row) {
+        if (row.file_size || row.file_size === 0) {
+            return Number(row.file_size).toFixed(2);
+        }
+        return '';
+    }
+
+    function formatRatingForCsv(row) {
+        var critic = formatRatingValue(row.rating, row.rating_image);
+        var audience = formatRatingValue(row.audience_rating, row.audience_rating_image);
+        if (critic && audience) {
+            return 'Critic: ' + critic + ' | Audience: ' + audience;
+        }
+        return critic || audience || '';
+    }
+
+    function buildTimestampForFilename() {
+        var now = new Date();
+        var yyyy = now.getFullYear();
+        var mm = String(now.getMonth() + 1).padStart(2, '0');
+        var dd = String(now.getDate()).padStart(2, '0');
+        var hh = String(now.getHours()).padStart(2, '0');
+        var mi = String(now.getMinutes()).padStart(2, '0');
+        return yyyy + '-' + mm + '-' + dd + '_' + hh + mi;
+    }
+
+    function exportCurrentSectionCsv() {
+        var timestamp = buildTimestampForFilename();
+
+        if (currentMediaView === 'tv') {
+            var tvRows = tvShowsTable.rows().data().toArray();
+            var tvCsvRows = [['Title', 'Added', 'Rating', 'Size (GB)', 'Last Played', 'Plays']];
+            tvRows.forEach(function(row) {
+                tvCsvRows.push([
+                    row.title || '',
+                    row.added_at || '',
+                    formatRatingForCsv(row),
+                    formatTvSizeForCsv(row),
+                    row.last_played || '',
+                    row.play_count == null ? '' : row.play_count
+                ]);
+            });
+            downloadCsv('tv_shows_' + timestamp + '.csv', tvCsvRows);
+            return;
+        }
+
+        var movieRows = moviesTable.rows().data().toArray();
+        var movieCsvRows = [['Title', 'Added', 'Codec', 'Resolution', 'Rating', 'Size (GB)', 'Last Played', 'Plays']];
+        movieRows.forEach(function(row) {
+            movieCsvRows.push([
+                row.title || '',
+                row.added_at || '',
+                row.video_codec || '',
+                formatResolutionText(row.video_resolution),
+                formatRatingForCsv(row),
+                formatMovieSizeForCsv(row),
+                row.last_played || '',
+                row.play_count == null ? '' : row.play_count
+            ]);
+        });
+        downloadCsv('movies_' + timestamp + '.csv', movieCsvRows);
+    }
+
     function formatRatingCell(row) {
         var html = '<div class="rating-cell">';
         var hasRating = false;
@@ -908,6 +1026,7 @@ $(document).ready(function() {
         }
 
         if (view === 'tv') {
+            currentMediaView = 'tv';
             moviesSection.style.display = 'none';
             tvSection.style.display = 'block';
             moviesBtn.classList.remove('active');
@@ -916,6 +1035,7 @@ $(document).ready(function() {
                 tvShowsTable.columns.adjust().draw(false);
             }
         } else {
+            currentMediaView = 'movies';
             moviesSection.style.display = 'block';
             tvSection.style.display = 'none';
             moviesBtn.classList.add('active');
@@ -924,6 +1044,7 @@ $(document).ready(function() {
                 moviesTable.columns.adjust().draw(false);
             }
         }
+        updateExportButtonLabel();
     }
 
     // Initialize Movies DataTable
@@ -1228,6 +1349,11 @@ $(document).ready(function() {
         runFullRefreshButton.addEventListener('click', startCombinedRefresh);
     }
 
+    var exportSectionButton = document.getElementById('export-section-btn');
+    if (exportSectionButton) {
+        exportSectionButton.addEventListener('click', exportCurrentSectionCsv);
+    }
+
     var compactRefreshButton = document.getElementById('refresh-media-compact-btn');
     if (compactRefreshButton) {
         compactRefreshButton.addEventListener('click', function() {
@@ -1261,6 +1387,7 @@ $(document).ready(function() {
     if (!combinedRefreshRequested) {
         setCombinedRefreshButtonState(false, getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data)));
     }
+    updateExportButtonLabel();
 
     $('#moviesTable, #tvShowsTable').on('click', 'a.content-link', function(event) {
         var href = this.getAttribute('href');
