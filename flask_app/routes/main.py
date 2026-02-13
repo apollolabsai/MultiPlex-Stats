@@ -449,7 +449,7 @@ def api_viewing_history_posters():
     """Get recent unique title posters for the viewing-history hero background."""
     try:
         service = AnalyticsService()
-        posters = service.get_recent_unique_history_posters(limit=20)
+        posters = service.get_recent_unique_history_posters(limit=10)
         return jsonify({'posters': posters})
     except Exception as e:
         return jsonify({'error': str(e), 'posters': []}), 500
