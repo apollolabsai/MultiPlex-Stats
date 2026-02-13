@@ -592,6 +592,7 @@ class ContentServiceChartTests(unittest.TestCase):
             title='Rated Movie',
             year=2023,
             play_count=0,
+            added_at=1704110400,
             rating='7.8',
             rating_image='imdb://image.rating',
             audience_rating='91',
@@ -609,6 +610,7 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertEqual(metadata['critic_rating_display'], '7.8')
         self.assertEqual(metadata['audience_rating'], '91')
         self.assertEqual(metadata['audience_rating_display'], '91%')
+        self.assertEqual(metadata['date_added'], '2024-01-01')
 
     def test_format_rating_display_handles_rotten_tomatoes_fraction(self):
         formatted = ContentService._format_rating_display(

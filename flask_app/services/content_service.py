@@ -220,6 +220,7 @@ class ContentService:
             'director': '',
             'studio': '',
             'year': record.year or '',
+            'date_added': '',
             'runtime': self._format_runtime(record.duration),
             'rated': '',
             'critic_rating': '',
@@ -255,6 +256,9 @@ class ContentService:
         metadata['director'] = self._extract_director(data)
         metadata['studio'] = data.get('studio') or metadata['studio']
         metadata['year'] = data.get('year') or metadata['year']
+        metadata['date_added'] = self._format_added_date(
+            data.get('added_at') or data.get('addedAt') or data.get('added')
+        )
         metadata['runtime'] = self._format_runtime(data.get('duration') or data.get('duration_ms') or record.duration)
         metadata['rated'] = data.get('content_rating') or data.get('rating') or ''
         metadata['critic_rating'] = data.get('rating') or data.get('rating_value') or ''
@@ -322,6 +326,7 @@ class ContentService:
                 'director': '',
                 'studio': '',
                 'year': media.year or '',
+                'date_added': self._format_added_date(media.added_at),
                 'runtime': '',
                 'rated': '',
                 'critic_rating': '',
@@ -368,6 +373,8 @@ class ContentService:
 
         if not metadata.get('year') and media.year:
             metadata['year'] = media.year
+        if not metadata.get('date_added') and media.added_at:
+            metadata['date_added'] = self._format_added_date(media.added_at)
         if not metadata.get('video_codec') and media.video_codec:
             metadata['video_codec'] = media.video_codec
         if not metadata.get('resolution') and media.video_resolution:
@@ -488,6 +495,55 @@ class ContentService:
         if value.is_integer():
             return f"{int(value)}.0"
         return str(value)
+
+    def _format_added_date(self, value: Any) -> str:
+        """Normalize metadata added-at values to YYYY-MM-DD in local timezone."""
+        if value in (None, '', 0, '0'):
+            return ''
+
+        dt_utc: datetime | None = None
+
+        if isinstance(value, (int, float)):
+            timestamp = int(value)
+            if timestamp <= 0:
+                return ''
+            if timestamp > 10**12:
+                timestamp //= 1000
+            try:
+                dt_utc = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            except (ValueError, OSError, TypeError):
+                return ''
+        elif isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return ''
+
+            if text.isdigit():
+                timestamp = int(text)
+                if timestamp <= 0:
+                    return ''
+                if timestamp > 10**12:
+                    timestamp //= 1000
+                try:
+                    dt_utc = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+                except (ValueError, OSError, TypeError):
+                    return ''
+            else:
+                try:
+                    parsed = datetime.fromisoformat(text.replace('Z', '+00:00'))
+                except ValueError:
+                    return ''
+                if parsed.tzinfo is None:
+                    dt_utc = parsed.replace(tzinfo=timezone.utc)
+                else:
+                    dt_utc = parsed.astimezone(timezone.utc)
+        else:
+            return ''
+
+        if not dt_utc:
+            return ''
+
+        return dt_utc.astimezone(self.local_tz).strftime('%Y-%m-%d')
 
     @staticmethod
     def _format_rating_display(value: Any, rating_image: str | None) -> str:

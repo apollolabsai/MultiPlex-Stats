@@ -34,6 +34,10 @@
                     <span class="hero-stat-number">{{ "{:,}".format(unique_users) }}</span>
                     <span class="hero-stat-label">Unique Users</span>
                 </div>
+                <div class="hero-stat">
+                    <span class="hero-stat-number">{{ metadata.date_added or "Unknown" }}</span>
+                    <span class="hero-stat-label">Date Added</span>
+                </div>
                 {% if not is_movie %}
                 <div class="hero-stat">
                     <span class="hero-stat-number">{{ metadata.year or "Unknown" }}</span>
