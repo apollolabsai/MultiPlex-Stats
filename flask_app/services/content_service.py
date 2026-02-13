@@ -222,6 +222,12 @@ class ContentService:
             'year': record.year or '',
             'runtime': self._format_runtime(record.duration),
             'rated': '',
+            'critic_rating': '',
+            'critic_rating_image': '',
+            'critic_rating_display': '',
+            'audience_rating': '',
+            'audience_rating_image': '',
+            'audience_rating_display': '',
             'video_codec': '',
             'resolution': '',
             'audio': '',
@@ -251,6 +257,20 @@ class ContentService:
         metadata['year'] = data.get('year') or metadata['year']
         metadata['runtime'] = self._format_runtime(data.get('duration') or data.get('duration_ms') or record.duration)
         metadata['rated'] = data.get('content_rating') or data.get('rating') or ''
+        metadata['critic_rating'] = data.get('rating') or data.get('rating_value') or ''
+        metadata['critic_rating_image'] = data.get('rating_image') or data.get('ratingImage') or ''
+        metadata['audience_rating'] = data.get('audience_rating') or data.get('audienceRating') or ''
+        metadata['audience_rating_image'] = (
+            data.get('audience_rating_image') or data.get('audienceRatingImage') or ''
+        )
+        metadata['critic_rating_display'] = self._format_rating_display(
+            metadata['critic_rating'],
+            metadata['critic_rating_image'],
+        )
+        metadata['audience_rating_display'] = self._format_rating_display(
+            metadata['audience_rating'],
+            metadata['audience_rating_image'],
+        )
 
         media_info = self._extract_media_info(data)
         if media_info:
@@ -304,6 +324,12 @@ class ContentService:
                 'year': media.year or '',
                 'runtime': '',
                 'rated': '',
+                'critic_rating': '',
+                'critic_rating_image': '',
+                'critic_rating_display': '',
+                'audience_rating': '',
+                'audience_rating_image': '',
+                'audience_rating_display': '',
                 'video_codec': '',
                 'resolution': '',
                 'audio': '',
@@ -346,6 +372,24 @@ class ContentService:
             metadata['video_codec'] = media.video_codec
         if not metadata.get('resolution') and media.video_resolution:
             metadata['resolution'] = media.video_resolution
+        if not metadata.get('critic_rating') and media.rating:
+            metadata['critic_rating'] = media.rating
+        if not metadata.get('critic_rating_image') and media.rating_image:
+            metadata['critic_rating_image'] = media.rating_image
+        if not metadata.get('audience_rating') and media.audience_rating:
+            metadata['audience_rating'] = media.audience_rating
+        if not metadata.get('audience_rating_image') and media.audience_rating_image:
+            metadata['audience_rating_image'] = media.audience_rating_image
+        if not metadata.get('critic_rating_display'):
+            metadata['critic_rating_display'] = self._format_rating_display(
+                metadata.get('critic_rating'),
+                metadata.get('critic_rating_image'),
+            )
+        if not metadata.get('audience_rating_display'):
+            metadata['audience_rating_display'] = self._format_rating_display(
+                metadata.get('audience_rating'),
+                metadata.get('audience_rating_image'),
+            )
 
         return metadata
 
@@ -444,6 +488,29 @@ class ContentService:
         if value.is_integer():
             return f"{int(value)}.0"
         return str(value)
+
+    @staticmethod
+    def _format_rating_display(value: Any, rating_image: str | None) -> str:
+        if value in (None, ''):
+            return ''
+
+        try:
+            numeric = float(value)
+        except (ValueError, TypeError):
+            return str(value)
+
+        source = (rating_image or '').lower()
+        if source.startswith('rottentomatoes://'):
+            if 0 < numeric <= 1:
+                numeric *= 100
+            elif 1 < numeric <= 10:
+                numeric *= 10
+            return f"{round(numeric)}%"
+
+        if numeric > 10:
+            return f"{round(numeric)}%"
+
+        return f"{numeric:.1f}"
 
     @staticmethod
     def _build_proxy_url(

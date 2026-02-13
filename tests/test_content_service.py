@@ -586,6 +586,37 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertEqual(details['watch_history'], [])
         self.assertIsNone(details['source_record_id'])
 
+    def test_get_metadata_for_media_falls_back_to_cached_ratings(self):
+        media = self._add_cached_media(
+            media_type='movie',
+            title='Rated Movie',
+            year=2023,
+            play_count=0,
+            rating='7.8',
+            rating_image='imdb://image.rating',
+            audience_rating='91',
+            audience_rating_image='rottentomatoes://image.rating.upright',
+        )
+
+        metadata = ContentService()._get_metadata_for_media(
+            media=media,
+            source_record=None,
+            is_movie=True,
+            content_title='Rated Movie',
+        )
+
+        self.assertEqual(metadata['critic_rating'], '7.8')
+        self.assertEqual(metadata['critic_rating_display'], '7.8')
+        self.assertEqual(metadata['audience_rating'], '91')
+        self.assertEqual(metadata['audience_rating_display'], '91%')
+
+    def test_format_rating_display_handles_rotten_tomatoes_fraction(self):
+        formatted = ContentService._format_rating_display(
+            0.93,
+            'rottentomatoes://image.rating.upright',
+        )
+        self.assertEqual(formatted, '93%')
+
 
 if __name__ == '__main__':
     unittest.main()

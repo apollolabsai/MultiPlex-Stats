@@ -2,6 +2,16 @@
 
 {% block title %}{{ content_title }} - MultiPlex Stats{% endblock %}
 
+{% macro rating_icon(image) -%}
+    {% if image and image.startswith('imdb://') -%}
+        <img src="{{ url_for('static', filename='img/imdb.svg') }}" class="hero-rating-icon" alt="IMDb">
+    {%- elif image and image.startswith('rottentomatoes://') -%}
+        <img src="{{ url_for('static', filename='img/rottentomatoes.svg') }}" class="hero-rating-icon" alt="Rotten Tomatoes">
+    {%- elif image and image.startswith('themoviedb://') -%}
+        <img src="{{ url_for('static', filename='img/themoviedb.svg') }}" class="hero-rating-icon" alt="TMDb">
+    {%- endif %}
+{%- endmacro %}
+
 {% block content %}
 <section class="content-hero{% if metadata.banner_url %} has-banner{% endif %}"{% if metadata.banner_url %} style="background-image: url('{{ metadata.banner_url }}');"{% endif %}>
     <div class="content-hero-overlay"></div>
@@ -31,6 +41,24 @@
                 </div>
                 {% endif %}
             </div>
+            {% if metadata.critic_rating_display or metadata.audience_rating_display %}
+            <div class="hero-ratings">
+                {% if metadata.critic_rating_display %}
+                <div class="hero-rating-pill">
+                    {{ rating_icon(metadata.critic_rating_image) }}
+                    <span class="hero-rating-value">{{ metadata.critic_rating_display }}</span>
+                    <span class="hero-rating-type">Critic</span>
+                </div>
+                {% endif %}
+                {% if metadata.audience_rating_display %}
+                <div class="hero-rating-pill">
+                    {{ rating_icon(metadata.audience_rating_image) }}
+                    <span class="hero-rating-value">{{ metadata.audience_rating_display }}</span>
+                    <span class="hero-rating-type">Audience</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
             <p class="summary">{{ metadata.summary }}</p>
 
             {% if is_movie %}
@@ -156,6 +184,40 @@
     color: #ddd;
     line-height: 1.5;
     margin-bottom: 16px;
+}
+
+.hero-ratings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 8px 0 14px;
+}
+
+.hero-rating-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 11px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.hero-rating-icon {
+    width: 18px;
+    height: 18px;
+}
+
+.hero-rating-value {
+    color: #fff;
+    font-weight: 700;
+}
+
+.hero-rating-type {
+    color: #f18a3d;
+    font-size: 0.78em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .hero-stats {
