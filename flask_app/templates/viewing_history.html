@@ -109,7 +109,7 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: #171717;
     padding: 20px 22px;
-    min-height: 120px;
+    min-height: 124px;
     margin-bottom: 16px;
 }
 
@@ -118,8 +118,9 @@
     inset: 0;
     opacity: 0.5;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    grid-template-rows: repeat(2, minmax(60px, 1fr));
+    grid-auto-flow: column;
+    align-content: start;
+    justify-content: start;
 }
 
 .history-hero-tile {
@@ -363,8 +364,34 @@ $(document).ready(function() {
     var tvIcon = '<svg class="media-icon" fill="#ed542c" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>';
     var contentDetailBase = '{{ url_for("main.content_details", history_id=0) }}';
     var navigationInProgress = false;
-    var historyHeroTileCount = 10;
+    var historyHeroRows = 2;
+    var historyHeroGap = 2;
+    var historyHeroOverflowColumns = 3;
+    var historyHeroPosters = [];
     var historyHeroBackdrop = document.getElementById('history-hero-backdrop');
+    var historyHeroElement = document.getElementById('history-hero');
+    var historyHeroResizeTimer = null;
+
+    function calculateHistoryHeroQuiltLayout() {
+        if (!historyHeroBackdrop || !historyHeroElement) {
+            return null;
+        }
+
+        var heroHeight = Math.max(124, historyHeroElement.clientHeight || 0);
+        var heroWidth = Math.max(320, historyHeroElement.clientWidth || 0);
+        var tileHeight = Math.max(60, Math.floor((heroHeight - historyHeroGap * (historyHeroRows - 1)) / historyHeroRows));
+        var tileWidth = Math.max(40, Math.round(tileHeight * (2 / 3))); // poster ratio 2:3
+        var columns = Math.max(1, Math.ceil(heroWidth / (tileWidth + historyHeroGap)) + historyHeroOverflowColumns);
+
+        return {
+            rows: historyHeroRows,
+            gap: historyHeroGap,
+            tileHeight: tileHeight,
+            tileWidth: tileWidth,
+            columns: columns,
+            tileCount: columns * historyHeroRows
+        };
+    }
 
     function renderHistoryHeroPosters(posters) {
         if (!historyHeroBackdrop) {
@@ -383,7 +410,17 @@ $(document).ready(function() {
             return;
         }
 
-        for (var i = 0; i < historyHeroTileCount; i++) {
+        var layout = calculateHistoryHeroQuiltLayout();
+        if (!layout) {
+            return;
+        }
+
+        historyHeroBackdrop.style.gridTemplateRows = 'repeat(' + layout.rows + ', ' + layout.tileHeight + 'px)';
+        historyHeroBackdrop.style.gridAutoColumns = layout.tileWidth + 'px';
+        historyHeroBackdrop.style.rowGap = layout.gap + 'px';
+        historyHeroBackdrop.style.columnGap = layout.gap + 'px';
+
+        for (var i = 0; i < layout.tileCount; i++) {
             var item = normalizedPosters[i % normalizedPosters.length];
             var posterUrl = String(item.poster_url || '').replace(/"/g, '\\"');
             var tile = document.createElement('div');
@@ -405,11 +442,24 @@ $(document).ready(function() {
                 return response.json();
             })
             .then(function(payload) {
-                renderHistoryHeroPosters(payload.posters || []);
+                historyHeroPosters = Array.isArray(payload.posters) ? payload.posters : [];
+                renderHistoryHeroPosters(historyHeroPosters);
             })
             .catch(function(error) {
                 console.error('Error loading viewing history posters:', error);
             });
+    }
+
+    function scheduleHistoryHeroRerender() {
+        if (!historyHeroPosters.length) {
+            return;
+        }
+        if (historyHeroResizeTimer) {
+            clearTimeout(historyHeroResizeTimer);
+        }
+        historyHeroResizeTimer = setTimeout(function() {
+            renderHistoryHeroPosters(historyHeroPosters);
+        }, 120);
     }
 
     function showNavigationLoading(titleText) {
@@ -683,6 +733,7 @@ $(document).ready(function() {
     // Load stats on page load
     loadStats();
     loadHistoryHeroPosters();
+    window.addEventListener('resize', scheduleHistoryHeroRerender);
 
     $('#viewingHistoryTable').on('click', 'a.content-link', function(event) {
         var href = this.getAttribute('href');
