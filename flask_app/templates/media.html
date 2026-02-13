@@ -1050,7 +1050,7 @@ $(document).ready(function() {
     // Initialize Movies DataTable
     var moviesTable = $('#moviesTable').DataTable({
         data: moviesData,
-        pageLength: 100,
+        pageLength: 50,
         lengthMenu: [[50, 100, 200, 500], [50, 100, 200, 500]],
         order: [[1, 'desc']],
         columns: [
@@ -1115,7 +1115,7 @@ $(document).ready(function() {
     // Initialize TV Shows DataTable
     var tvShowsTable = $('#tvShowsTable').DataTable({
         data: tvShowsData,
-        pageLength: 100,
+        pageLength: 50,
         lengthMenu: [[50, 100, 200, 500], [50, 100, 200, 500]],
         order: [[1, 'desc']],
         columns: [
