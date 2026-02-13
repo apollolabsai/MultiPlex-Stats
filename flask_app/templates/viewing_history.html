@@ -3,7 +3,9 @@
 {% block title %}Viewing History - MultiPlex Stats{% endblock %}
 
 {% block content %}
-<header>
+<header class="history-hero" id="history-hero">
+    <div class="history-hero-backdrop" id="history-hero-backdrop" aria-hidden="true"></div>
+    <div class="history-hero-overlay" aria-hidden="true"></div>
     <h1 class="settings-title">Viewing History</h1>
     <div class="subtitle" id="history-subtitle">Complete playback records from all servers</div>
 </header>
@@ -100,6 +102,47 @@
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 
 <style>
+.history-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #171717;
+    padding: 20px 22px;
+    margin-bottom: 16px;
+}
+
+.history-hero-backdrop {
+    position: absolute;
+    inset: 0;
+    opacity: 0.5;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-rows: repeat(4, minmax(0, 1fr));
+}
+
+.history-hero-tile {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.history-hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(10, 10, 10, 0.9) 0%, rgba(14, 14, 14, 0.68) 55%, rgba(12, 12, 12, 0.86) 100%);
+}
+
+.history-hero .settings-title,
+.history-hero .subtitle {
+    position: relative;
+    z-index: 2;
+}
+
+.history-hero .subtitle {
+    max-width: 560px;
+}
+
 #stats-grid .stat-card {
     padding: 12px 16px;
 }
@@ -303,6 +346,12 @@
         transform: translateX(280%);
     }
 }
+
+@media (max-width: 820px) {
+    .history-hero {
+        padding: 18px 18px;
+    }
+}
 </style>
 
 <script>
@@ -313,6 +362,53 @@ $(document).ready(function() {
     var tvIcon = '<svg class="media-icon" fill="#ed542c" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>';
     var contentDetailBase = '{{ url_for("main.content_details", history_id=0) }}';
     var navigationInProgress = false;
+    var historyHeroBackdrop = document.getElementById('history-hero-backdrop');
+
+    function renderHistoryHeroPosters(posters) {
+        if (!historyHeroBackdrop) {
+            return;
+        }
+
+        historyHeroBackdrop.innerHTML = '';
+        if (!Array.isArray(posters) || posters.length === 0) {
+            return;
+        }
+
+        var normalizedPosters = posters.filter(function(item) {
+            return item && item.poster_url;
+        });
+        if (normalizedPosters.length === 0) {
+            return;
+        }
+
+        for (var i = 0; i < 20; i++) {
+            var item = normalizedPosters[i % normalizedPosters.length];
+            var posterUrl = String(item.poster_url || '').replace(/"/g, '\\"');
+            var tile = document.createElement('div');
+            tile.className = 'history-hero-tile';
+            tile.style.backgroundImage = 'url("' + posterUrl + '")';
+            if (item.title) {
+                tile.setAttribute('title', item.title);
+            }
+            historyHeroBackdrop.appendChild(tile);
+        }
+    }
+
+    function loadHistoryHeroPosters() {
+        fetch('{{ url_for("main.api_viewing_history_posters") }}')
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Failed to load poster background.');
+                }
+                return response.json();
+            })
+            .then(function(payload) {
+                renderHistoryHeroPosters(payload.posters || []);
+            })
+            .catch(function(error) {
+                console.error('Error loading viewing history posters:', error);
+            });
+    }
 
     function showNavigationLoading(titleText) {
         var overlay = document.getElementById('nav-loading-overlay');
@@ -584,6 +680,7 @@ $(document).ready(function() {
 
     // Load stats on page load
     loadStats();
+    loadHistoryHeroPosters();
 
     $('#viewingHistoryTable').on('click', 'a.content-link', function(event) {
         var href = this.getAttribute('href');

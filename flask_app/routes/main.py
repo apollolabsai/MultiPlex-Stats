@@ -444,6 +444,17 @@ def api_viewing_history_stats():
     })
 
 
+@main_bp.route('/api/viewing-history-posters')
+def api_viewing_history_posters():
+    """Get recent unique title posters for the viewing-history hero background."""
+    try:
+        service = AnalyticsService()
+        posters = service.get_recent_unique_history_posters(limit=20)
+        return jsonify({'posters': posters})
+    except Exception as e:
+        return jsonify({'error': str(e), 'posters': []}), 500
+
+
 @main_bp.route('/users')
 def users():
     """Display all users from configured servers."""

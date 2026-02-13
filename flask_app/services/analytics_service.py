@@ -5,6 +5,7 @@ import os
 import json
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+from urllib.parse import urlencode
 import pandas as pd
 from sqlalchemy import func, or_
 
@@ -22,7 +23,7 @@ from multiplex_stats.visualization import (
 )
 from flask_app.services.config_service import ConfigService
 from flask_app.services.history_sync_service import HistorySyncService
-from flask_app.models import CachedMedia, ViewingHistory
+from flask_app.models import CachedMedia, ServerConfig, ViewingHistory
 
 
 class AnalyticsService:
@@ -506,6 +507,90 @@ class AnalyticsService:
                 print(f"Error fetching users from {server_b_config.name}: {e}")
 
         return user_thumb_map
+
+    def get_recent_unique_history_posters(
+        self,
+        limit: int = 20,
+        max_scan: int = 1200,
+    ) -> List[Dict[str, str]]:
+        """
+        Get poster URLs for the most recent unique titles in viewing history.
+
+        Uniqueness is by show title for TV episodes and by title/year for movies.
+        """
+        if limit < 1:
+            return []
+
+        servers = ServerConfig.query.filter(ServerConfig.is_active.is_(True)).all()
+        server_map = {
+            (server.name or '').strip(): server
+            for server in servers
+            if server.name and server.ip_address
+        }
+        if not server_map:
+            return []
+
+        records = (
+            ViewingHistory.query
+            .order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc())
+            .limit(max_scan)
+            .all()
+        )
+
+        seen_keys: set[tuple[Any, ...]] = set()
+        posters: List[Dict[str, str]] = []
+
+        for record in records:
+            thumb = (record.thumb or '').strip()
+            if not thumb:
+                continue
+
+            media_type = (record.media_type or '').strip().lower()
+            is_show = media_type in {'episode', 'tv', 'show'}
+
+            if is_show:
+                title = (record.grandparent_title or record.title or record.full_title or '').strip()
+                normalized = self._normalize_title(title)
+                if not normalized:
+                    continue
+                unique_key = ('show', normalized)
+                rating_key = self._safe_int(record.grandparent_rating_key) or self._safe_int(record.rating_key)
+            else:
+                title = (record.title or record.full_title or '').strip()
+                normalized = self._normalize_title(title)
+                if not normalized:
+                    continue
+                unique_key = ('movie', normalized, self._safe_int(record.year))
+                rating_key = self._safe_int(record.rating_key)
+
+            if unique_key in seen_keys:
+                continue
+
+            server = server_map.get((record.server_name or '').strip())
+            if not server:
+                continue
+
+            protocol = 'https' if server.use_ssl else 'http'
+            params: dict[str, Any] = {
+                'img': thumb,
+                'width': 220,
+                'height': 330,
+                'fallback': 'poster',
+            }
+            if rating_key is not None:
+                params['rating_key'] = rating_key
+
+            poster_url = f"{protocol}://{server.ip_address}/pms_image_proxy?{urlencode(params)}"
+            posters.append({
+                'title': title,
+                'poster_url': poster_url,
+            })
+            seen_keys.add(unique_key)
+
+            if len(posters) >= limit:
+                break
+
+        return posters
 
     def get_cached_charts(self, run_id: int) -> Dict[str, str]:
         """
