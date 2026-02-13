@@ -237,6 +237,44 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertEqual(details['unique_users'], 2)
         client.get_item_user_stats.assert_called_with(9001)
 
+    def test_get_metadata_for_tv_uses_children_fallback_for_counts(self):
+        self._add_server('Server A', 0)
+
+        record = self._add_history(
+            row_id=14,
+            server_name='Server A',
+            server_order=0,
+            media_type='episode',
+            title='Pilot',
+            full_title='Family Guy - Pilot',
+            grandparent_title='Family Guy',
+            rating_key=3100,
+            grandparent_rating_key=9100,
+            started=1700000000,
+            date_played=date(2024, 2, 1),
+        )
+
+        client = MagicMock()
+        client.get_metadata.return_value = {
+            'response': {'result': 'success', 'data': {'summary': 'animated show'}}
+        }
+        client.get_children_metadata.return_value = {
+            'response': {
+                'result': 'success',
+                'data': [
+                    {'media_type': 'season', 'children_count': 12},
+                    {'media_type': 'season', 'children_count': 14},
+                ],
+            }
+        }
+
+        with patch('flask_app.services.content_service.TautulliClient', return_value=client):
+            metadata = ContentService()._get_metadata_for_record(record, is_movie=False)
+
+        self.assertEqual(metadata['season_count'], 2)
+        self.assertEqual(metadata['episode_count'], 26)
+        client.get_children_metadata.assert_called_with(9100, media_type='show')
+
     def test_tv_user_chart_uses_endpoint_user_counts(self):
         self._add_server('Server A', 0)
 

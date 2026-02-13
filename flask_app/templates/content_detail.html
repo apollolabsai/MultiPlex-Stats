@@ -43,6 +43,14 @@
                     <span class="hero-stat-number">{{ metadata.year or "Unknown" }}</span>
                     <span class="hero-stat-label">Aired Year</span>
                 </div>
+                <div class="hero-stat">
+                    <span class="hero-stat-number">{{ "{:,}".format(metadata.season_count) if metadata.season_count is not none and metadata.season_count != '' else "Unknown" }}</span>
+                    <span class="hero-stat-label">Seasons</span>
+                </div>
+                <div class="hero-stat">
+                    <span class="hero-stat-number">{{ "{:,}".format(metadata.episode_count) if metadata.episode_count is not none and metadata.episode_count != '' else "Unknown" }}</span>
+                    <span class="hero-stat-label">Episodes</span>
+                </div>
                 {% endif %}
             </div>
             {% if metadata.critic_rating_display or metadata.audience_rating_display %}

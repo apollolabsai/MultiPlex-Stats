@@ -222,6 +222,8 @@ class ContentService:
             'studio': '',
             'year': record.year or '',
             'date_added': '',
+            'season_count': '',
+            'episode_count': '',
             'runtime': self._format_runtime(record.duration),
             'rated': '',
             'critic_rating': '',
@@ -260,6 +262,11 @@ class ContentService:
         metadata['date_added'] = self._format_added_date(
             data.get('added_at') or data.get('addedAt') or data.get('added')
         )
+        season_count, episode_count = self._extract_show_structure_counts(data)
+        if season_count is not None:
+            metadata['season_count'] = season_count
+        if episode_count is not None:
+            metadata['episode_count'] = episode_count
         metadata['runtime'] = self._format_runtime(data.get('duration') or data.get('duration_ms') or record.duration)
         metadata['rated'] = data.get('content_rating') or data.get('rating') or ''
         metadata['critic_rating'] = data.get('rating') or data.get('rating_value') or ''
@@ -276,6 +283,19 @@ class ContentService:
             metadata['audience_rating'],
             metadata['audience_rating_image'],
         )
+
+        if not is_movie and (not metadata.get('season_count') or not metadata.get('episode_count')):
+            try:
+                children_response = client.get_children_metadata(int(rating_key), media_type='show')
+                child_seasons, child_episodes = self._extract_show_structure_counts_from_children(
+                    children_response
+                )
+                if not metadata.get('season_count') and child_seasons is not None:
+                    metadata['season_count'] = child_seasons
+                if not metadata.get('episode_count') and child_episodes is not None:
+                    metadata['episode_count'] = child_episodes
+            except Exception:
+                pass
 
         media_info = self._extract_media_info(data)
         if media_info:
@@ -328,6 +348,8 @@ class ContentService:
                 'studio': '',
                 'year': media.year or '',
                 'date_added': self._format_added_date(media.added_at),
+                'season_count': '',
+                'episode_count': '',
                 'runtime': '',
                 'rated': '',
                 'critic_rating': '',
@@ -400,6 +422,84 @@ class ContentService:
             )
 
         return metadata
+
+    @staticmethod
+    def _extract_show_structure_counts(metadata: dict[str, Any]) -> tuple[int | None, int | None]:
+        """Extract season/episode totals from show metadata payload."""
+        if not isinstance(metadata, dict):
+            return None, None
+
+        season_count = ContentService._to_int(
+            metadata.get('child_count')
+            or metadata.get('season_count')
+            or metadata.get('seasons_count')
+            or metadata.get('seasons')
+        )
+        episode_count = ContentService._to_int(
+            metadata.get('leaf_count')
+            or metadata.get('grandchild_count')
+            or metadata.get('grandchildren_count')
+            or metadata.get('episode_count')
+            or metadata.get('episodes_count')
+        )
+
+        children_count = ContentService._to_int(metadata.get('children_count'))
+        children_type = str(metadata.get('children_type') or '').strip().lower()
+        if children_count is not None:
+            if children_type.startswith('season'):
+                if season_count is None:
+                    season_count = children_count
+            elif children_type.startswith('episode'):
+                if episode_count is None:
+                    episode_count = children_count
+            elif season_count is None:
+                season_count = children_count
+
+        return season_count, episode_count
+
+    @staticmethod
+    def _extract_show_structure_counts_from_children(
+        response: dict[str, Any]
+    ) -> tuple[int | None, int | None]:
+        """Extract season/episode totals from get_children_metadata payload."""
+        if not isinstance(response, dict):
+            return None, None
+
+        envelope = response.get('response', {})
+        if not isinstance(envelope, dict):
+            return None, None
+
+        data = envelope.get('data', {})
+        rows: list[dict[str, Any]] = []
+
+        if isinstance(data, list):
+            rows = [row for row in data if isinstance(row, dict)]
+        elif isinstance(data, dict):
+            nested_rows = data.get('data')
+            if isinstance(nested_rows, list):
+                rows = [row for row in nested_rows if isinstance(row, dict)]
+
+        if rows:
+            season_count = len(rows)
+            episode_total = 0
+            has_episode_total = False
+            for row in rows:
+                child_count = ContentService._to_int(
+                    row.get('children_count')
+                    or row.get('child_count')
+                    or row.get('leaf_count')
+                    or row.get('episode_count')
+                )
+                if child_count is not None:
+                    episode_total += child_count
+                    has_episode_total = True
+
+            return season_count, (episode_total if has_episode_total else None)
+
+        if isinstance(data, dict):
+            return ContentService._extract_show_structure_counts(data)
+
+        return None, None
 
     @staticmethod
     def _extract_metadata_payload(response: dict[str, Any]) -> dict[str, Any]:

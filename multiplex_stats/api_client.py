@@ -326,6 +326,26 @@ class TautulliClient:
         """
         return self._make_request('get_metadata', rating_key=rating_key)
 
+    def get_children_metadata(
+        self,
+        rating_key: int,
+        media_type: Optional[str] = None
+    ) -> dict[str, Any]:
+        """
+        Get child metadata rows for a specific media item.
+
+        Args:
+            rating_key: The rating key of the media item
+            media_type: Optional item type (show, season, etc.)
+
+        Returns:
+            API response containing child metadata rows
+        """
+        params: dict[str, Any] = {'rating_key': rating_key}
+        if media_type:
+            params['media_type'] = media_type
+        return self._make_request('get_children_metadata', **params)
+
     def get_item_watch_time_stats(
         self,
         rating_key: int,
