@@ -502,6 +502,17 @@ def media():
                           total_tv_plays=total_tv_plays)
 
 
+@main_bp.route('/api/media-top-posters')
+def api_media_top_posters():
+    """Get top-played media posters for the media-page hero background."""
+    try:
+        service = AnalyticsService()
+        posters = service.get_top_media_posters_by_play_count(limit=80)
+        return jsonify({'posters': posters})
+    except Exception as e:
+        return jsonify({'error': str(e), 'posters': []}), 500
+
+
 @main_bp.route('/api/media/start-load', methods=['POST'])
 def api_media_start_load():
     """Start loading media library data."""

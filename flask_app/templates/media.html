@@ -3,7 +3,9 @@
 {% block title %}Media Library - MultiPlex Stats{% endblock %}
 
 {% block content %}
-<header>
+<header class="media-hero" id="media-hero">
+    <div class="media-hero-backdrop" id="media-hero-backdrop" aria-hidden="true"></div>
+    <div class="media-hero-overlay" aria-hidden="true"></div>
     <h1 class="settings-title">Media Library</h1>
     <div class="subtitle">Movies and TV Shows from all servers</div>
 </header>
@@ -195,6 +197,52 @@
 #stats-grid .stat-label {
     font-size: 0.72em;
     letter-spacing: 0.06em;
+}
+
+.media-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #171717;
+    padding: 20px 22px;
+    min-height: 124px;
+    margin-bottom: 16px;
+}
+
+.media-hero-backdrop {
+    position: absolute;
+    inset: 0;
+    opacity: 0.5;
+    display: grid;
+    grid-auto-flow: column;
+    align-content: start;
+    justify-content: start;
+}
+
+.media-hero-tile {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.media-hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(10, 10, 10, 0.9) 0%, rgba(14, 14, 14, 0.68) 55%, rgba(12, 12, 12, 0.86) 100%);
+}
+
+.media-hero .settings-title,
+.media-hero .subtitle {
+    position: relative;
+    z-index: 2;
+}
+
+.media-hero .subtitle {
+    max-width: 560px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
 }
 
 .media-load-section {
@@ -554,6 +602,103 @@ $(document).ready(function() {
     var navigationInProgress = false;
     var currentMediaView = 'movies';
     var contentDetailBase = '{{ url_for("main.media_content_details", media_id=0) }}';
+    var mediaHeroRows = 2;
+    var mediaHeroGap = 2;
+    var mediaHeroOverflowColumns = 3;
+    var mediaHeroPosters = [];
+    var mediaHeroBackdrop = document.getElementById('media-hero-backdrop');
+    var mediaHeroElement = document.getElementById('media-hero');
+    var mediaHeroResizeTimer = null;
+
+    function calculateMediaHeroQuiltLayout() {
+        if (!mediaHeroBackdrop || !mediaHeroElement) {
+            return null;
+        }
+
+        var heroHeight = Math.max(124, mediaHeroElement.clientHeight || 0);
+        var heroWidth = Math.max(320, mediaHeroElement.clientWidth || 0);
+        var tileHeight = Math.max(60, Math.floor((heroHeight - mediaHeroGap * (mediaHeroRows - 1)) / mediaHeroRows));
+        var tileWidth = Math.max(40, Math.round(tileHeight * (2 / 3))); // poster ratio 2:3
+        var columns = Math.max(1, Math.ceil(heroWidth / (tileWidth + mediaHeroGap)) + mediaHeroOverflowColumns);
+
+        return {
+            rows: mediaHeroRows,
+            gap: mediaHeroGap,
+            tileHeight: tileHeight,
+            tileWidth: tileWidth,
+            columns: columns,
+            tileCount: columns * mediaHeroRows
+        };
+    }
+
+    function renderMediaHeroPosters(posters) {
+        if (!mediaHeroBackdrop) {
+            return;
+        }
+
+        mediaHeroBackdrop.innerHTML = '';
+        if (!Array.isArray(posters) || posters.length === 0) {
+            return;
+        }
+
+        var normalizedPosters = posters.filter(function(item) {
+            return item && item.poster_url;
+        });
+        if (normalizedPosters.length === 0) {
+            return;
+        }
+
+        var layout = calculateMediaHeroQuiltLayout();
+        if (!layout) {
+            return;
+        }
+
+        mediaHeroBackdrop.style.gridTemplateRows = 'repeat(' + layout.rows + ', ' + layout.tileHeight + 'px)';
+        mediaHeroBackdrop.style.gridAutoColumns = layout.tileWidth + 'px';
+        mediaHeroBackdrop.style.rowGap = layout.gap + 'px';
+        mediaHeroBackdrop.style.columnGap = layout.gap + 'px';
+
+        for (var i = 0; i < layout.tileCount; i++) {
+            var item = normalizedPosters[i % normalizedPosters.length];
+            var posterUrl = String(item.poster_url || '').replace(/"/g, '\\"');
+            var tile = document.createElement('div');
+            tile.className = 'media-hero-tile';
+            tile.style.backgroundImage = 'url("' + posterUrl + '")';
+            if (item.title) {
+                tile.setAttribute('title', item.title);
+            }
+            mediaHeroBackdrop.appendChild(tile);
+        }
+    }
+
+    function loadMediaHeroPosters() {
+        fetch('{{ url_for("main.api_media_top_posters") }}')
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Failed to load media hero posters.');
+                }
+                return response.json();
+            })
+            .then(function(payload) {
+                mediaHeroPosters = Array.isArray(payload.posters) ? payload.posters : [];
+                renderMediaHeroPosters(mediaHeroPosters);
+            })
+            .catch(function(error) {
+                console.error('Error loading media hero posters:', error);
+            });
+    }
+
+    function scheduleMediaHeroRerender() {
+        if (!mediaHeroPosters.length) {
+            return;
+        }
+        if (mediaHeroResizeTimer) {
+            clearTimeout(mediaHeroResizeTimer);
+        }
+        mediaHeroResizeTimer = setTimeout(function() {
+            renderMediaHeroPosters(mediaHeroPosters);
+        }, 120);
+    }
 
     function escapeHtml(value) {
         return String(value || '')
@@ -1414,6 +1559,8 @@ $(document).ready(function() {
         setCombinedRefreshButtonState(false, getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data)));
     }
     updateExportButtonLabel();
+    loadMediaHeroPosters();
+    window.addEventListener('resize', scheduleMediaHeroRerender);
 
     $('#moviesTable, #tvShowsTable').on('click', 'a.content-link', function(event) {
         var href = this.getAttribute('href');

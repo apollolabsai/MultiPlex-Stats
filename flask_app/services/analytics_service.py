@@ -23,7 +23,7 @@ from multiplex_stats.visualization import (
 )
 from flask_app.services.config_service import ConfigService
 from flask_app.services.history_sync_service import HistorySyncService
-from flask_app.models import CachedMedia, ServerConfig, ViewingHistory
+from flask_app.models import CachedMedia, LifetimeMediaPlayCount, ServerConfig, ViewingHistory
 
 
 class AnalyticsService:
@@ -589,6 +589,178 @@ class AnalyticsService:
 
             if len(posters) >= limit:
                 break
+
+        return posters
+
+    def get_top_media_posters_by_play_count(
+        self,
+        limit: int = 80,
+        ranking_pool: int = 400,
+        max_scan: int = 20000,
+    ) -> List[Dict[str, str]]:
+        """
+        Get poster URLs for top-played media titles.
+
+        Ranking prefers lifetime merged play counts when available, then falls
+        back to cached media play_count.
+        """
+        if limit < 1:
+            return []
+
+        ranking_pool = max(limit, ranking_pool)
+
+        servers = ServerConfig.query.filter(ServerConfig.is_active.is_(True)).all()
+        server_map = {
+            (server.name or '').strip(): server
+            for server in servers
+            if server.name and server.ip_address
+        }
+        if not server_map:
+            return []
+
+        ranked_keys: list[tuple[Any, ...]] = []
+        seen_keys: set[tuple[Any, ...]] = set()
+
+        lifetime_rows = (
+            LifetimeMediaPlayCount.query
+            .filter(LifetimeMediaPlayCount.total_plays > 0)
+            .order_by(LifetimeMediaPlayCount.total_plays.desc(), LifetimeMediaPlayCount.id.asc())
+            .limit(ranking_pool)
+            .all()
+        )
+        for row in lifetime_rows:
+            media_type = (row.media_type or '').strip().lower()
+            title_normalized = self._normalize_title(row.title_normalized)
+            if not title_normalized:
+                continue
+
+            if media_type == 'show':
+                key: tuple[Any, ...] = ('show', title_normalized)
+            elif media_type == 'movie':
+                key = ('movie', title_normalized, self._safe_int(row.year))
+            else:
+                continue
+
+            if key in seen_keys:
+                continue
+            ranked_keys.append(key)
+            seen_keys.add(key)
+
+        if len(ranked_keys) < ranking_pool:
+            cached_rows = (
+                CachedMedia.query
+                .filter(CachedMedia.play_count > 0)
+                .order_by(CachedMedia.play_count.desc(), CachedMedia.id.asc())
+                .limit(ranking_pool)
+                .all()
+            )
+            for row in cached_rows:
+                media_type = (row.media_type or '').strip().lower()
+                title_normalized = self._normalize_title(row.title)
+                if not title_normalized:
+                    continue
+
+                if media_type == 'show':
+                    key = ('show', title_normalized)
+                elif media_type == 'movie':
+                    key = ('movie', title_normalized, self._safe_int(row.year))
+                else:
+                    continue
+
+                if key in seen_keys:
+                    continue
+                ranked_keys.append(key)
+                seen_keys.add(key)
+                if len(ranked_keys) >= ranking_pool:
+                    break
+
+        if not ranked_keys:
+            return []
+
+        target_keys = set(ranked_keys)
+        resolved_by_key: dict[tuple[Any, ...], Dict[str, str]] = {}
+
+        records = (
+            ViewingHistory.query
+            .order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc())
+            .limit(max_scan)
+            .all()
+        )
+
+        for record in records:
+            if len(resolved_by_key) >= len(target_keys):
+                break
+
+            thumb = (record.thumb or '').strip()
+            if not thumb:
+                continue
+
+            media_type = (record.media_type or '').strip().lower()
+            is_show = media_type in {'episode', 'tv', 'show'}
+
+            if is_show:
+                title = (record.grandparent_title or record.title or record.full_title or '').strip()
+                normalized = self._normalize_title(title)
+                if not normalized:
+                    continue
+                key = ('show', normalized)
+                rating_key = self._safe_int(record.grandparent_rating_key) or self._safe_int(record.rating_key)
+            else:
+                title = (record.title or record.full_title or '').strip()
+                normalized = self._normalize_title(title)
+                if not normalized:
+                    continue
+                key = ('movie', normalized, self._safe_int(record.year))
+                rating_key = self._safe_int(record.rating_key)
+
+            if key not in target_keys or key in resolved_by_key:
+                continue
+
+            server = server_map.get((record.server_name or '').strip())
+            if not server:
+                continue
+
+            protocol = 'https' if server.use_ssl else 'http'
+            params: dict[str, Any] = {
+                'img': thumb,
+                'width': 220,
+                'height': 330,
+                'fallback': 'poster',
+            }
+            if rating_key is not None:
+                params['rating_key'] = rating_key
+
+            poster_url = f"{protocol}://{server.ip_address}/pms_image_proxy?{urlencode(params)}"
+            resolved_by_key[key] = {
+                'title': title,
+                'poster_url': poster_url,
+            }
+
+        posters: List[Dict[str, str]] = []
+        seen_urls: set[str] = set()
+        for key in ranked_keys:
+            item = resolved_by_key.get(key)
+            if not item:
+                continue
+            url = item.get('poster_url', '')
+            if not url or url in seen_urls:
+                continue
+            posters.append(item)
+            seen_urls.add(url)
+            if len(posters) >= limit:
+                return posters
+
+        # Fill any remaining slots with recent unique posters so hero still looks full.
+        if len(posters) < limit:
+            recent_fallback = self.get_recent_unique_history_posters(limit=limit * 2, max_scan=max_scan)
+            for item in recent_fallback:
+                url = item.get('poster_url', '')
+                if not url or url in seen_urls:
+                    continue
+                posters.append(item)
+                seen_urls.add(url)
+                if len(posters) >= limit:
+                    break
 
         return posters
 
