@@ -513,6 +513,17 @@ def api_media_top_posters():
         return jsonify({'error': str(e), 'posters': []}), 500
 
 
+@main_bp.route('/api/dashboard-top-posters')
+def api_dashboard_top_posters():
+    """Get top-played media posters for the dashboard hero background."""
+    try:
+        service = AnalyticsService()
+        posters = service.get_top_media_posters_by_play_count(limit=120)
+        return jsonify({'posters': posters})
+    except Exception as e:
+        return jsonify({'error': str(e), 'posters': []}), 500
+
+
 @main_bp.route('/api/media/start-load', methods=['POST'])
 def api_media_start_load():
     """Start loading media library data."""

@@ -89,7 +89,9 @@
     </ul>
 </div>
 {% else %}
-<header>
+<header class="dashboard-hero" id="dashboard-hero">
+    <div class="dashboard-hero-backdrop" id="dashboard-hero-backdrop" aria-hidden="true"></div>
+    <div class="dashboard-hero-overlay" aria-hidden="true"></div>
     <img src="{{ url_for('static', filename='logo.png') }}" alt="MultiPlex Stats" style="max-width: 400px; height: auto; margin-bottom: 10px;">
     <div class="subtitle">Plex Server Analytics & Insights</div>
     <div class="timestamp">
@@ -364,6 +366,41 @@
     color: #ffaf6e;
 }
 
+.dashboard-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: #171717;
+}
+
+.dashboard-hero-backdrop {
+    position: absolute;
+    inset: 0;
+    opacity: 0.5;
+    display: grid;
+    grid-auto-flow: column;
+    align-content: start;
+    justify-content: start;
+}
+
+.dashboard-hero-tile {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.dashboard-hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(10, 10, 10, 0.9) 0%, rgba(14, 14, 14, 0.68) 55%, rgba(12, 12, 12, 0.86) 100%);
+}
+
+.dashboard-hero > * {
+    position: relative;
+    z-index: 2;
+}
+
 .poster-preview {
     display: none;
     position: fixed;
@@ -598,6 +635,103 @@ $(document).ready(function() {
     var lastActivityUpdateAt = Date.now();
     var posterPreviewBound = false;
     var navigationInProgress = false;
+    var dashboardHeroRows = 3;
+    var dashboardHeroGap = 2;
+    var dashboardHeroOverflowColumns = 3;
+    var dashboardHeroPosters = [];
+    var dashboardHeroBackdrop = document.getElementById('dashboard-hero-backdrop');
+    var dashboardHeroElement = document.getElementById('dashboard-hero');
+    var dashboardHeroResizeTimer = null;
+
+    function calculateDashboardHeroQuiltLayout() {
+        if (!dashboardHeroBackdrop || !dashboardHeroElement) {
+            return null;
+        }
+
+        var heroHeight = Math.max(186, dashboardHeroElement.clientHeight || 0);
+        var heroWidth = Math.max(320, dashboardHeroElement.clientWidth || 0);
+        var tileHeight = Math.max(60, Math.floor((heroHeight - dashboardHeroGap * (dashboardHeroRows - 1)) / dashboardHeroRows));
+        var tileWidth = Math.max(40, Math.round(tileHeight * (2 / 3))); // poster ratio 2:3
+        var columns = Math.max(1, Math.ceil(heroWidth / (tileWidth + dashboardHeroGap)) + dashboardHeroOverflowColumns);
+
+        return {
+            rows: dashboardHeroRows,
+            gap: dashboardHeroGap,
+            tileHeight: tileHeight,
+            tileWidth: tileWidth,
+            columns: columns,
+            tileCount: columns * dashboardHeroRows
+        };
+    }
+
+    function renderDashboardHeroPosters(posters) {
+        if (!dashboardHeroBackdrop) {
+            return;
+        }
+
+        dashboardHeroBackdrop.innerHTML = '';
+        if (!Array.isArray(posters) || posters.length === 0) {
+            return;
+        }
+
+        var normalizedPosters = posters.filter(function(item) {
+            return item && item.poster_url;
+        });
+        if (normalizedPosters.length === 0) {
+            return;
+        }
+
+        var layout = calculateDashboardHeroQuiltLayout();
+        if (!layout) {
+            return;
+        }
+
+        dashboardHeroBackdrop.style.gridTemplateRows = 'repeat(' + layout.rows + ', ' + layout.tileHeight + 'px)';
+        dashboardHeroBackdrop.style.gridAutoColumns = layout.tileWidth + 'px';
+        dashboardHeroBackdrop.style.rowGap = layout.gap + 'px';
+        dashboardHeroBackdrop.style.columnGap = layout.gap + 'px';
+
+        for (var i = 0; i < layout.tileCount; i++) {
+            var item = normalizedPosters[i % normalizedPosters.length];
+            var posterUrl = String(item.poster_url || '').replace(/"/g, '\\"');
+            var tile = document.createElement('div');
+            tile.className = 'dashboard-hero-tile';
+            tile.style.backgroundImage = 'url("' + posterUrl + '")';
+            if (item.title) {
+                tile.setAttribute('title', item.title);
+            }
+            dashboardHeroBackdrop.appendChild(tile);
+        }
+    }
+
+    function loadDashboardHeroPosters() {
+        fetch('{{ url_for("main.api_dashboard_top_posters") }}')
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Failed to load dashboard hero posters.');
+                }
+                return response.json();
+            })
+            .then(function(payload) {
+                dashboardHeroPosters = Array.isArray(payload.posters) ? payload.posters : [];
+                renderDashboardHeroPosters(dashboardHeroPosters);
+            })
+            .catch(function(error) {
+                console.error('Error loading dashboard hero posters:', error);
+            });
+    }
+
+    function scheduleDashboardHeroRerender() {
+        if (!dashboardHeroPosters.length) {
+            return;
+        }
+        if (dashboardHeroResizeTimer) {
+            clearTimeout(dashboardHeroResizeTimer);
+        }
+        dashboardHeroResizeTimer = setTimeout(function() {
+            renderDashboardHeroPosters(dashboardHeroPosters);
+        }, 120);
+    }
 
     function showNavigationLoading(titleText) {
         var overlay = document.getElementById('nav-loading-overlay');
@@ -753,7 +887,9 @@ $(document).ready(function() {
 
     bindPosterPreviewHandlers();
     preloadPosterPreviews(document);
+    loadDashboardHeroPosters();
     updateLastUpdatedLabel();
+    window.addEventListener('resize', scheduleDashboardHeroRerender);
 
     lastUpdatedTimer = setInterval(updateLastUpdatedLabel, 30000);
 
