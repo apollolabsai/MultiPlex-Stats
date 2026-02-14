@@ -110,7 +110,7 @@ class HistorySyncServiceTests(unittest.TestCase):
         self.assertEqual(sync_status['servers'][0]['fetched'], 2)
         self.assertEqual(sync_status['servers'][1]['fetched'], 2)
 
-    def test_backfill_skips_duplicate_row_ids_between_servers(self):
+    def test_backfill_allows_same_raw_row_ids_across_servers(self):
         self._add_server('Server A', 0)
         self._add_server('Server B', 1)
 
@@ -129,12 +129,33 @@ class HistorySyncServiceTests(unittest.TestCase):
         self.assertEqual(status.status, 'success')
         self.assertEqual(status.records_total, 2)
         self.assertEqual(status.records_fetched, 2)
+        self.assertEqual(status.records_inserted, 2)
+        self.assertEqual(status.records_skipped, 0)
+        self.assertEqual(ViewingHistory.query.count(), 2)
+        sync_status = HistorySyncService().get_sync_status()
+        self.assertEqual(sync_status['servers'][0]['inserted'], 1)
+        self.assertEqual(sync_status['servers'][1]['inserted'], 1)
+
+    def test_backfill_skips_duplicate_row_ids_within_same_server(self):
+        self._add_server('Server A', 0)
+
+        duplicate_row = {'row_id': 99, 'started': 1700000000, 'media_type': 'episode', 'title': 'Dup'}
+        fake_client = _FakeClient([
+            _history_response([duplicate_row], 2),
+            _history_response([duplicate_row], 2),
+        ])
+
+        with patch('flask_app.services.history_sync_service.TautulliClient', return_value=fake_client):
+            started = HistorySyncService().start_backfill(30)
+
+        self.assertTrue(started)
+        status = HistorySyncService().get_or_create_status()
+        self.assertEqual(status.status, 'success')
+        self.assertEqual(status.records_total, 2)
+        self.assertEqual(status.records_fetched, 2)
         self.assertEqual(status.records_inserted, 1)
         self.assertEqual(status.records_skipped, 1)
         self.assertEqual(ViewingHistory.query.count(), 1)
-        sync_status = HistorySyncService().get_sync_status()
-        self.assertEqual(sync_status['servers'][0]['inserted'], 1)
-        self.assertEqual(sync_status['servers'][1]['skipped'], 1)
 
     def test_full_backfill_runs_without_after_date_filter(self):
         self._add_server('Server A', 0)

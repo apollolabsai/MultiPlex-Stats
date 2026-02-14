@@ -80,7 +80,7 @@ class ViewingHistory(db.Model):
     __tablename__ = 'viewing_history'
 
     id = db.Column(db.Integer, primary_key=True)
-    row_id = db.Column(db.Integer, nullable=False, unique=True, index=True)  # Tautulli's unique ID
+    row_id = db.Column(db.Integer, nullable=False, unique=True, index=True)  # Server-scoped Tautulli row ID
     server_name = db.Column(db.String(100), nullable=False)
     server_order = db.Column(db.Integer, default=0)  # 0=ServerA, 1=ServerB
 

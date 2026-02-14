@@ -17,6 +17,7 @@ class HistorySyncService:
     """Service for managing viewing history sync operations."""
 
     PAGE_SIZE = 1000  # Records per API request
+    ROW_ID_NAMESPACE_MULTIPLIER = 1_000_000_000
     _status_write_lock = threading.Lock()
     _server_progress = {}
 
@@ -515,13 +516,15 @@ class HistorySyncService:
         Returns:
             'inserted' when a row is added, 'skipped' for duplicates, 'ignored' when row_id is missing.
         """
-        row_id = record.get('row_id')
-
-        if not row_id:
+        raw_row_id = self._safe_int(record.get('row_id'))
+        if raw_row_id is None:
             return 'ignored'
 
-        # Check for existing record (deduplication)
-        existing = ViewingHistory.query.filter_by(row_id=row_id).first()
+        scoped_row_id = self._compose_scoped_row_id(raw_row_id, server_order)
+
+        # Deduplicate by server + row_id. Tautulli row ids are not globally unique
+        # across independent servers.
+        existing = ViewingHistory.query.filter_by(row_id=scoped_row_id).first()
         if existing:
             return 'skipped'
 
@@ -539,7 +542,7 @@ class HistorySyncService:
 
         # Create new record
         history_record = ViewingHistory(
-            row_id=row_id,
+            row_id=scoped_row_id,
             server_name=server_name,
             server_order=server_order,
             user_id=record.get('user_id'),
@@ -577,6 +580,23 @@ class HistorySyncService:
 
         db.session.add(history_record)
         return 'inserted'
+
+    @classmethod
+    def _compose_scoped_row_id(cls, raw_row_id: int, server_order: int) -> int:
+        """
+        Compose a server-scoped row id using a stable numeric namespace.
+        """
+        safe_server_order = 0 if server_order is None else int(server_order)
+        return safe_server_order * cls.ROW_ID_NAMESPACE_MULTIPLIER + int(raw_row_id)
+
+    @staticmethod
+    def _safe_int(value) -> int | None:
+        try:
+            if value in (None, ''):
+                return None
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
     def has_history_data(self) -> bool:
         """Check if there's any history data in the database."""
