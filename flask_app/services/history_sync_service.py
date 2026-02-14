@@ -147,6 +147,53 @@ class HistorySyncService:
         db.session.commit()
         return True
 
+    def start_full_backfill(self) -> bool:
+        """
+        Start a full history backfill without date filtering.
+
+        Returns:
+            True if backfill started, False if already running
+        """
+        status = self.get_or_create_status()
+
+        if status.status == 'running':
+            return False
+
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        if not server_a_config:
+            raise ValueError("No server configuration found")
+
+        status.status = 'running'
+        status.sync_type = 'full_backfill'
+        status.started_at = datetime.utcnow()
+        status.completed_at = None
+        status.records_fetched = 0
+        status.records_total = None
+        status.records_inserted = 0
+        status.records_skipped = 0
+        status.current_server = None
+        status.error_message = None
+        db.session.commit()
+        with self._status_write_lock:
+            self._reset_server_progress(server_a_config, server_b_config)
+
+        ViewingHistory.query.delete()
+        db.session.commit()
+
+        try:
+            self._run_sync(after_date=None, is_backfill=True)
+            status.status = 'success'
+            status.completed_at = datetime.utcnow()
+            status.last_sync_date = datetime.utcnow()
+            status.last_sync_record_count = ViewingHistory.query.count()
+        except Exception as e:
+            status.status = 'failed'
+            status.completed_at = datetime.utcnow()
+            status.error_message = str(e)
+
+        db.session.commit()
+        return True
+
     def start_backfill_async(self, days: int, app=None) -> bool:
         """
         Start a full backfill sync in a background thread.
@@ -195,7 +242,51 @@ class HistorySyncService:
         thread.start()
         return True
 
-    def _run_backfill_thread(self, app, after_str: str) -> None:
+    def start_full_backfill_async(self, app=None) -> bool:
+        """
+        Start a full history backfill in a background thread (no date filter).
+
+        Args:
+            app: Flask application instance for app context in thread
+
+        Returns:
+            True if backfill started, False if already running
+        """
+        status = self.get_or_create_status()
+
+        if status.status == 'running':
+            return False
+
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        if not server_a_config:
+            raise ValueError("No server configuration found")
+
+        status.status = 'running'
+        status.sync_type = 'full_backfill'
+        status.started_at = datetime.utcnow()
+        status.completed_at = None
+        status.records_fetched = 0
+        status.records_total = None
+        status.records_inserted = 0
+        status.records_skipped = 0
+        status.current_server = None
+        status.error_message = None
+        db.session.commit()
+        with self._status_write_lock:
+            self._reset_server_progress(server_a_config, server_b_config)
+
+        ViewingHistory.query.delete()
+        db.session.commit()
+
+        if app is None:
+            app = current_app._get_current_object()
+
+        thread = threading.Thread(target=self._run_backfill_thread, args=(app, None))
+        thread.daemon = True
+        thread.start()
+        return True
+
+    def _run_backfill_thread(self, app, after_str: str | None) -> None:
         """Run backfill in a background thread with app context."""
         with app.app_context():
             status = self.get_or_create_status()
@@ -269,12 +360,12 @@ class HistorySyncService:
         db.session.commit()
         return True
 
-    def _run_sync(self, after_date: str, is_backfill: bool = False):
+    def _run_sync(self, after_date: str | None, is_backfill: bool = False):
         """
         Run the actual sync operation.
 
         Args:
-            after_date: Date string in YYYY-MM-DD format
+            after_date: Optional date string in YYYY-MM-DD format. When None, all history is fetched.
             is_backfill: Whether this is a full backfill (affects progress reporting)
         """
         server_a_config, server_b_config = ConfigService.get_server_configs()
@@ -343,13 +434,13 @@ class HistorySyncService:
         if errors:
             raise ValueError(" | ".join(errors))
 
-    def _sync_server(self, server_config, after_date: str, server_order: int, server_key: str):
+    def _sync_server(self, server_config, after_date: str | None, server_order: int, server_key: str):
         """
         Sync history from a single server.
 
         Args:
             server_config: Server configuration object
-            after_date: Date string in YYYY-MM-DD format
+            after_date: Optional date string in YYYY-MM-DD format. When None, all history is fetched.
             server_order: 0 for ServerA, 1 for ServerB
         """
         client = TautulliClient(server_config)
@@ -359,11 +450,7 @@ class HistorySyncService:
 
         while True:
             # Fetch page of records
-            response = client.get_history_paginated(
-                start=start,
-                length=self.PAGE_SIZE,
-                after=after_date
-            )
+            response = client.get_history_paginated(start=start, length=self.PAGE_SIZE, after=after_date)
 
             if not response or 'response' not in response:
                 raise ValueError(f"Invalid API response from {server_config.name}")

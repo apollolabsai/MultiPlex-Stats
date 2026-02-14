@@ -22,8 +22,10 @@ class _FakeClient:
     def __init__(self, responses):
         self._responses = responses
         self._idx = 0
+        self.after_values = []
 
     def get_history_paginated(self, start=0, length=1000, after=None):
+        self.after_values.append(after)
         if self._idx >= len(self._responses):
             return _history_response([], 0)
         response = self._responses[self._idx]
@@ -133,3 +135,21 @@ class HistorySyncServiceTests(unittest.TestCase):
         sync_status = HistorySyncService().get_sync_status()
         self.assertEqual(sync_status['servers'][0]['inserted'], 1)
         self.assertEqual(sync_status['servers'][1]['skipped'], 1)
+
+    def test_full_backfill_runs_without_after_date_filter(self):
+        self._add_server('Server A', 0)
+
+        fake_client = _FakeClient([
+            _history_response(
+                [{'row_id': 1, 'started': 1700000000, 'media_type': 'movie', 'title': 'Movie A'}],
+                1,
+            )
+        ])
+
+        with patch('flask_app.services.history_sync_service.TautulliClient', return_value=fake_client):
+            started = HistorySyncService().start_full_backfill()
+
+        self.assertTrue(started)
+        self.assertTrue(fake_client.after_values)
+        self.assertIsNone(fake_client.after_values[0])
+        self.assertEqual(ViewingHistory.query.count(), 1)

@@ -21,15 +21,16 @@
                 <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
             </svg>
             <div class="load-text">
-                <h3>Load and Refresh Media Data</h3>
-                <p>One action runs media import first, then builds the lifetime play count cache.</p>
+                <h3>Load and Refresh Data in Settings</h3>
+                <p>Data sync now runs from the Settings page to keep media, history, and lifetime cache aligned.</p>
             </div>
         </div>
 
         <div class="load-process-copy">
-            <p><strong>Step 1:</strong> Import movies and TV shows from each configured server.</p>
-            <p><strong>Step 2:</strong> Build lifetime play counts from full history so titles with multiple keys are merged correctly. Some Tautulli servers assign multiple keys to the same title over time. We build a full-history cache so media page play counts are merged across those keys without slowing page load.</p>
-            <p>Both steps include per-server progress polling.</p>
+            <p>Use the single data-sync button in Settings.</p>
+            <p><strong>Step 1:</strong> Import media libraries from both servers.</p>
+            <p><strong>Step 2:</strong> Import full viewing history and rebuild lifetime play-count cache so multi-key titles are merged correctly.</p>
+            <p>Open Settings to run or refresh the full pipeline.</p>
         </div>
 
         <!-- Step 1 Progress -->
@@ -52,17 +53,7 @@
             </div>
         </div>
 
-        <button type="button" class="btn btn-primary btn-large" id="run-full-refresh-btn" {% if sync_status.status == 'running' or lifetime_sync_status.status == 'running' %}disabled{% endif %}>
-            {% if sync_status.status == 'running' %}
-            Loading Media Library...
-            {% elif lifetime_sync_status.status == 'running' %}
-            Building Lifetime Play Counts...
-            {% elif sync_status.has_data %}
-            Refresh Media Data
-            {% else %}
-            Load Media Data
-            {% endif %}
-        </button>
+        <button type="button" class="btn btn-primary btn-large" id="run-full-refresh-btn">Open Settings Data Sync</button>
         <div class="last-sync-info">This can take over 5 minutes depending on library size.</div>
         <div class="last-sync-info" id="media-last-sync-label">
             {% if sync_status.last_sync_date %}
@@ -108,7 +99,7 @@
     </div>
     <div class="media-actions" id="media-actions">
         <button type="button" class="btn btn-secondary" id="export-section-btn">Export Movies CSV</button>
-        <button type="button" class="btn btn-primary" id="refresh-media-inline-btn">Refresh Media Data</button>
+        <button type="button" class="btn btn-primary" id="refresh-media-inline-btn">Refresh in Settings</button>
     </div>
 </div>
 
@@ -605,6 +596,7 @@ $(document).ready(function() {
     var combinedWaitingForLifetime = false;
     var launchedFromCompactRefresh = false;
     var navigationInProgress = false;
+    var settingsDataSyncUrl = '{{ url_for("settings.index") }}#data-sync-section';
     var currentMediaView = 'movies';
     var contentDetailBase = '{{ url_for("main.media_content_details", media_id=0) }}';
     var mediaHeroRows = 2;
@@ -773,7 +765,7 @@ $(document).ready(function() {
     }
 
     function getRunButtonLabel(hasData) {
-        return hasData ? 'Refresh Media Data' : 'Load Media Data';
+        return hasData ? 'Refresh in Settings' : 'Open Settings Data Sync';
     }
 
     function setCombinedRefreshButtonState(disabled, text) {
@@ -1503,36 +1495,7 @@ $(document).ready(function() {
     }
 
     function startCombinedRefresh() {
-        if (combinedRefreshRequested) {
-            return;
-        }
-
-        if (mediaStatus && mediaStatus.status === 'running') {
-            combinedRefreshRequested = true;
-            combinedWaitingForLifetime = false;
-            setCombinedRefreshButtonState(true, 'Loading Media Library...');
-            if (!pollInterval) {
-                pollInterval = setInterval(pollStatus, 1000);
-            }
-            pollStatus();
-            return;
-        }
-
-        if (lifetimeStatus && lifetimeStatus.status === 'running') {
-            combinedRefreshRequested = true;
-            combinedWaitingForLifetime = true;
-            setCombinedRefreshButtonState(true, 'Building Lifetime Play Counts...');
-            if (!lifetimePollInterval) {
-                lifetimePollInterval = setInterval(pollLifetimeStatus, 1000);
-            }
-            pollLifetimeStatus();
-            return;
-        }
-
-        combinedRefreshRequested = true;
-        combinedWaitingForLifetime = false;
-        setCombinedRefreshButtonState(true, 'Loading Media Library...');
-        startMediaLoad();
+        window.location.href = settingsDataSyncUrl;
     }
 
     // Bind click handlers
@@ -1549,36 +1512,12 @@ $(document).ready(function() {
     var inlineRefreshButton = document.getElementById('refresh-media-inline-btn');
     if (inlineRefreshButton) {
         inlineRefreshButton.addEventListener('click', function() {
-            launchedFromCompactRefresh = true;
-            showStarterLoadState();
-            setDataSectionsVisible(false);
             startCombinedRefresh();
         });
     }
 
-    if (mediaStatus && mediaStatus.status === 'running') {
-        combinedRefreshRequested = true;
-        combinedWaitingForLifetime = false;
-        showStarterLoadState();
-        setCombinedRefreshButtonState(true, 'Loading Media Library...');
-        pollInterval = setInterval(pollStatus, 1000);
-    }
-
-    if (lifetimeStatus && lifetimeStatus.status === 'running') {
-        combinedRefreshRequested = true;
-        combinedWaitingForLifetime = true;
-        showStarterLoadState();
-        setCombinedRefreshButtonState(true, 'Building Lifetime Play Counts...');
-        if (!lifetimePollInterval) {
-            lifetimePollInterval = setInterval(pollLifetimeStatus, 1000);
-        }
-    }
-
     updateLifetimeSyncStatus(lifetimeStatus);
-
-    if (!combinedRefreshRequested) {
-        setCombinedRefreshButtonState(false, getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data)));
-    }
+    setCombinedRefreshButtonState(false, getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data)));
     updateExportButtonLabel();
     loadMediaHeroPosters();
     window.addEventListener('resize', scheduleMediaHeroRerender);

@@ -113,21 +113,24 @@
     </div>
 
     <div class="settings-right-column">
-        <div class="settings-section">
+        <div class="settings-section" id="data-sync-section">
             <h2 class="section-title">
                 <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                     <line x1="3" y1="9" x2="21" y2="9"></line>
                     <line x1="9" y1="21" x2="9" y2="9"></line>
                 </svg>
-                Import Viewing History
+                Data Sync
             </h2>
 
             <div class="form-card">
                 <p class="info-text">
-                    Load viewing history from Tautulli into a local database for fast display in the dashboard.
-                    This is typically a one-time load; new records are automatically appended when you refresh the dashboard.
+                    Run the full data pipeline from one button. This keeps media, history, and lifetime play counts aligned.
                 </p>
+                <div class="load-process-copy">
+                    <p><strong>Step 1:</strong> Import movies and TV shows from each configured server.</p>
+                    <p><strong>Step 2:</strong> Import full viewing history from each configured server and then rebuild lifetime play counts so titles with multiple keys are merged correctly.</p>
+                </div>
 
                 <!-- Current Status -->
                 <div class="history-status" id="history-status">
@@ -145,51 +148,71 @@
                             <span class="status-label">Unique users:</span>
                             <span class="status-value">{{ history_stats.unique_users }}</span>
                         </div>
-                        {% if sync_status.last_sync_date %}
                         <div class="status-row">
-                            <span class="status-label">Last synced ({{ timezone_name }}):</span>
-                            <span class="status-value">{{ sync_status.last_sync_date }}</span>
+                            <span class="status-label">Last media sync ({{ timezone_name }}):</span>
+                            <span class="status-value" id="last-media-sync-value">{{ media_sync_status.last_sync_date or 'Never' }}</span>
                         </div>
-                        {% endif %}
+                        <div class="status-row">
+                            <span class="status-label">Last full history sync ({{ timezone_name }}):</span>
+                            <span class="status-value" id="last-history-sync-value">{{ sync_status.last_sync_date or 'Never' }}</span>
+                        </div>
+                        <div class="status-row">
+                            <span class="status-label">Last lifetime cache build ({{ timezone_name }}):</span>
+                            <span class="status-value" id="last-lifetime-sync-value">{{ lifetime_sync_status.last_sync_date or 'Never' }}</span>
+                        </div>
                     </div>
                     {% else %}
-                    <p class="info-message">No viewing history loaded. Use the form below to load history data.</p>
+                    <p class="info-message">No viewing history loaded. Run full data sync to load all media and complete history.</p>
                     {% endif %}
                 </div>
 
-                <!-- Sync Progress (shown when running) -->
-                <div class="sync-progress" id="sync-progress" style="display: none;">
+                <!-- Step 1 Progress -->
+                <div class="sync-progress" id="media-sync-progress" {% if media_sync_status.status != 'running' %}style="display: none;"{% endif %}>
                     <div class="progress-header">
-                        <span class="progress-title">Loading history...</span>
+                        <span class="progress-title">Step 1 of 2: Media Library Sync</span>
                     </div>
-                    <div id="history-server-progress-container"></div>
-                    <div class="progress-bar-container large">
-                        <div class="progress-bar-fill orange" id="progress-bar" style="width: 0%;"></div>
-                    </div>
+                    <div id="media-server-progress-container"></div>
                     <div class="progress-stats">
-                        <span id="progress-fetched">0</span> / <span id="progress-total">?</span> records
-                        (<span id="progress-inserted">0</span> new, <span id="progress-skipped">0</span> duplicates)
+                        <span id="media-progress-fetched">{{ media_sync_status.records_fetched or 0 }}</span> records fetched
                     </div>
                 </div>
 
-                <!-- Load History Form -->
-                <form method="POST" action="{{ url_for('settings.start_history_backfill') }}" id="backfill-form">
-                    <div class="form-group">
-                        <label for="backfill_days">Days of History to Load</label>
-                        <input type="number" id="backfill_days" name="backfill_days"
-                               value="{{ settings.history_backfill_days if settings else 365 }}" min="1" max="3650">
-                        <small>Loading more days takes longer but provides more data for the Viewing History table</small>
+                <!-- Step 2 Progress -->
+                <div class="sync-progress" id="history-sync-progress" {% if sync_status.status != 'running' %}style="display: none;"{% endif %}>
+                    <div class="progress-header">
+                        <span class="progress-title">Step 2 of 2: Full History Sync</span>
                     </div>
+                    <div id="history-server-progress-container"></div>
+                    <div class="progress-stats">
+                        <span id="progress-fetched">{{ sync_status.records_fetched or 0 }}</span> / <span id="progress-total">{{ sync_status.records_total or '?' }}</span> records
+                        (<span id="progress-inserted">{{ sync_status.records_inserted or 0 }}</span> new, <span id="progress-skipped">{{ sync_status.records_skipped or 0 }}</span> duplicates)
+                    </div>
+                </div>
 
-                    <button type="submit" class="btn btn-primary" id="backfill-btn">
-                        {% if history_stats.total_records > 0 %}
-                        Reload History Data
-                        {% else %}
-                        Load History Data
-                        {% endif %}
-                    </button>
-                    <small class="form-note">This will replace any existing history data</small>
-                </form>
+                <div class="sync-progress" id="lifetime-sync-progress" {% if lifetime_sync_status.status != 'running' %}style="display: none;"{% endif %}>
+                    <div class="progress-header">
+                        <span class="progress-title">Finalizing: Rebuilding Lifetime Play Count Cache</span>
+                    </div>
+                    <div id="lifetime-server-progress-container"></div>
+                    <div class="progress-stats">
+                        <span id="lifetime-progress-fetched">{{ lifetime_sync_status.records_fetched or 0 }}</span> history rows processed
+                    </div>
+                </div>
+
+                <button type="button" class="btn btn-primary" id="full-sync-btn" {% if not servers %}disabled{% endif %}>
+                    {% if media_sync_status.has_data and history_stats.total_records > 0 %}
+                    Refresh All Data
+                    {% else %}
+                    Load All Data
+                    {% endif %}
+                </button>
+                <small class="form-note">
+                    {% if servers %}
+                    This replaces local media/history data and rebuilds lifetime play-count cache
+                    {% else %}
+                    Add at least one server configuration before starting a full data sync
+                    {% endif %}
+                </small>
             </div>
         </div>
 
@@ -197,13 +220,43 @@
 </div>
 
 <script>
-// Poll for sync status when a sync is running
 (function() {
-    var pollInterval = null;
-    var syncStatus = {{ sync_status | tojson }};
+    var mediaStatus = {{ media_sync_status | tojson }};
+    var historyStatus = {{ sync_status | tojson }};
+    var lifetimeStatus = {{ lifetime_sync_status | tojson }};
+    var mediaPollInterval = null;
+    var historyPollInterval = null;
+    var lifetimePollInterval = null;
+    var pipelineInProgress = false;
+    var hasServerConfig = {{ 'true' if servers else 'false' }};
 
-    function renderServerProgress(servers) {
-        var container = document.getElementById('history-server-progress-container');
+    function formatLastUpdatedValue(value) {
+        if (!value) {
+            return 'Never';
+        }
+        var parsed = new Date(value);
+        if (isNaN(parsed.getTime())) {
+            return value;
+        }
+        return parsed.toLocaleString();
+    }
+
+    function getActionButtonLabel() {
+        var hasData = !!(mediaStatus && mediaStatus.has_data) && !!(historyStatus && historyStatus.total_records_in_db > 0);
+        return hasData ? 'Refresh All Data' : 'Load All Data';
+    }
+
+    function setActionButtonState(disabled, label) {
+        var button = document.getElementById('full-sync-btn');
+        if (!button) {
+            return;
+        }
+        button.disabled = !hasServerConfig || !!disabled;
+        button.textContent = label || getActionButtonLabel();
+    }
+
+    function renderServerProgress(containerId, servers, includeHistoryCounts) {
+        var container = document.getElementById(containerId);
         if (!container) {
             return;
         }
@@ -235,7 +288,10 @@
             if (server.total) {
                 html += ' / ' + server.total.toLocaleString() + ' total';
             }
-            html += ' (' + ((server.inserted || 0).toLocaleString()) + ' new, ' + ((server.skipped || 0).toLocaleString()) + ' duplicates)</div>';
+            if (includeHistoryCounts) {
+                html += ' (' + ((server.inserted || 0).toLocaleString()) + ' new, ' + ((server.skipped || 0).toLocaleString() + ' duplicates)');
+            }
+            html += '</div>';
             if (server.error) {
                 html += '<div class="history-server-error">' + server.error + '</div>';
             }
@@ -244,67 +300,281 @@
         container.innerHTML = html;
     }
 
-    function updateProgress(status) {
-        var progressDiv = document.getElementById('sync-progress');
-        var backfillBtn = document.getElementById('backfill-btn');
-
-        if (status.status === 'running') {
-            progressDiv.style.display = 'block';
-            backfillBtn.disabled = true;
-            backfillBtn.textContent = 'Loading...';
-
-            // Update progress
-            renderServerProgress(status.servers || []);
-            document.getElementById('progress-fetched').textContent = status.records_fetched.toLocaleString();
-            document.getElementById('progress-total').textContent = status.records_total ? status.records_total.toLocaleString() : '?';
-            document.getElementById('progress-inserted').textContent = status.records_inserted.toLocaleString();
-            document.getElementById('progress-skipped').textContent = status.records_skipped.toLocaleString();
-
-            // Update progress bar
-            if (status.records_total && status.records_total > 0) {
-                var percent = Math.min(100, (status.records_fetched / status.records_total) * 100);
-                document.getElementById('progress-bar').style.width = percent + '%';
-            }
-        } else {
-            progressDiv.style.display = 'none';
-            backfillBtn.disabled = false;
-            backfillBtn.textContent = status.total_records_in_db > 0 ? 'Reload History Data' : 'Load History Data';
-            renderServerProgress(status.servers || []);
-
-            if (status.status === 'success') {
-                // Reload page to show updated stats
-                window.location.reload();
-            } else if (status.status === 'failed' && status.error_message) {
-                alert('Sync failed: ' + status.error_message);
-            }
-
-            // Stop polling
-            if (pollInterval) {
-                clearInterval(pollInterval);
-                pollInterval = null;
-            }
+    function failPipeline(message) {
+        mediaPollInterval = stopPoll(mediaPollInterval);
+        historyPollInterval = stopPoll(historyPollInterval);
+        lifetimePollInterval = stopPoll(lifetimePollInterval);
+        pipelineInProgress = false;
+        setActionButtonState(false, getActionButtonLabel());
+        if (message) {
+            alert(message);
         }
     }
 
-    function pollStatus() {
+    function stopPoll(intervalRef) {
+        if (!intervalRef) {
+            return null;
+        }
+        clearInterval(intervalRef);
+        return null;
+    }
+
+    function updateMediaSyncStatus(status) {
+        mediaStatus = status || {};
+        var progressDiv = document.getElementById('media-sync-progress');
+        var fetchedLabel = document.getElementById('media-progress-fetched');
+        var lastSyncLabel = document.getElementById('last-media-sync-value');
+
+        if (status.status === 'running') {
+            pipelineInProgress = true;
+            progressDiv.style.display = 'block';
+            renderServerProgress('media-server-progress-container', status.servers || [], false);
+            if (fetchedLabel) {
+                fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
+            }
+            setActionButtonState(true, 'Step 1/2: Syncing Media...');
+            return;
+        }
+
+        progressDiv.style.display = 'none';
+        if (lastSyncLabel) {
+            lastSyncLabel.textContent = formatLastUpdatedValue(status.last_sync_date);
+        }
+
+        mediaPollInterval = stopPoll(mediaPollInterval);
+
+        if (!pipelineInProgress) {
+            setActionButtonState(false, getActionButtonLabel());
+            return;
+        }
+
+        if (status.status === 'success') {
+            startHistorySync();
+            return;
+        }
+
+        if (status.status === 'failed') {
+            failPipeline('Media sync failed: ' + (status.error_message || 'Unknown error'));
+            return;
+        }
+    }
+
+    function updateHistorySyncStatus(status) {
+        historyStatus = status || {};
+        var progressDiv = document.getElementById('history-sync-progress');
+        var fetchedLabel = document.getElementById('progress-fetched');
+        var totalLabel = document.getElementById('progress-total');
+        var insertedLabel = document.getElementById('progress-inserted');
+        var skippedLabel = document.getElementById('progress-skipped');
+        var lastSyncLabel = document.getElementById('last-history-sync-value');
+
+        if (status.status === 'running') {
+            pipelineInProgress = true;
+            progressDiv.style.display = 'block';
+            renderServerProgress('history-server-progress-container', status.servers || [], true);
+            if (fetchedLabel) fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
+            if (totalLabel) totalLabel.textContent = status.records_total ? status.records_total.toLocaleString() : '?';
+            if (insertedLabel) insertedLabel.textContent = (status.records_inserted || 0).toLocaleString();
+            if (skippedLabel) skippedLabel.textContent = (status.records_skipped || 0).toLocaleString();
+            setActionButtonState(true, 'Step 2/2: Syncing Full History...');
+            return;
+        }
+
+        progressDiv.style.display = 'none';
+        if (lastSyncLabel) {
+            lastSyncLabel.textContent = formatLastUpdatedValue(status.last_sync_date);
+        }
+
+        historyPollInterval = stopPoll(historyPollInterval);
+
+        if (!pipelineInProgress) {
+            setActionButtonState(false, getActionButtonLabel());
+            return;
+        }
+
+        if (status.status === 'success') {
+            startLifetimeSync();
+            return;
+        }
+
+        if (status.status === 'failed') {
+            failPipeline('History sync failed: ' + (status.error_message || 'Unknown error'));
+            return;
+        }
+    }
+
+    function updateLifetimeSyncStatus(status) {
+        lifetimeStatus = status || {};
+        var progressDiv = document.getElementById('lifetime-sync-progress');
+        var fetchedLabel = document.getElementById('lifetime-progress-fetched');
+        var lastSyncLabel = document.getElementById('last-lifetime-sync-value');
+
+        if (status.status === 'running') {
+            pipelineInProgress = true;
+            progressDiv.style.display = 'block';
+            renderServerProgress('lifetime-server-progress-container', status.servers || [], false);
+            if (fetchedLabel) {
+                fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
+            }
+            setActionButtonState(true, 'Finalizing: Rebuilding Lifetime Cache...');
+            return;
+        }
+
+        progressDiv.style.display = 'none';
+        if (lastSyncLabel) {
+            lastSyncLabel.textContent = formatLastUpdatedValue(status.last_sync_date);
+        }
+
+        lifetimePollInterval = stopPoll(lifetimePollInterval);
+
+        if (!pipelineInProgress) {
+            setActionButtonState(false, getActionButtonLabel());
+            return;
+        }
+
+        if (status.status === 'success') {
+            window.location.reload();
+            return;
+        }
+
+        if (status.status === 'failed') {
+            failPipeline('Lifetime cache build failed: ' + (status.error_message || 'Unknown error'));
+            return;
+        }
+    }
+
+    function pollMediaStatus() {
+        fetch('{{ url_for("main.api_media_status") }}')
+            .then(function(response) { return response.json(); })
+            .then(function(data) { updateMediaSyncStatus(data); })
+            .catch(function(error) { console.error('Error polling media status:', error); });
+    }
+
+    function pollHistoryStatus() {
         fetch('{{ url_for("settings.get_history_sync_status") }}')
             .then(function(response) { return response.json(); })
-            .then(function(data) { updateProgress(data); })
-            .catch(function(error) { console.error('Error polling status:', error); });
+            .then(function(data) { updateHistorySyncStatus(data); })
+            .catch(function(error) { console.error('Error polling history status:', error); });
     }
 
-    // Start polling if sync is running
-    if (syncStatus.status === 'running') {
-        updateProgress(syncStatus);
-        pollInterval = setInterval(pollStatus, 1000);
+    function pollLifetimeStatus() {
+        fetch('{{ url_for("main.api_media_lifetime_stats_status") }}')
+            .then(function(response) { return response.json(); })
+            .then(function(data) { updateLifetimeSyncStatus(data); })
+            .catch(function(error) { console.error('Error polling lifetime status:', error); });
     }
 
-    // Also start polling when form is submitted
-    document.getElementById('backfill-form').addEventListener('submit', function() {
-        setTimeout(function() {
-            pollInterval = setInterval(pollStatus, 1000);
-        }, 500);
-    });
+    function startMediaSync() {
+        setActionButtonState(true, 'Step 1/2: Syncing Media...');
+        fetch('{{ url_for("main.api_media_start_load") }}', { method: 'POST' })
+            .then(function(response) {
+                return response.json().then(function(payload) {
+                    if (!response.ok && response.status !== 409) {
+                        throw new Error(payload.error || 'Failed to start media sync');
+                    }
+                    return payload;
+                });
+            })
+            .then(function() {
+                if (!mediaPollInterval) {
+                    mediaPollInterval = setInterval(pollMediaStatus, 1000);
+                }
+                pollMediaStatus();
+            })
+            .catch(function(error) {
+                failPipeline(error.message);
+            });
+    }
+
+    function startHistorySync() {
+        setActionButtonState(true, 'Step 2/2: Syncing Full History...');
+        fetch('{{ url_for("settings.start_full_history_backfill") }}', { method: 'POST' })
+            .then(function(response) {
+                return response.json().then(function(payload) {
+                    if (!response.ok && response.status !== 409) {
+                        throw new Error(payload.error || 'Failed to start full history sync');
+                    }
+                    return payload;
+                });
+            })
+            .then(function() {
+                if (!historyPollInterval) {
+                    historyPollInterval = setInterval(pollHistoryStatus, 1000);
+                }
+                pollHistoryStatus();
+            })
+            .catch(function(error) {
+                failPipeline(error.message);
+            });
+    }
+
+    function startLifetimeSync() {
+        setActionButtonState(true, 'Finalizing: Rebuilding Lifetime Cache...');
+        fetch('{{ url_for("main.api_media_lifetime_stats_start") }}', { method: 'POST' })
+            .then(function(response) {
+                return response.json().then(function(payload) {
+                    if (!response.ok && response.status !== 409) {
+                        throw new Error(payload.error || 'Failed to start lifetime cache rebuild');
+                    }
+                    return payload;
+                });
+            })
+            .then(function() {
+                if (!lifetimePollInterval) {
+                    lifetimePollInterval = setInterval(pollLifetimeStatus, 1000);
+                }
+                pollLifetimeStatus();
+            })
+            .catch(function(error) {
+                failPipeline(error.message);
+            });
+    }
+
+    function startFullPipeline() {
+        if (!hasServerConfig) {
+            alert('Configure at least one server before running full data sync.');
+            return;
+        }
+        if (pipelineInProgress) {
+            return;
+        }
+        pipelineInProgress = true;
+        startMediaSync();
+    }
+
+    var fullSyncButton = document.getElementById('full-sync-btn');
+    if (fullSyncButton) {
+        fullSyncButton.addEventListener('click', startFullPipeline);
+    }
+
+    if (mediaStatus && mediaStatus.status === 'running') {
+        pipelineInProgress = true;
+        if (!mediaPollInterval) {
+            mediaPollInterval = setInterval(pollMediaStatus, 1000);
+        }
+        pollMediaStatus();
+        return;
+    }
+
+    if (historyStatus && historyStatus.status === 'running') {
+        pipelineInProgress = true;
+        if (!historyPollInterval) {
+            historyPollInterval = setInterval(pollHistoryStatus, 1000);
+        }
+        pollHistoryStatus();
+        return;
+    }
+
+    if (lifetimeStatus && lifetimeStatus.status === 'running') {
+        pipelineInProgress = true;
+        if (!lifetimePollInterval) {
+            lifetimePollInterval = setInterval(pollLifetimeStatus, 1000);
+        }
+        pollLifetimeStatus();
+        return;
+    }
+
+    setActionButtonState(false, getActionButtonLabel());
 })();
 </script>
 
@@ -348,6 +618,18 @@
     background: rgba(241, 138, 61, 0.1);
     border: 1px solid rgba(241, 138, 61, 0.3);
     border-radius: 8px;
+}
+
+.load-process-copy {
+    margin: 0 auto 18px;
+    max-width: 700px;
+    text-align: left;
+    color: #bdbdbd;
+    line-height: 1.45;
+}
+
+.load-process-copy p {
+    margin: 0 0 8px;
 }
 
 .progress-header {

@@ -5,6 +5,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_app.models import db, ServerConfig, AnalyticsSettings
 from flask_app.services.config_service import ConfigService
 from flask_app.services.history_sync_service import HistorySyncService
+from flask_app.services.media_service import MediaService
+from flask_app.services.media_lifetime_stats_service import MediaLifetimeStatsService
 from flask_app.utils.validators import validate_server_config
 
 settings_bp = Blueprint('settings', __name__)
@@ -20,12 +22,16 @@ def index():
     sync_service = HistorySyncService()
     sync_status = sync_service.get_sync_status()
     history_stats = sync_service.get_history_stats()
+    media_sync_status = MediaService().get_sync_status()
+    lifetime_sync_status = MediaLifetimeStatsService().get_sync_status()
 
     return render_template('settings.html',
                           servers=servers,
                           settings=settings,
                           sync_status=sync_status,
-                          history_stats=history_stats)
+                          history_stats=history_stats,
+                          media_sync_status=media_sync_status,
+                          lifetime_sync_status=lifetime_sync_status)
 
 
 @settings_bp.route('/server/add', methods=['POST'])
@@ -172,3 +178,15 @@ def get_history_sync_status():
     """Get current sync status for polling (JSON endpoint)."""
     sync_service = HistorySyncService()
     return jsonify(sync_service.get_sync_status())
+
+
+@settings_bp.route('/history/full-backfill', methods=['POST'])
+def start_full_history_backfill():
+    """Start full history import without date filtering."""
+    try:
+        sync_service = HistorySyncService()
+        if not sync_service.start_full_backfill_async():
+            return jsonify({'error': 'A history sync is already in progress.'}), 409
+        return jsonify({'status': 'started'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

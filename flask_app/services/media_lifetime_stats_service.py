@@ -1,8 +1,8 @@
 """
 Background sync service for lifetime media play counts.
 
-This scans full Tautulli history and aggregates by normalized title (and year for
-movies) so plays are merged across multiple rating keys.
+This reads local ViewingHistory rows and aggregates by normalized title
+(and year for movies) so plays are merged across multiple rating keys.
 """
 from __future__ import annotations
 
@@ -13,16 +13,15 @@ from typing import Any
 
 from flask import current_app
 
-from flask_app.models import db, LifetimeMediaPlayCount, LifetimeStatsSyncStatus
+from flask_app.models import db, LifetimeMediaPlayCount, LifetimeStatsSyncStatus, ViewingHistory
 from flask_app.services.config_service import ConfigService
-from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
 
 
 class MediaLifetimeStatsService:
     """Service for managing lifetime media play count sync operations."""
 
-    PAGE_SIZE = 1000
+    PROGRESS_UPDATE_INTERVAL = 500
     _scheduler_lock = threading.Lock()
     _scheduler_started = False
     _status_write_lock = threading.Lock()
@@ -102,7 +101,7 @@ class MediaLifetimeStatsService:
         status.status = 'running'
         status.started_at = datetime.utcnow()
         status.completed_at = None
-        status.current_step = f'Initializing ({trigger})...'
+        status.current_step = f'Initializing local history scan ({trigger})...'
         status.records_fetched = 0
         status.records_total = None
         status.error_message = None
@@ -150,7 +149,7 @@ class MediaLifetimeStatsService:
             db.session.commit()
 
     def _run_sync_parallel(self, app):
-        """Scan full history from all configured servers in parallel and cache totals."""
+        """Scan local history from configured servers in parallel and cache totals."""
         server_a_config, server_b_config = ConfigService.get_server_configs()
         if not server_a_config:
             raise ValueError("No server configuration found")
@@ -163,8 +162,8 @@ class MediaLifetimeStatsService:
         def fetch_server(server_config, server_key: str):
             with app.app_context():
                 try:
-                    self._set_server_status(server_key, 'running', 'Scanning full history...')
-                    server_counts = self._scan_server_history(server_config, server_key)
+                    self._set_server_status(server_key, 'running', 'Scanning local history...')
+                    server_counts = self._scan_server_history(server_config.name, server_key)
                     with counts_lock:
                         for key, value in server_counts.items():
                             counts_by_key[key] = counts_by_key.get(key, 0) + value
@@ -188,7 +187,7 @@ class MediaLifetimeStatsService:
             thread.join()
 
         if not successful_servers:
-            raise ValueError("Unable to fetch lifetime history from configured servers.")
+            raise ValueError("Unable to scan local history for lifetime play counts.")
 
         status = self.get_or_create_status()
         status.current_step = 'Saving aggregated lifetime play counts...'
@@ -198,38 +197,44 @@ class MediaLifetimeStatsService:
 
         self._store_counts(counts_by_key)
 
-    def _scan_server_history(self, server_config, server_key: str) -> dict[tuple[str, str, int | None], int]:
-        """Scan all paginated history rows for a server and aggregate play counts by content key."""
-        client = TautulliClient(server_config)
+    def _scan_server_history(self, server_name: str, server_key: str) -> dict[tuple[str, str, int | None], int]:
+        """Scan all local history rows for one server and aggregate play counts by content key."""
         counts: dict[tuple[str, str, int | None], int] = {}
-        start = 0
-        records_total: int | None = None
+        query = ViewingHistory.query.filter(ViewingHistory.server_name == server_name)
+        total_rows = query.count()
+        self._update_server_total(server_key, total_rows)
+        if total_rows == 0:
+            self._update_server_fetched(server_key, 0)
+            return counts
 
-        while True:
-            response = client.get_history_paginated(start=start, length=self.PAGE_SIZE)
-            rows, total = self._extract_history_page(response)
+        processed = 0
+        rows = (
+            query.with_entities(
+                ViewingHistory.media_type,
+                ViewingHistory.title,
+                ViewingHistory.full_title,
+                ViewingHistory.grandparent_title,
+                ViewingHistory.year,
+            )
+            .yield_per(2000)
+        )
 
-            if rows is None:
-                raise ValueError(f"Unexpected history response format from {server_config.name}.")
-
-            if records_total is None and total is not None:
-                records_total = total
-                self._update_server_total(server_key, total)
-
-            if not rows:
-                break
-
-            for row in rows:
-                key = self._extract_content_key(row)
-                if key is None:
-                    continue
+        for media_type, title, full_title, grandparent_title, year in rows:
+            key = self._extract_content_key(
+                {
+                    'media_type': media_type,
+                    'title': title,
+                    'full_title': full_title,
+                    'grandparent_title': grandparent_title,
+                    'year': year,
+                }
+            )
+            if key is not None:
                 counts[key] = counts.get(key, 0) + 1
 
-            start += len(rows)
-            self._update_server_fetched(server_key, start)
-
-            if total is not None and start >= total:
-                break
+            processed += 1
+            if processed % self.PROGRESS_UPDATE_INTERVAL == 0 or processed == total_rows:
+                self._update_server_fetched(server_key, processed)
 
         return counts
 
@@ -388,33 +393,6 @@ class MediaLifetimeStatsService:
                 status.server_b_fetched = fetched
             status.records_fetched = (status.server_a_fetched or 0) + (status.server_b_fetched or 0)
             db.session.commit()
-
-    @staticmethod
-    def _extract_history_page(response: dict[str, Any]) -> tuple[list[dict[str, Any]] | None, int | None]:
-        """Extract rows and total row count from get_history response payload."""
-        if not isinstance(response, dict):
-            return None, None
-
-        envelope = response.get('response', {})
-        if not isinstance(envelope, dict):
-            return None, None
-
-        data = envelope.get('data', {})
-        rows: list[dict[str, Any]] = []
-        records_filtered: int | None = None
-
-        if isinstance(data, dict):
-            raw_rows = data.get('data', [])
-            if isinstance(raw_rows, list):
-                rows = [row for row in raw_rows if isinstance(row, dict)]
-            records_filtered = MediaLifetimeStatsService._to_int(
-                data.get('recordsFiltered') or envelope.get('recordsFiltered')
-            )
-        elif isinstance(data, list):
-            rows = [row for row in data if isinstance(row, dict)]
-            records_filtered = MediaLifetimeStatsService._to_int(envelope.get('recordsFiltered'))
-
-        return rows, records_filtered
 
     @staticmethod
     def _extract_content_key(row: dict[str, Any]) -> tuple[str, str, int | None] | None:
