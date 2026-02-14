@@ -485,6 +485,11 @@
     color: #fff;
 }
 
+.media-date-col {
+    white-space: nowrap;
+    min-width: 130px;
+}
+
 .section-header {
     display: flex;
     align-items: center;
@@ -1239,7 +1244,11 @@ $(document).ready(function() {
                     return '<a class="content-title content-link" href="' + href + '">' + safeTitle + '</a>';
                 }
             },
-            { data: 'added_at' },
+            {
+                data: 'added_at',
+                width: '130px',
+                className: 'media-date-col'
+            },
             { data: 'video_codec' },
             {
                 data: 'video_resolution',
@@ -1271,7 +1280,11 @@ $(document).ready(function() {
                     return data || 0;
                 }
             },
-            { data: 'last_played' },
+            {
+                data: 'last_played',
+                width: '130px',
+                className: 'media-date-col'
+            },
             { data: 'play_count' }
         ],
         language: {
@@ -1304,7 +1317,11 @@ $(document).ready(function() {
                     return '<a class="content-title content-link" href="' + href + '">' + safeTitle + '</a>';
                 }
             },
-            { data: 'added_at' },
+            {
+                data: 'added_at',
+                width: '130px',
+                className: 'media-date-col'
+            },
             {
                 data: 'rating',
                 render: function(data, type, row) {
@@ -1320,7 +1337,11 @@ $(document).ready(function() {
                     return data ? data.toFixed(2) : '-';
                 }
             },
-            { data: 'last_played' },
+            {
+                data: 'last_played',
+                width: '130px',
+                className: 'media-date-col'
+            },
             { data: 'play_count' }
         ],
         language: {
