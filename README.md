@@ -18,6 +18,7 @@ A web application for combining and visualizing statistics from multiple Tautull
 - **Viewing History** - Searchable table of all viewing activity
 - **Trend Analysis** - Daily and monthly viewing trends over time
 - **Remove Useless Content** - View and export data with zero lifetime views to free up space
+- **True Lifetime Playcounts** - Build lifetime play counts from full history so titles with multiple Plex keys are merged correctly. Some Plex servers assign multiple keys to the same title over time. We build a full-history cache so media page play counts are merged across those keys without slowing page load.
 
 ---
 
@@ -126,22 +127,6 @@ The viewing history table requires a one-time data load from Tautulli:
 
 After the initial load, new records are automatically appended when you refresh the dashboard.
 
-### Analytics Settings
-
-Customize your charts and analysis periods:
-
-- **Top Movies/TV Shows/Users** - Number of items to display in rankings
-
----
-
-## Running Analytics
-
-1. Go to the Home page
-2. Click "Run Analytics"
-3. View your dashboard with charts and statistics
-
-Use the "Refresh Analytics" button on the dashboard to update with the latest data.
-
 ---
 
 ## Privacy and Security
@@ -168,5 +153,3 @@ This project is open source and available under the MIT License.
 ## Acknowledgments
 
 - **Tautulli** - Plex monitoring tool that provides the API
-- **Highcharts** - Interactive charting library
-- **Flask** - Web framework
