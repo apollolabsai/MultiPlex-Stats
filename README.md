@@ -2,8 +2,10 @@
 
 A web application for combining and visualizing statistics from multiple Tautulli/Plex servers in one unified dashboard.
 
-![MultiPlex Stats Dashboard](images/multiplexui3.png)
-
+![MultiPlex Stats Dashboard](images/Dashboard.png)
+![MultiPlex Stats Dashboard](images/ViewingHistory.png)
+![MultiPlex Stats Dashboard](images/Media.png)
+![MultiPlex Stats Dashboard](images/users.png)
 ---
 
 ## Features
@@ -15,6 +17,7 @@ A web application for combining and visualizing statistics from multiple Tautull
 - **Content Insights** - Discover your most popular movies and TV shows
 - **Viewing History** - Searchable table of all viewing activity
 - **Trend Analysis** - Daily and monthly viewing trends over time
+- **Remove Useless Content** - View and export data with zero lifetime views to free up space
 
 ---
 
@@ -64,8 +67,8 @@ services:
       - TAUTULLI_SERVER_A_NAME=MyServer
       - TAUTULLI_SERVER_A_IP=192.168.1.100:8181
       - TAUTULLI_SERVER_A_KEY=your_api_key_here
-      # - TAUTULLI_SERVER_A_SSL=false
-      # - TAUTULLI_SERVER_A_VERIFY_SSL=false
+      - TAUTULLI_SERVER_A_SSL=false
+      - TAUTULLI_SERVER_A_VERIFY_SSL=false
       # Optional second server
       # - TAUTULLI_SERVER_B_NAME=Server2
       # - TAUTULLI_SERVER_B_IP=192.168.1.101:8181
