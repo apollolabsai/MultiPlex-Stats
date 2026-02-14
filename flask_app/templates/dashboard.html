@@ -637,6 +637,7 @@ $(document).ready(function() {
     var lastActivityUpdateAt = Date.now();
     var posterPreviewBound = false;
     var navigationInProgress = false;
+    var analyticsRefreshInProgress = false;
     var dashboardHeroRows = 3;
     var dashboardHeroGap = 2;
     var dashboardHeroOverflowColumns = 3;
@@ -747,6 +748,38 @@ $(document).ready(function() {
         subtitleEl.textContent = titleText || 'Please wait';
         overlay.classList.add('is-open');
         overlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function showAnalyticsRefreshLoading() {
+        var overlay = document.getElementById('nav-loading-overlay');
+        var titleEl = document.getElementById('nav-loading-title');
+        var subtitleEl = document.getElementById('nav-loading-subtitle');
+        if (!overlay || !titleEl || !subtitleEl) {
+            return;
+        }
+
+        titleEl.textContent = 'Refreshing analytics...';
+        subtitleEl.textContent = 'Processing data from your configured servers';
+        overlay.classList.add('is-open');
+        overlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function bindAnalyticsRefreshForm() {
+        var forms = document.querySelectorAll('form[action="{{ url_for("main.run_analytics") }}"]');
+        forms.forEach(function(form) {
+            form.addEventListener('submit', function(event) {
+                if (analyticsRefreshInProgress) {
+                    event.preventDefault();
+                    return;
+                }
+                analyticsRefreshInProgress = true;
+                var submitButton = form.querySelector('button[type="submit"], input[type="submit"]');
+                if (submitButton) {
+                    submitButton.disabled = true;
+                }
+                showAnalyticsRefreshLoading();
+            });
+        });
     }
 
     function preloadPosterPreviews(scope) {
@@ -888,6 +921,7 @@ $(document).ready(function() {
     });
 
     bindPosterPreviewHandlers();
+    bindAnalyticsRefreshForm();
     preloadPosterPreviews(document);
     loadDashboardHeroPosters();
     updateLastUpdatedLabel();
