@@ -126,3 +126,26 @@ class MediaLifetimeStatsServiceTests(unittest.TestCase):
         self.assertEqual(counts.get(('movie', 'inception', 2010)), 1)
         self.assertEqual(counts.get(('show', 'family guy', None)), 2)
         self.assertNotIn(('movie', 'alien', 1979), counts)
+
+    def test_scan_server_history_handles_multiple_batches_with_progress_updates(self):
+        original_batch_size = MediaLifetimeStatsService.HISTORY_SCAN_BATCH_SIZE
+        original_progress_interval = MediaLifetimeStatsService.PROGRESS_UPDATE_INTERVAL
+        try:
+            MediaLifetimeStatsService.HISTORY_SCAN_BATCH_SIZE = 2
+            MediaLifetimeStatsService.PROGRESS_UPDATE_INTERVAL = 1
+
+            for idx in range(1, 7):
+                db.session.add(ViewingHistory(
+                    row_id=100 + idx,
+                    server_name='Server A',
+                    server_order=0,
+                    media_type='episode',
+                    grandparent_title='Batch Show',
+                ))
+            db.session.commit()
+
+            counts = MediaLifetimeStatsService()._scan_server_history('Server A', 'a')
+            self.assertEqual(counts.get(('show', 'batch show', None)), 6)
+        finally:
+            MediaLifetimeStatsService.HISTORY_SCAN_BATCH_SIZE = original_batch_size
+            MediaLifetimeStatsService.PROGRESS_UPDATE_INTERVAL = original_progress_interval

@@ -22,6 +22,7 @@ class MediaLifetimeStatsService:
     """Service for managing lifetime media play count sync operations."""
 
     PROGRESS_UPDATE_INTERVAL = 500
+    HISTORY_SCAN_BATCH_SIZE = 2000
     _scheduler_lock = threading.Lock()
     _scheduler_started = False
     _status_write_lock = threading.Lock()
@@ -187,7 +188,8 @@ class MediaLifetimeStatsService:
             thread.join()
 
         if not successful_servers:
-            raise ValueError("Unable to scan local history for lifetime play counts.")
+            details = " | ".join(errors) if errors else "No server scan completed successfully."
+            raise ValueError(f"Unable to scan local history for lifetime play counts. {details}")
 
         status = self.get_or_create_status()
         status.current_step = 'Saving aggregated lifetime play counts...'
@@ -208,33 +210,44 @@ class MediaLifetimeStatsService:
             return counts
 
         processed = 0
-        rows = (
-            query.with_entities(
-                ViewingHistory.media_type,
-                ViewingHistory.title,
-                ViewingHistory.full_title,
-                ViewingHistory.grandparent_title,
-                ViewingHistory.year,
+        last_seen_id = 0
+        while True:
+            rows = (
+                query.with_entities(
+                    ViewingHistory.id,
+                    ViewingHistory.media_type,
+                    ViewingHistory.title,
+                    ViewingHistory.full_title,
+                    ViewingHistory.grandparent_title,
+                    ViewingHistory.year,
+                )
+                .filter(ViewingHistory.id > last_seen_id)
+                .order_by(ViewingHistory.id.asc())
+                .limit(self.HISTORY_SCAN_BATCH_SIZE)
+                .all()
             )
-            .yield_per(2000)
-        )
+            if not rows:
+                break
 
-        for media_type, title, full_title, grandparent_title, year in rows:
-            key = self._extract_content_key(
-                {
-                    'media_type': media_type,
-                    'title': title,
-                    'full_title': full_title,
-                    'grandparent_title': grandparent_title,
-                    'year': year,
-                }
-            )
-            if key is not None:
-                counts[key] = counts.get(key, 0) + 1
+            for row_id, media_type, title, full_title, grandparent_title, year in rows:
+                key = self._extract_content_key(
+                    {
+                        'media_type': media_type,
+                        'title': title,
+                        'full_title': full_title,
+                        'grandparent_title': grandparent_title,
+                        'year': year,
+                    }
+                )
+                if key is not None:
+                    counts[key] = counts.get(key, 0) + 1
 
-            processed += 1
-            if processed % self.PROGRESS_UPDATE_INTERVAL == 0 or processed == total_rows:
-                self._update_server_fetched(server_key, processed)
+                processed += 1
+                last_seen_id = row_id
+                if processed % self.PROGRESS_UPDATE_INTERVAL == 0:
+                    self._update_server_fetched(server_key, processed)
+
+            self._update_server_fetched(server_key, processed)
 
         return counts
 
