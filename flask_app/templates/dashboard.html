@@ -35,7 +35,7 @@
     {% endif %}
 
     <form method="POST" action="{{ url_for('main.run_analytics') }}">
-        <button type="submit" class="btn btn-success btn-large">
+        <button type="submit" class="btn btn-success btn-large analytics-refresh-btn" data-hover-help="Runs analytics across your configured servers, refreshes dashboard charts, and updates Viewing History with new records.">
             <svg class="button-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
             </svg>
@@ -100,7 +100,7 @@
         </div>
 
         <form method="POST" action="{{ url_for('main.run_analytics') }}" style="margin-top: 20px;">
-            <button type="submit" class="btn btn-primary btn-large">
+            <button type="submit" class="btn btn-primary btn-large analytics-refresh-btn" data-hover-help="Runs analytics across your configured servers, refreshes dashboard charts, and updates Viewing History with new records.">
                 <svg class="button-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
                 </svg>
@@ -403,6 +403,29 @@
     z-index: 2;
 }
 
+.button-help-tooltip {
+    position: fixed;
+    z-index: 14000;
+    max-width: 320px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(241, 138, 61, 0.4);
+    background: rgba(12, 12, 12, 0.96);
+    color: #f7f7f7;
+    font-size: 0.84em;
+    line-height: 1.35;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.button-help-tooltip.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
 .poster-preview {
     display: none;
     position: fixed;
@@ -638,6 +661,9 @@ $(document).ready(function() {
     var posterPreviewBound = false;
     var navigationInProgress = false;
     var analyticsRefreshInProgress = false;
+    var refreshHelpTooltipEl = null;
+    var refreshHelpHoverTimer = null;
+    var refreshHelpTargetEl = null;
     var dashboardHeroRows = 3;
     var dashboardHeroGap = 2;
     var dashboardHeroOverflowColumns = 3;
@@ -782,6 +808,98 @@ $(document).ready(function() {
         });
     }
 
+    function ensureRefreshHelpTooltip() {
+        if (refreshHelpTooltipEl) {
+            return refreshHelpTooltipEl;
+        }
+        refreshHelpTooltipEl = document.createElement('div');
+        refreshHelpTooltipEl.className = 'button-help-tooltip';
+        refreshHelpTooltipEl.setAttribute('role', 'tooltip');
+        document.body.appendChild(refreshHelpTooltipEl);
+        return refreshHelpTooltipEl;
+    }
+
+    function placeRefreshHelpTooltip(target) {
+        if (!target || !refreshHelpTooltipEl) {
+            return;
+        }
+        var rect = target.getBoundingClientRect();
+        var spacing = 10;
+        var top = rect.bottom + spacing;
+        var left = rect.left + (rect.width / 2);
+
+        refreshHelpTooltipEl.style.left = '0px';
+        refreshHelpTooltipEl.style.top = '0px';
+        refreshHelpTooltipEl.style.maxWidth = '320px';
+
+        var tooltipRect = refreshHelpTooltipEl.getBoundingClientRect();
+        left = left - (tooltipRect.width / 2);
+
+        var minLeft = 10;
+        var maxLeft = window.innerWidth - tooltipRect.width - 10;
+        if (left < minLeft) left = minLeft;
+        if (left > maxLeft) left = maxLeft;
+
+        if (top + tooltipRect.height > window.innerHeight - 10) {
+            top = rect.top - tooltipRect.height - spacing;
+        }
+
+        refreshHelpTooltipEl.style.left = Math.round(left) + 'px';
+        refreshHelpTooltipEl.style.top = Math.round(top) + 'px';
+    }
+
+    function showRefreshHelpTooltip(target) {
+        var text = target && target.getAttribute('data-hover-help');
+        if (!text) {
+            return;
+        }
+        var tooltip = ensureRefreshHelpTooltip();
+        tooltip.textContent = text;
+        refreshHelpTargetEl = target;
+        placeRefreshHelpTooltip(target);
+        tooltip.classList.add('is-visible');
+    }
+
+    function hideRefreshHelpTooltip() {
+        if (refreshHelpHoverTimer) {
+            clearTimeout(refreshHelpHoverTimer);
+            refreshHelpHoverTimer = null;
+        }
+        if (refreshHelpTooltipEl) {
+            refreshHelpTooltipEl.classList.remove('is-visible');
+        }
+        refreshHelpTargetEl = null;
+    }
+
+    function bindRefreshHelpTooltip() {
+        var buttons = document.querySelectorAll('.analytics-refresh-btn[data-hover-help]');
+        buttons.forEach(function(button) {
+            button.addEventListener('mouseenter', function() {
+                hideRefreshHelpTooltip();
+                refreshHelpHoverTimer = setTimeout(function() {
+                    showRefreshHelpTooltip(button);
+                }, 420);
+            });
+            button.addEventListener('mouseleave', hideRefreshHelpTooltip);
+            button.addEventListener('blur', hideRefreshHelpTooltip);
+            button.addEventListener('click', hideRefreshHelpTooltip);
+            button.addEventListener('focus', function() {
+                showRefreshHelpTooltip(button);
+            });
+        });
+
+        window.addEventListener('scroll', function() {
+            if (refreshHelpTargetEl) {
+                placeRefreshHelpTooltip(refreshHelpTargetEl);
+            }
+        }, true);
+        window.addEventListener('resize', function() {
+            if (refreshHelpTargetEl) {
+                placeRefreshHelpTooltip(refreshHelpTargetEl);
+            }
+        });
+    }
+
     function preloadPosterPreviews(scope) {
         var $scope = scope ? $(scope) : $(document);
         $scope.find('.poster-preview').each(function() {
@@ -922,6 +1040,7 @@ $(document).ready(function() {
 
     bindPosterPreviewHandlers();
     bindAnalyticsRefreshForm();
+    bindRefreshHelpTooltip();
     preloadPosterPreviews(document);
     loadDashboardHeroPosters();
     updateLastUpdatedLabel();
