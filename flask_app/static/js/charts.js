@@ -10,11 +10,15 @@ function getDynamicBarHeight(count, minHeight, rowHeight, padding) {
 /**
  * Render a stacked bar chart (daily/monthly)
  */
-function renderStackedBarChart(containerId, chartData) {
+function renderStackedBarChart(containerId, chartData, options) {
+    options = options || {};
+    var chartHeight = typeof options.height === 'number' ? options.height : 600;
+    var labelRotation = typeof options.labelRotation === 'number' ? options.labelRotation : -45;
+
     Highcharts.chart(containerId, {
         chart: {
             type: 'column',
-            height: 600
+            height: chartHeight
         },
         title: {
             text: chartData.title
@@ -23,7 +27,7 @@ function renderStackedBarChart(containerId, chartData) {
             categories: chartData.categories,
             crosshair: true,
             labels: {
-                rotation: -45,
+                rotation: labelRotation,
                 style: {
                     fontSize: '13px'
                 }

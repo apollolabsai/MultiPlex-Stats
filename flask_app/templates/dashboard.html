@@ -241,6 +241,17 @@
             <!-- Chart rendered by Highcharts -->
         </div>
     </div>
+    <div class="grid-3">
+        <div class="chart-container" id="distribution-day-of-week-container">
+            <!-- Chart rendered by Highcharts -->
+        </div>
+        <div class="chart-container" id="distribution-stream-type-container">
+            <!-- Chart rendered by Highcharts -->
+        </div>
+        <div class="chart-container" id="distribution-hour-of-day-container">
+            <!-- Chart rendered by Highcharts -->
+        </div>
+    </div>
 </div>
 
 <div class="section">
@@ -1264,6 +1275,15 @@ $(document).ready(function() {
     if (chartsJson.platform) {
         renderPieChart('distribution-platform-container', chartsJson.platform);
     }
+    if (chartsJson.distribution_day_of_week) {
+        renderStackedBarChart('distribution-day-of-week-container', chartsJson.distribution_day_of_week, { height: 420, labelRotation: 0 });
+    }
+    if (chartsJson.distribution_stream_type) {
+        renderStackedBarChart('distribution-stream-type-container', chartsJson.distribution_stream_type, { height: 420, labelRotation: 0 });
+    }
+    if (chartsJson.distribution_hour_of_day) {
+        renderStackedBarChart('distribution-hour-of-day-container', chartsJson.distribution_hour_of_day, { height: 420, labelRotation: -60 });
+    }
     if (chartsJson.users) {
         renderUserStackedBarChart('user-chart-container', chartsJson.users);
     }
@@ -1297,6 +1317,17 @@ $(document).ready(function() {
         var initialTvTopInput = document.getElementById('tv-top-n');
         var initialTvTop = initialTvTopInput ? parseInt(initialTvTopInput.value, 10) : null;
         fetchTvChart(initialTvDays, initialTvTop);
+    }
+
+    // Backward-compatibility: older cached dashboard payloads may not include
+    // the newer distribution stacked charts yet.
+    if (
+        !chartsJson.distribution_day_of_week ||
+        !chartsJson.distribution_stream_type ||
+        !chartsJson.distribution_hour_of_day
+    ) {
+        var initialDistributionDays = {{ summary.distribution_days|default(60) }};
+        fetchDistributionCharts(initialDistributionDays);
     }
 
     // Load users for filter dropdown
@@ -1535,14 +1566,28 @@ $(document).ready(function() {
         var categoryContainer = document.getElementById('distribution-category-container');
         var serverContainer = document.getElementById('distribution-server-container');
         var platformContainer = document.getElementById('distribution-platform-container');
+        var dayOfWeekContainer = document.getElementById('distribution-day-of-week-container');
+        var streamTypeContainer = document.getElementById('distribution-stream-type-container');
+        var hourOfDayContainer = document.getElementById('distribution-hour-of-day-container');
 
-        if (!categoryContainer || !serverContainer || !platformContainer || !days) {
+        if (
+            !categoryContainer ||
+            !serverContainer ||
+            !platformContainer ||
+            !dayOfWeekContainer ||
+            !streamTypeContainer ||
+            !hourOfDayContainer ||
+            !days
+        ) {
             return;
         }
 
         categoryContainer.classList.add('is-loading');
         serverContainer.classList.add('is-loading');
         platformContainer.classList.add('is-loading');
+        dayOfWeekContainer.classList.add('is-loading');
+        streamTypeContainer.classList.add('is-loading');
+        hourOfDayContainer.classList.add('is-loading');
 
         fetch('{{ url_for("main.api_distribution_charts") }}?days=' + encodeURIComponent(days))
             .then(function(response) {
@@ -1557,6 +1602,9 @@ $(document).ready(function() {
                 renderPieChart('distribution-category-container', payload.category);
                 renderPieChart('distribution-server-container', payload.server);
                 renderPieChart('distribution-platform-container', payload.platform);
+                renderStackedBarChart('distribution-day-of-week-container', payload.distribution_day_of_week, { height: 420, labelRotation: 0 });
+                renderStackedBarChart('distribution-stream-type-container', payload.distribution_stream_type, { height: 420, labelRotation: 0 });
+                renderStackedBarChart('distribution-hour-of-day-container', payload.distribution_hour_of_day, { height: 420, labelRotation: -60 });
                 setActiveRange('distribution-range-form', 'distribution_days_custom', payload.distribution_days, [7, 30, 60, 90]);
             })
             .catch(function(error) {
@@ -1566,6 +1614,9 @@ $(document).ready(function() {
                 categoryContainer.classList.remove('is-loading');
                 serverContainer.classList.remove('is-loading');
                 platformContainer.classList.remove('is-loading');
+                dayOfWeekContainer.classList.remove('is-loading');
+                streamTypeContainer.classList.remove('is-loading');
+                hourOfDayContainer.classList.remove('is-loading');
             });
     }
 

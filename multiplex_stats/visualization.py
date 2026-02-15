@@ -380,6 +380,166 @@ def get_platform_pie_data(df: pd.DataFrame, history_days: int) -> dict:
     }
 
 
+def _build_server_stacked_series(
+    df: pd.DataFrame,
+    category_col: str,
+    categories: list[str],
+    server_a_name: str,
+    server_b_name: Optional[str],
+) -> list[dict]:
+    """Build stacked series for server A/B using standard dashboard colors."""
+    grouped = (
+        df.groupby([category_col, 'Server'])['count'].sum().to_dict()
+        if not df.empty
+        else {}
+    )
+
+    series = [{
+        'name': server_a_name,
+        'data': [int(grouped.get((category, server_a_name), 0)) for category in categories],
+        'color': '#E6B413',
+    }]
+
+    if server_b_name:
+        series.append({
+            'name': server_b_name,
+            'data': [int(grouped.get((category, server_b_name), 0)) for category in categories],
+            'color': '#e36414',
+        })
+
+    return series
+
+
+def get_day_of_week_stacked_data(
+    df: pd.DataFrame,
+    server_a_name: str,
+    server_b_name: Optional[str],
+    history_days: int,
+) -> dict:
+    """Get stacked bar data for plays by day of week."""
+    categories = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+    day_index_to_label = {
+        0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri', 5: 'Sat', 6: 'Sun',
+    }
+
+    working = df.copy()
+    if not working.empty and 'date_pt' in working.columns:
+        working['day_index'] = pd.to_datetime(
+            working['date_pt'],
+            format='%Y-%m-%d',
+            errors='coerce'
+        ).dt.dayofweek
+        working = working.dropna(subset=['day_index'])
+        if not working.empty:
+            working['day_index'] = working['day_index'].astype(int)
+            working['day_of_week'] = working['day_index'].map(day_index_to_label)
+            working = working[working['day_of_week'].isin(categories)]
+        else:
+            working['day_of_week'] = pd.Series(dtype='object')
+    else:
+        working['day_of_week'] = pd.Series(dtype='object')
+
+    series = _build_server_stacked_series(
+        working,
+        category_col='day_of_week',
+        categories=categories,
+        server_a_name=server_a_name,
+        server_b_name=server_b_name,
+    )
+
+    return {
+        'categories': categories,
+        'series': series,
+        'title': f'Plays by Day of Week - {history_days} days',
+    }
+
+
+def get_stream_type_stacked_data(
+    df: pd.DataFrame,
+    server_a_name: str,
+    server_b_name: Optional[str],
+    history_days: int,
+) -> dict:
+    """Get stacked bar data for plays by stream type."""
+    categories = ['Direct Play', 'Transcode', 'Direct Stream']
+    stream_type_map = {
+        'direct play': 'Direct Play',
+        'transcode': 'Transcode',
+        'copy': 'Direct Stream',
+        'direct stream': 'Direct Stream',
+    }
+
+    working = df.copy()
+    if not working.empty and 'transcode_decision' in working.columns:
+        decisions = (
+            working['transcode_decision']
+            .fillna('')
+            .astype(str)
+            .str.strip()
+            .str.lower()
+        )
+        working['stream_type'] = decisions.map(stream_type_map)
+        working = working[working['stream_type'].isin(categories)]
+    else:
+        working['stream_type'] = pd.Series(dtype='object')
+
+    series = _build_server_stacked_series(
+        working,
+        category_col='stream_type',
+        categories=categories,
+        server_a_name=server_a_name,
+        server_b_name=server_b_name,
+    )
+
+    return {
+        'categories': categories,
+        'series': series,
+        'title': f'Plays by Stream Type - {history_days} days',
+    }
+
+
+def get_hour_of_day_stacked_data(
+    df: pd.DataFrame,
+    server_a_name: str,
+    server_b_name: Optional[str],
+    history_days: int,
+) -> dict:
+    """Get stacked bar data for plays by hour of day."""
+    categories = [f"{(hour % 12) or 12} {'AM' if hour < 12 else 'PM'}" for hour in range(24)]
+    hour_to_label = {hour: categories[hour] for hour in range(24)}
+
+    working = df.copy()
+    if not working.empty and 'time_pt' in working.columns:
+        parsed = pd.to_datetime(
+            working['time_pt'].fillna('').astype(str).str.upper(),
+            format='%I:%M%p',
+            errors='coerce',
+        )
+        working['hour_of_day'] = parsed.dt.hour
+        working = working.dropna(subset=['hour_of_day'])
+        if not working.empty:
+            working['hour_of_day'] = working['hour_of_day'].astype(int)
+            working['hour_label'] = working['hour_of_day'].map(hour_to_label)
+        else:
+            working['hour_label'] = pd.Series(dtype='object')
+    else:
+        working['hour_label'] = pd.Series(dtype='object')
+
+    series = _build_server_stacked_series(
+        working,
+        category_col='hour_label',
+        categories=categories,
+        server_a_name=server_a_name,
+        server_b_name=server_b_name,
+    )
+
+    return {
+        'categories': categories,
+        'series': series,
+        'title': f'Plays by Hour of Day - {history_days} days',
+    }
+
+
 def get_concurrent_streams_chart_data(
     api_response_a: dict,
     api_response_b: Optional[dict],

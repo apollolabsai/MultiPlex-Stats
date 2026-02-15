@@ -20,6 +20,7 @@ from multiplex_stats.visualization import (
     get_daily_chart_data, get_monthly_chart_data,
     get_user_chart_data, get_movie_chart_data, get_tv_chart_data,
     get_category_pie_data, get_server_pie_data, get_platform_pie_data,
+    get_day_of_week_stacked_data, get_stream_type_stacked_data, get_hour_of_day_stacked_data,
     get_concurrent_streams_chart_data
 )
 from flask_app.services.config_service import ConfigService
@@ -129,7 +130,25 @@ class AnalyticsService:
                 server_b_config.name if server_b_config else None,
                 settings.history_days
             ),
-            'platform': get_platform_pie_data(df_history, settings.history_days)
+            'platform': get_platform_pie_data(df_history, settings.history_days),
+            'distribution_day_of_week': get_day_of_week_stacked_data(
+                df_history,
+                server_a_config.name,
+                server_b_config.name if server_b_config else None,
+                settings.history_days
+            ),
+            'distribution_stream_type': get_stream_type_stacked_data(
+                df_history,
+                server_a_config.name,
+                server_b_config.name if server_b_config else None,
+                settings.history_days
+            ),
+            'distribution_hour_of_day': get_hour_of_day_stacked_data(
+                df_history,
+                server_a_config.name,
+                server_b_config.name if server_b_config else None,
+                settings.history_days
+            ),
         }
 
         # 5. Cache chart JSON to disk
@@ -301,6 +320,24 @@ class AnalyticsService:
                 dist_days
             ),
             'platform': get_platform_pie_data(df_history, dist_days),
+            'distribution_day_of_week': get_day_of_week_stacked_data(
+                df_history,
+                server_a_config.name,
+                server_b_config.name if server_b_config else None,
+                dist_days
+            ),
+            'distribution_stream_type': get_stream_type_stacked_data(
+                df_history,
+                server_a_config.name,
+                server_b_config.name if server_b_config else None,
+                dist_days
+            ),
+            'distribution_hour_of_day': get_hour_of_day_stacked_data(
+                df_history,
+                server_a_config.name,
+                server_b_config.name if server_b_config else None,
+                dist_days
+            ),
             'distribution_days': dist_days
         }
 
