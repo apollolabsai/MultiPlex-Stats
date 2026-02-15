@@ -3,6 +3,7 @@ Analytics service that bridges Flask to the existing multiplex_stats package.
 """
 import os
 import json
+import re
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
@@ -103,6 +104,9 @@ class AnalyticsService:
             server_a_config.name, server_b_config.name if server_b_config else None
         )
 
+        movie_chart = get_movie_chart_data(df_movies, settings.history_days)
+        movie_chart['poster_cards'] = self._build_movie_poster_cards(df_movies)
+
         charts_json = {
             'daily': get_daily_chart_data(df_daily, server_a_config.name, server_b_config.name if server_b_config else None),
             'monthly': get_monthly_chart_data(df_monthly, server_a_config.name, server_b_config.name if server_b_config else None),
@@ -113,7 +117,7 @@ class AnalyticsService:
                 settings.history_days,
                 top_n=settings.top_users
             ),
-            'movies': get_movie_chart_data(df_movies, settings.history_days),
+            'movies': movie_chart,
             'tv': get_tv_chart_data(df_tv, settings.history_days),
             'category': get_category_pie_data(df_daily_dist, settings.history_days),
             'server': get_server_pie_data(
@@ -372,11 +376,13 @@ class AnalyticsService:
 
         df_movies = aggregate_movie_stats(df_history, top_n=movie_count)
         chart_data = get_movie_chart_data(df_movies, history_days)
+        movie_poster_cards = self._build_movie_poster_cards(df_movies)
 
         return {
             'chart_data': chart_data,
             'movie_chart_days': history_days,
-            'top_movies': movie_count
+            'top_movies': movie_count,
+            'movie_poster_cards': movie_poster_cards,
         }
 
     def get_tv_chart_json(self, days: int | None = None, top_n: int | None = None) -> Dict[str, Any]:
@@ -1096,6 +1102,100 @@ class AnalyticsService:
     def _normalize_title(value: Any) -> str:
         """Normalize titles for case-insensitive exact matching."""
         return str(value or '').strip().lower()
+
+    @staticmethod
+    def _split_movie_title_year(full_title: str) -> tuple[str, Optional[int]]:
+        """Split a movie label like 'Title (2024)' into title and year."""
+        text = str(full_title or '').strip()
+        if not text:
+            return '', None
+
+        match = re.match(r'^(?P<title>.+?)\s*\((?P<year>\d{4})\)\s*$', text)
+        if not match:
+            return text, None
+
+        title = (match.group('title') or '').strip() or text
+        year = AnalyticsService._safe_int(match.group('year'))
+        return title, year
+
+    def _build_movie_poster_cards(self, df_movies: pd.DataFrame) -> List[Dict[str, Any]]:
+        """
+        Build ordered poster card metadata for top-movie dashboard display.
+
+        Output order always follows df_movies rank order (most watched first).
+        """
+        if df_movies.empty:
+            return []
+
+        servers = ServerConfig.query.filter(ServerConfig.is_active.is_(True)).all()
+        server_map = {
+            (server.name or '').strip(): server
+            for server in servers
+            if server.name and server.ip_address
+        }
+
+        cards: List[Dict[str, Any]] = []
+        for index, row in enumerate(df_movies.itertuples(index=False), start=1):
+            full_title = str(getattr(row, 'full_title', '') or '').strip()
+            if not full_title:
+                continue
+
+            plays = self._safe_int(getattr(row, 'count', 0)) or 0
+            parsed_title, parsed_year = self._split_movie_title_year(full_title)
+
+            normalized_candidates = {
+                self._normalize_title(full_title),
+                self._normalize_title(parsed_title),
+            }
+            normalized_candidates = {item for item in normalized_candidates if item}
+            title_filters = []
+            for normalized in normalized_candidates:
+                title_filters.append(func.lower(ViewingHistory.full_title) == normalized)
+                title_filters.append(func.lower(ViewingHistory.title) == normalized)
+
+            query = ViewingHistory.query.filter(func.lower(ViewingHistory.media_type) == 'movie')
+            if title_filters:
+                query = query.filter(or_(*title_filters))
+
+            if parsed_year is not None:
+                query = query.filter(
+                    or_(ViewingHistory.year == parsed_year, ViewingHistory.year.is_(None))
+                )
+
+            record = query.order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc()).first()
+            media_id = self._resolve_media_id_for_stream(
+                media_type='movie',
+                title=parsed_title or full_title,
+                grandparent_title='',
+                year=parsed_year,
+            )
+
+            poster_url = ''
+            if record and record.thumb:
+                server = server_map.get((record.server_name or '').strip())
+                if server:
+                    protocol = 'https' if server.use_ssl else 'http'
+                    params: Dict[str, Any] = {
+                        'img': record.thumb,
+                        'width': 220,
+                        'height': 330,
+                        'fallback': 'poster',
+                    }
+                    rating_key = self._safe_int(record.rating_key)
+                    if rating_key is not None:
+                        params['rating_key'] = rating_key
+                    poster_url = f"{protocol}://{server.ip_address}/pms_image_proxy?{urlencode(params)}"
+
+            cards.append({
+                'rank': index,
+                'title': parsed_title or full_title,
+                'full_title': full_title,
+                'plays': plays,
+                'media_id': media_id,
+                'poster_url': poster_url,
+            })
+
+        return cards
 
     def _resolve_history_id_for_stream(
         self,

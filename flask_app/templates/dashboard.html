@@ -303,6 +303,13 @@
     <div class="chart-container" id="movie-chart-container">
         <!-- Chart rendered by Highcharts -->
     </div>
+    <div class="movie-poster-panel" id="movie-poster-panel" aria-live="polite">
+        <div class="movie-poster-panel-header">
+            <div class="movie-poster-panel-title">Top Movie Posters</div>
+            <div class="movie-poster-panel-subtitle" id="movie-poster-panel-subtitle"></div>
+        </div>
+        <div class="movie-poster-rail" id="movie-poster-rail"></div>
+    </div>
     <div class="chart-controls">
         <div class="chart-controls-label">Top <input type="number" class="top-n-input" id="tv-top-n" min="1" max="100" value="{{ summary.top_tv_shows|default(30) }}"> TV Shows</div>
         <form class="chart-controls-form" id="tv-range-form">
@@ -612,6 +619,134 @@
     pointer-events: none;
 }
 
+.movie-poster-panel {
+    display: none;
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(241, 138, 61, 0.26);
+    background: linear-gradient(180deg, rgba(22, 22, 22, 0.95) 0%, rgba(16, 16, 16, 0.9) 100%);
+}
+
+.movie-poster-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.movie-poster-panel-title {
+    color: #f3c28d;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.86em;
+}
+
+.movie-poster-panel-subtitle {
+    color: #949494;
+    font-size: 0.84em;
+}
+
+.movie-poster-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.movie-poster-row {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+}
+
+.movie-poster-card {
+    position: relative;
+    width: 116px;
+    flex: 0 0 116px;
+    text-decoration: none;
+    color: inherit;
+}
+
+.movie-poster-image-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #111;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.42);
+    transition: transform 0.16s ease, border-color 0.16s ease;
+}
+
+.movie-poster-card:hover .movie-poster-image-wrap {
+    transform: translateY(-2px);
+    border-color: rgba(241, 138, 61, 0.55);
+}
+
+.movie-poster-card.is-disabled {
+    cursor: default;
+    opacity: 0.75;
+}
+
+.movie-poster-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.movie-poster-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #777;
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: linear-gradient(135deg, #202020 0%, #151515 100%);
+}
+
+.movie-poster-rank {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    min-width: 24px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.78);
+    color: #f5c085;
+    font-size: 0.72em;
+    font-weight: 700;
+    text-align: center;
+    border: 1px solid rgba(241, 138, 61, 0.35);
+}
+
+.movie-poster-meta {
+    margin-top: 6px;
+}
+
+.movie-poster-title {
+    color: #f3f3f3;
+    font-size: 0.8em;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.movie-poster-plays {
+    color: #9a9a9a;
+    font-size: 0.74em;
+    margin-top: 2px;
+}
+
 .top-n-input {
     width: 50px;
     padding: 4px 6px;
@@ -671,6 +806,7 @@ $(document).ready(function() {
     var dashboardHeroBackdrop = document.getElementById('dashboard-hero-backdrop');
     var dashboardHeroElement = document.getElementById('dashboard-hero');
     var dashboardHeroResizeTimer = null;
+    var mediaContentDetailBase = '{{ url_for("main.media_content_details", media_id=0) }}';
 
     function calculateDashboardHeroQuiltLayout() {
         if (!dashboardHeroBackdrop || !dashboardHeroElement) {
@@ -774,6 +910,142 @@ $(document).ready(function() {
         subtitleEl.textContent = titleText || 'Please wait';
         overlay.classList.add('is-open');
         overlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function buildMoviePosterLink(card) {
+        if (!card) {
+            return '';
+        }
+        if (card.media_id) {
+            return mediaContentDetailBase.replace(/0$/, String(card.media_id));
+        }
+        return '';
+    }
+
+    function createMoviePosterCard(card) {
+        var title = (card && (card.title || card.full_title)) ? String(card.title || card.full_title) : 'Unknown';
+        var plays = card && card.plays ? Number(card.plays) : 0;
+        var rank = card && card.rank ? Number(card.rank) : 0;
+        var href = buildMoviePosterLink(card);
+
+        var link = document.createElement('a');
+        link.className = 'movie-poster-card';
+        link.setAttribute('data-title', title);
+        if (href) {
+            link.href = href;
+        } else {
+            link.href = '#';
+            link.classList.add('is-disabled');
+            link.setAttribute('aria-disabled', 'true');
+            link.tabIndex = -1;
+        }
+
+        var imageWrap = document.createElement('div');
+        imageWrap.className = 'movie-poster-image-wrap';
+
+        if (card && card.poster_url) {
+            var image = document.createElement('img');
+            image.className = 'movie-poster-image';
+            image.src = String(card.poster_url);
+            image.alt = title + ' poster';
+            image.loading = 'lazy';
+            imageWrap.appendChild(image);
+        } else {
+            var placeholder = document.createElement('div');
+            placeholder.className = 'movie-poster-placeholder';
+            placeholder.textContent = 'No Poster';
+            imageWrap.appendChild(placeholder);
+        }
+
+        if (rank > 0) {
+            var rankBadge = document.createElement('div');
+            rankBadge.className = 'movie-poster-rank';
+            rankBadge.textContent = '#' + rank;
+            imageWrap.appendChild(rankBadge);
+        }
+
+        var meta = document.createElement('div');
+        meta.className = 'movie-poster-meta';
+
+        var titleEl = document.createElement('div');
+        titleEl.className = 'movie-poster-title';
+        titleEl.textContent = title;
+        titleEl.title = title;
+        meta.appendChild(titleEl);
+
+        var playsEl = document.createElement('div');
+        playsEl.className = 'movie-poster-plays';
+        playsEl.textContent = plays.toLocaleString() + ' plays';
+        meta.appendChild(playsEl);
+
+        link.appendChild(imageWrap);
+        link.appendChild(meta);
+        return link;
+    }
+
+    function renderMoviePosterRail(cards) {
+        var panel = document.getElementById('movie-poster-panel');
+        var subtitle = document.getElementById('movie-poster-panel-subtitle');
+        var rail = document.getElementById('movie-poster-rail');
+        if (!panel || !subtitle || !rail) {
+            return;
+        }
+
+        rail.innerHTML = '';
+        if (!Array.isArray(cards) || cards.length === 0) {
+            panel.style.display = 'none';
+            return;
+        }
+
+        panel.style.display = 'block';
+        subtitle.textContent = cards.length === 1 ? 'Showing 1 movie' : ('Showing ' + cards.length + ' movies');
+
+        var rows = [cards];
+        if (cards.length > 8) {
+            var splitIndex = Math.ceil(cards.length / 2);
+            rows = [cards.slice(0, splitIndex), cards.slice(splitIndex)];
+        }
+
+        rows.forEach(function(rowCards) {
+            if (!rowCards.length) {
+                return;
+            }
+            var row = document.createElement('div');
+            row.className = 'movie-poster-row';
+            rowCards.forEach(function(card) {
+                row.appendChild(createMoviePosterCard(card));
+            });
+            rail.appendChild(row);
+        });
+    }
+
+    function handleContentNavigationClick(event, linkElement, titleText) {
+        var href = linkElement ? linkElement.getAttribute('href') : '';
+        if (!href || href === '#') {
+            event.preventDefault();
+            return;
+        }
+
+        if (
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey ||
+            (typeof event.button === 'number' && event.button !== 0)
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+        if (navigationInProgress) {
+            return;
+        }
+
+        navigationInProgress = true;
+        showNavigationLoading(titleText || 'Please wait');
+        window.setTimeout(function() {
+            window.location.href = href;
+        }, 35);
     }
 
     function showAnalyticsRefreshLoading() {
@@ -1009,33 +1281,13 @@ $(document).ready(function() {
     }
 
     $(document).on('click', '#current-activity-container a.content-link', function(event) {
-        var href = this.getAttribute('href');
-        if (!href) {
-            return;
-        }
-
-        if (
-            event.metaKey ||
-            event.ctrlKey ||
-            event.shiftKey ||
-            event.altKey ||
-            (typeof event.button === 'number' && event.button !== 0)
-        ) {
-            return;
-        }
-
-        event.preventDefault();
-        if (navigationInProgress) {
-            return;
-        }
-
-        navigationInProgress = true;
         var titleText = (this.textContent || '').trim();
-        showNavigationLoading(titleText);
+        handleContentNavigationClick(event, this, titleText);
+    });
 
-        window.setTimeout(function() {
-            window.location.href = href;
-        }, 35);
+    $(document).on('click', '#movie-poster-rail a.movie-poster-card', function(event) {
+        var titleText = this.getAttribute('data-title') || '';
+        handleContentNavigationClick(event, this, titleText);
     });
 
     bindPosterPreviewHandlers();
@@ -1083,6 +1335,7 @@ $(document).ready(function() {
     }
     if (chartsJson.movies) {
         renderGradientBarChart('movie-chart-container', chartsJson.movies);
+        renderMoviePosterRail(chartsJson.movies.poster_cards || []);
     }
     if (chartsJson.tv) {
         renderGradientBarChart('tv-chart-container', chartsJson.tv);
@@ -1484,6 +1737,7 @@ $(document).ready(function() {
             })
             .then(function(payload) {
                 renderGradientBarChart('movie-chart-container', payload.chart_data);
+                renderMoviePosterRail(payload.movie_poster_cards || []);
                 setActiveRange('movie-range-form', 'movie_days_custom', payload.movie_chart_days, [7, 30, 60, 90]);
                 if (topNInput && payload.top_movies) {
                     topNInput.value = payload.top_movies;
