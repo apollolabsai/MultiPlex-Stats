@@ -1341,6 +1341,18 @@ $(document).ready(function() {
         renderGradientBarChart('tv-chart-container', chartsJson.tv);
     }
 
+    // Backward-compatibility: older cached dashboard payloads don't include poster_cards yet.
+    // Hydrate from the movie-chart API so the poster rail appears without forcing a full analytics rerun.
+    var initialMovieCards = chartsJson.movies && Array.isArray(chartsJson.movies.poster_cards)
+        ? chartsJson.movies.poster_cards
+        : [];
+    if (!initialMovieCards.length) {
+        var initialMovieDays = {{ summary.movie_chart_days|default(60) }};
+        var initialTopInput = document.getElementById('movie-top-n');
+        var initialMovieTop = initialTopInput ? parseInt(initialTopInput.value, 10) : null;
+        fetchMovieChart(initialMovieDays, initialMovieTop);
+    }
+
     // Load users for filter dropdown
     function loadUserFilter() {
         var select = document.getElementById('activity-user-filter');
