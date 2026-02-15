@@ -7,8 +7,7 @@ This reads local ViewingHistory rows and aggregates by normalized title
 from __future__ import annotations
 
 import threading
-import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 from flask import current_app
@@ -23,8 +22,6 @@ class MediaLifetimeStatsService:
 
     PROGRESS_UPDATE_INTERVAL = 500
     HISTORY_SCAN_BATCH_SIZE = 2000
-    _scheduler_lock = threading.Lock()
-    _scheduler_started = False
     _status_write_lock = threading.Lock()
 
     def __init__(self):
@@ -337,42 +334,6 @@ class MediaLifetimeStatsService:
                 show['play_count'] = plays
 
         return movies, tv_shows
-
-    @classmethod
-    def start_daily_scheduler(cls, app) -> None:
-        """Start a daemon thread that triggers lifetime stats refresh daily at 1:00 AM local time."""
-        with cls._scheduler_lock:
-            if cls._scheduler_started:
-                return
-            cls._scheduler_started = True
-
-        thread = threading.Thread(target=cls._scheduler_loop, args=(app,), daemon=True)
-        thread.start()
-
-    @classmethod
-    def _scheduler_loop(cls, app) -> None:
-        """Scheduler loop for daily auto-refresh at 1:00 AM local time."""
-        while True:
-            sleep_seconds = cls._seconds_until_next_run(hour=1, minute=0)
-            time.sleep(max(1, int(sleep_seconds)))
-
-            with app.app_context():
-                try:
-                    if ConfigService.has_valid_config():
-                        MediaLifetimeStatsService().start_sync(app=app, trigger='scheduled')
-                except Exception as exc:
-                    print(f"Lifetime stats scheduled sync failed: {exc}")
-
-            time.sleep(1)
-
-    @staticmethod
-    def _seconds_until_next_run(hour: int, minute: int = 0) -> float:
-        tz = get_local_timezone()
-        now = datetime.now(tz)
-        next_run = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        if next_run <= now:
-            next_run += timedelta(days=1)
-        return (next_run - now).total_seconds()
 
     def _set_server_status(self, server_key: str, status_value: str, step: str, error: str | None = None) -> None:
         with self._status_write_lock:

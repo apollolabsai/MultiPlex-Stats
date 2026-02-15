@@ -101,12 +101,6 @@ def create_app(config_name='development'):
         db.create_all()
         _initialize_default_settings()
 
-    # Start background scheduler threads once in the active app process.
-    should_start_background = (not app.debug) or (os.environ.get('WERKZEUG_RUN_MAIN') == 'true')
-    if should_start_background:
-        from flask_app.services.media_lifetime_stats_service import MediaLifetimeStatsService
-        MediaLifetimeStatsService.start_daily_scheduler(app)
-
     return app
 
 
