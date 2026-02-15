@@ -23,7 +23,7 @@ def index():
 
 @main_bp.route('/run-analytics', methods=['POST'])
 def run_analytics():
-    """Execute analytics synchronously and redirect to dashboard."""
+    """Execute analytics synchronously, then trigger a lifetime cache rebuild."""
     try:
         # Validate configuration exists
         if not ConfigService.has_valid_config():
@@ -59,7 +59,15 @@ def run_analytics():
         run.summary_json = json.dumps(result['summary'])
         db.session.commit()
 
-        flash('Analytics completed successfully!', 'success')
+        try:
+            lifetime_started = MediaLifetimeStatsService().start_sync(trigger='dashboard_refresh')
+            if lifetime_started:
+                flash('Analytics completed. Lifetime cache rebuild started.', 'success')
+            else:
+                flash('Analytics completed. Lifetime cache rebuild is already running.', 'success')
+        except Exception as lifetime_error:
+            flash('Analytics completed, but lifetime cache rebuild could not be started.', 'error')
+            print(f"Lifetime cache rebuild start error: {lifetime_error}")
         return redirect(url_for('main.dashboard'))
 
     except Exception as e:
