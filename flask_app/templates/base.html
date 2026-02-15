@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}MultiPlex Stats{% endblock %}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
-    <script src="https://code.highcharts.com/highcharts.js"></script>
-    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
-    <script src="{{ url_for('static', filename='js/highcharts-theme.js') }}"></script>
+    <script defer src="https://code.highcharts.com/highcharts.js"></script>
+    <script defer src="https://code.highcharts.com/modules/accessibility.js"></script>
+    <script defer src="{{ url_for('static', filename='js/highcharts-theme.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>

@@ -357,6 +357,9 @@
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <!-- Highcharts rendering functions -->
 <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<!-- Shared utilities -->
+<script src="{{ url_for('static', filename='js/hero-quilt.js') }}"></script>
+<script src="{{ url_for('static', filename='js/nav-loading.js') }}"></script>
 
 <style>
 /* Poster preview on hover */
@@ -806,118 +809,15 @@ $(document).ready(function() {
     var refreshHelpTooltipEl = null;
     var refreshHelpHoverTimer = null;
     var refreshHelpTargetEl = null;
-    var dashboardHeroRows = 3;
-    var dashboardHeroGap = 2;
-    var dashboardHeroOverflowColumns = 3;
-    var dashboardHeroPosters = [];
-    var dashboardHeroBackdrop = document.getElementById('dashboard-hero-backdrop');
-    var dashboardHeroElement = document.getElementById('dashboard-hero');
-    var dashboardHeroResizeTimer = null;
     var mediaContentDetailBase = '{{ url_for("main.media_content_details", media_id=0) }}';
-
-    function calculateDashboardHeroQuiltLayout() {
-        if (!dashboardHeroBackdrop || !dashboardHeroElement) {
-            return null;
-        }
-
-        var heroHeight = Math.max(186, dashboardHeroElement.clientHeight || 0);
-        var heroWidth = Math.max(320, dashboardHeroElement.clientWidth || 0);
-        var tileHeight = Math.max(60, Math.floor((heroHeight - dashboardHeroGap * (dashboardHeroRows - 1)) / dashboardHeroRows));
-        var tileWidth = Math.max(40, Math.round(tileHeight * (2 / 3))); // poster ratio 2:3
-        var columns = Math.max(1, Math.ceil(heroWidth / (tileWidth + dashboardHeroGap)) + dashboardHeroOverflowColumns);
-
-        return {
-            rows: dashboardHeroRows,
-            gap: dashboardHeroGap,
-            tileHeight: tileHeight,
-            tileWidth: tileWidth,
-            columns: columns,
-            tileCount: columns * dashboardHeroRows
-        };
-    }
-
-    function renderDashboardHeroPosters(posters) {
-        if (!dashboardHeroBackdrop) {
-            return;
-        }
-
-        dashboardHeroBackdrop.innerHTML = '';
-        if (!Array.isArray(posters) || posters.length === 0) {
-            return;
-        }
-
-        var normalizedPosters = posters.filter(function(item) {
-            return item && item.poster_url;
-        });
-        if (normalizedPosters.length === 0) {
-            return;
-        }
-
-        var layout = calculateDashboardHeroQuiltLayout();
-        if (!layout) {
-            return;
-        }
-
-        dashboardHeroBackdrop.style.gridTemplateRows = 'repeat(' + layout.rows + ', ' + layout.tileHeight + 'px)';
-        dashboardHeroBackdrop.style.gridAutoColumns = layout.tileWidth + 'px';
-        dashboardHeroBackdrop.style.rowGap = layout.gap + 'px';
-        dashboardHeroBackdrop.style.columnGap = layout.gap + 'px';
-
-        for (var i = 0; i < layout.tileCount; i++) {
-            var item = normalizedPosters[i % normalizedPosters.length];
-            var posterUrl = String(item.poster_url || '').replace(/"/g, '\\"');
-            var tile = document.createElement('div');
-            tile.className = 'dashboard-hero-tile';
-            tile.style.backgroundImage = 'url("' + posterUrl + '")';
-            if (item.title) {
-                tile.setAttribute('title', item.title);
-            }
-            dashboardHeroBackdrop.appendChild(tile);
-        }
-    }
-
-    function loadDashboardHeroPosters() {
-        fetch('{{ url_for("main.api_dashboard_top_posters") }}')
-            .then(function(response) {
-                if (!response.ok) {
-                    throw new Error('Failed to load dashboard hero posters.');
-                }
-                return response.json();
-            })
-            .then(function(payload) {
-                dashboardHeroPosters = Array.isArray(payload.posters) ? payload.posters : [];
-                renderDashboardHeroPosters(dashboardHeroPosters);
-            })
-            .catch(function(error) {
-                console.error('Error loading dashboard hero posters:', error);
-            });
-    }
-
-    function scheduleDashboardHeroRerender() {
-        if (!dashboardHeroPosters.length) {
-            return;
-        }
-        if (dashboardHeroResizeTimer) {
-            clearTimeout(dashboardHeroResizeTimer);
-        }
-        dashboardHeroResizeTimer = setTimeout(function() {
-            renderDashboardHeroPosters(dashboardHeroPosters);
-        }, 120);
-    }
-
-    function showNavigationLoading(titleText) {
-        var overlay = document.getElementById('nav-loading-overlay');
-        var titleEl = document.getElementById('nav-loading-title');
-        var subtitleEl = document.getElementById('nav-loading-subtitle');
-        if (!overlay || !titleEl || !subtitleEl) {
-            return;
-        }
-
-        titleEl.textContent = 'Loading content details...';
-        subtitleEl.textContent = titleText || 'Please wait';
-        overlay.classList.add('is-open');
-        overlay.setAttribute('aria-hidden', 'false');
-    }
+    var dashboardHero = new HeroQuilt({
+        backdropId: 'dashboard-hero-backdrop',
+        heroId: 'dashboard-hero',
+        tileClass: 'dashboard-hero-tile',
+        rows: 3,
+        minHeight: 186,
+        fetchUrl: '{{ url_for("main.api_dashboard_top_posters") }}'
+    });
 
     function buildMoviePosterLink(card) {
         if (!card) {
@@ -1328,9 +1228,9 @@ $(document).ready(function() {
     bindAnalyticsRefreshForm();
     bindRefreshHelpTooltip();
     preloadPosterPreviews(document);
-    loadDashboardHeroPosters();
+    dashboardHero.load();
     updateLastUpdatedLabel();
-    window.addEventListener('resize', scheduleDashboardHeroRerender);
+    window.addEventListener('resize', function() { dashboardHero.scheduleRerender(); });
 
     lastUpdatedTimer = setInterval(updateLastUpdatedLabel, 30000);
 

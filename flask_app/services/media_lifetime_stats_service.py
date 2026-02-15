@@ -14,6 +14,7 @@ from flask import current_app
 
 from flask_app.models import db, LifetimeMediaPlayCount, LifetimeStatsSyncStatus, ViewingHistory
 from flask_app.services.config_service import ConfigService
+from flask_app.services.utils import normalize_title, to_int
 from multiplex_stats.timezone_utils import get_local_timezone
 
 
@@ -273,14 +274,14 @@ class MediaLifetimeStatsService:
             return movies, tv_shows
 
         movie_titles = {
-            self._normalize_title(item.get('content_title'))
+            normalize_title(item.get('content_title'))
             for item in movies
-            if self._normalize_title(item.get('content_title'))
+            if normalize_title(item.get('content_title'))
         }
         show_titles = {
-            self._normalize_title(item.get('content_title'))
+            normalize_title(item.get('content_title'))
             for item in tv_shows
-            if self._normalize_title(item.get('content_title'))
+            if normalize_title(item.get('content_title'))
         }
 
         movie_map_exact: dict[tuple[str, int | None], int] = {}
@@ -309,11 +310,11 @@ class MediaLifetimeStatsService:
                 show_map[row.title_normalized] = row.total_plays
 
         for movie in movies:
-            title = self._normalize_title(movie.get('content_title'))
+            title = normalize_title(movie.get('content_title'))
             if not title:
                 continue
 
-            year = self._to_int(movie.get('content_year'))
+            year = to_int(movie.get('content_year'))
             plays = movie_map_exact.get((title, year))
             if plays is None:
                 variants = movie_variants.get(title, [])
@@ -326,7 +327,7 @@ class MediaLifetimeStatsService:
                 movie['play_count'] = plays
 
         for show in tv_shows:
-            title = self._normalize_title(show.get('content_title'))
+            title = normalize_title(show.get('content_title'))
             if not title:
                 continue
             plays = show_map.get(title)
@@ -371,33 +372,19 @@ class MediaLifetimeStatsService:
     @staticmethod
     def _extract_content_key(row: dict[str, Any]) -> tuple[str, str, int | None] | None:
         """Normalize a history row into a lifetime cache key."""
-        media_type = MediaLifetimeStatsService._normalize_title(row.get('media_type'))
+        media_type = normalize_title(row.get('media_type'))
         if media_type == 'movie':
-            title = MediaLifetimeStatsService._normalize_title(row.get('title') or row.get('full_title'))
+            title = normalize_title(row.get('title') or row.get('full_title'))
             if not title:
                 return None
-            year = MediaLifetimeStatsService._to_int(row.get('year'))
+            year = to_int(row.get('year'))
             return ('movie', title, year)
 
         if media_type in {'episode', 'tv', 'show'}:
-            show_title = MediaLifetimeStatsService._normalize_title(row.get('grandparent_title'))
+            show_title = normalize_title(row.get('grandparent_title'))
             if not show_title:
                 return None
             return ('show', show_title, None)
 
         return None
 
-    @staticmethod
-    def _normalize_title(value: Any) -> str:
-        if not value:
-            return ''
-        return ' '.join(str(value).strip().lower().split())
-
-    @staticmethod
-    def _to_int(value: Any) -> int | None:
-        try:
-            if value in (None, ''):
-                return None
-            return int(value)
-        except (TypeError, ValueError):
-            return None

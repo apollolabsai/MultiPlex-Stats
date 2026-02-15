@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 from sqlalchemy import func, or_
 
 from flask_app.models import CachedMedia, LifetimeMediaPlayCount, ServerConfig, ViewingHistory
+from flask_app.services.utils import normalize_title, to_int
 from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
 
@@ -263,7 +264,7 @@ class ContentService:
         metadata['date_added'] = self._format_added_date(
             data.get('added_at') or data.get('addedAt') or data.get('added')
         )
-        metadata_children_count = self._to_int(data.get('children_count') or data.get('child_count'))
+        metadata_children_count = to_int(data.get('children_count') or data.get('child_count'))
         season_count, episode_count = self._extract_show_structure_counts(data)
         if season_count is not None:
             metadata['season_count'] = season_count
@@ -304,7 +305,7 @@ class ContentService:
             and not metadata.get('episode_count')
             and metadata_children_count is not None
         ):
-            seasons = self._to_int(metadata.get('season_count'))
+            seasons = to_int(metadata.get('season_count'))
             if seasons is None or metadata_children_count >= seasons:
                 metadata['episode_count'] = metadata_children_count
 
@@ -446,12 +447,12 @@ class ContentService:
             or ''
         ).strip().lower()
 
-        season_count = ContentService._to_int(
+        season_count = to_int(
             metadata.get('season_count')
             or metadata.get('seasons_count')
             or metadata.get('seasons')
         )
-        episode_count = ContentService._to_int(
+        episode_count = to_int(
             metadata.get('leaf_count')
             or metadata.get('grandchild_count')
             or metadata.get('grandchildren_count')
@@ -459,7 +460,7 @@ class ContentService:
             or metadata.get('episodes_count')
         )
 
-        children_count = ContentService._to_int(
+        children_count = to_int(
             metadata.get('children_count') or metadata.get('child_count')
         )
         if children_count is not None:
@@ -511,7 +512,7 @@ class ContentService:
             episode_total = 0
             has_episode_total = False
             for row in season_rows:
-                child_count = ContentService._to_int(
+                child_count = to_int(
                     row.get('children_count')
                     or row.get('child_count')
                     or row.get('leaf_count')
@@ -968,7 +969,7 @@ class ContentService:
             content_year=content_year,
         )
 
-        fallback_total = self._to_int(fallback_total_plays) or 0
+        fallback_total = to_int(fallback_total_plays) or 0
         total_plays = lifetime_total
         if total_plays is None:
             if local_total_plays > 0:
@@ -990,7 +991,7 @@ class ContentService:
         content_title: str,
         content_year: int | None,
     ) -> int | None:
-        normalized_title = self._normalize_content_title(content_title)
+        normalized_title = normalize_title(content_title)
         if not normalized_title:
             return None
 
@@ -1157,7 +1158,7 @@ class ContentService:
                 continue
 
             rating_key = item.rating_key if is_movie else (item.grandparent_rating_key or item.rating_key)
-            parsed_key = ContentService._to_int(rating_key)
+            parsed_key = to_int(rating_key)
             if parsed_key is not None:
                 keys_by_server.setdefault(server_name, set()).add(parsed_key)
 
@@ -1165,7 +1166,7 @@ class ContentService:
             source_server_name = (record.server_name or '').strip()
             if source_server_name:
                 source_rating_key = record.rating_key if is_movie else (record.grandparent_rating_key or record.rating_key)
-                parsed_source_key = ContentService._to_int(source_rating_key)
+                parsed_source_key = to_int(source_rating_key)
                 if parsed_source_key is not None:
                     keys_by_server.setdefault(source_server_name, set()).add(parsed_source_key)
 
@@ -1194,7 +1195,7 @@ class ContentService:
         is_movie: bool,
         content_year: int | None,
     ) -> set[int]:
-        normalized_title = self._normalize_content_title(content_title)
+        normalized_title = normalize_title(content_title)
         if not normalized_title:
             return set()
 
@@ -1261,7 +1262,7 @@ class ContentService:
             rows = []
 
         parsed_rows = [row for row in rows if isinstance(row, dict)]
-        records_filtered = ContentService._to_int(data.get('recordsFiltered'))
+        records_filtered = to_int(data.get('recordsFiltered'))
         return parsed_rows, records_filtered
 
     def _extract_matching_rating_key(
@@ -1271,37 +1272,31 @@ class ContentService:
         is_movie: bool,
         content_year: int | None,
     ) -> int | None:
-        media_type = self._normalize_content_title(row.get('media_type'))
+        media_type = normalize_title(row.get('media_type'))
 
         if is_movie:
             if media_type != 'movie':
                 return None
 
-            row_title = self._normalize_content_title(row.get('title') or row.get('full_title'))
+            row_title = normalize_title(row.get('title') or row.get('full_title'))
             if row_title != normalized_title:
                 return None
 
             if content_year is not None:
-                row_year = self._to_int(row.get('year'))
+                row_year = to_int(row.get('year'))
                 if row_year is not None and row_year != content_year:
                     return None
 
-            return self._to_int(row.get('rating_key'))
+            return to_int(row.get('rating_key'))
 
         if media_type not in {'episode', 'tv', 'show'}:
             return None
 
-        show_title = self._normalize_content_title(row.get('grandparent_title'))
+        show_title = normalize_title(row.get('grandparent_title'))
         if show_title != normalized_title:
             return None
 
-        return self._to_int(row.get('grandparent_rating_key') or row.get('rating_key'))
-
-    @staticmethod
-    def _normalize_content_title(value: Any) -> str:
-        if not value:
-            return ''
-        return ' '.join(str(value).strip().lower().split())
+        return to_int(row.get('grandparent_rating_key') or row.get('rating_key'))
 
     @staticmethod
     def _extract_watch_stats_total_plays(response: dict[str, Any]) -> int | None:
@@ -1311,7 +1306,7 @@ class ContentService:
             if 'data' in data and isinstance(data.get('data'), list):
                 data = data.get('data')
             else:
-                return ContentService._to_int(data.get('total_plays'))
+                return to_int(data.get('total_plays'))
 
         if not isinstance(data, list):
             return None
@@ -1323,14 +1318,14 @@ class ContentService:
             if not isinstance(row, dict):
                 continue
 
-            total_plays = ContentService._to_int(row.get('total_plays'))
+            total_plays = to_int(row.get('total_plays'))
             if total_plays is None:
                 continue
 
             if highest_total is None or total_plays > highest_total:
                 highest_total = total_plays
 
-            query_days = ContentService._to_int(row.get('query_days'))
+            query_days = to_int(row.get('query_days'))
             if query_days == 0:
                 zero_day_total = total_plays
 
@@ -1344,7 +1339,7 @@ class ContentService:
             if not isinstance(row, dict):
                 continue
 
-            total_plays = ContentService._to_int(row.get('total_plays'))
+            total_plays = to_int(row.get('total_plays'))
             if total_plays is not None and total_plays <= 0:
                 continue
 
@@ -1361,7 +1356,7 @@ class ContentService:
         for row in rows:
             if not isinstance(row, dict):
                 continue
-            value = ContentService._to_int(row.get('total_plays'))
+            value = to_int(row.get('total_plays'))
             if value is not None and value > 0:
                 total += value
         return total
@@ -1375,7 +1370,7 @@ class ContentService:
             if not isinstance(row, dict):
                 continue
 
-            value = ContentService._to_int(row.get('total_plays'))
+            value = to_int(row.get('total_plays'))
             if value is None or value <= 0:
                 continue
 
@@ -1435,22 +1430,9 @@ class ContentService:
                 return f"name:{str(value).strip().lower()}"
 
         user_id = row.get('user_id')
-        parsed_user_id = ContentService._to_int(user_id)
+        parsed_user_id = to_int(user_id)
         if parsed_user_id is not None:
             return f"id:{parsed_user_id}"
 
         return ''
 
-    @staticmethod
-    def _to_int(value: Any) -> int | None:
-        if value in (None, ''):
-            return None
-        if isinstance(value, str):
-            value = value.replace(',', '').strip()
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            try:
-                return int(float(value))
-            except (TypeError, ValueError):
-                return None

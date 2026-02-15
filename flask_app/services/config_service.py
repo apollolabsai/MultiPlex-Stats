@@ -2,6 +2,7 @@
 Configuration service for managing database-driven configuration.
 """
 from typing import Tuple, Optional, List
+from flask import has_request_context, g
 from flask_app.models import db, ServerConfig, AnalyticsSettings
 
 
@@ -12,22 +13,39 @@ class ConfigService:
     def get_server_configs() -> Tuple[Optional[object], Optional[object]]:
         """
         Get server configurations in multiplex_stats format.
+        Results are cached on Flask's ``g`` object for the current request.
 
         Returns:
             Tuple of (ServerA config, ServerB config) as multiplex_stats.models.ServerConfig objects
         """
+        if has_request_context():
+            cached = getattr(g, '_server_configs', None)
+            if cached is not None:
+                return cached
+
         servers = ServerConfig.query.filter_by(is_active=True).order_by(ServerConfig.server_order).all()
 
         server_a = servers[0].to_multiplex_config() if len(servers) > 0 else None
         server_b = servers[1].to_multiplex_config() if len(servers) > 1 else None
 
-        return server_a, server_b
+        result = (server_a, server_b)
+        if has_request_context():
+            g._server_configs = result
+        return result
 
     @staticmethod
     def get_analytics_settings() -> object:
-        """Get analytics settings in multiplex_stats format."""
+        """Get analytics settings in multiplex_stats format (cached per-request)."""
+        if has_request_context():
+            cached = getattr(g, '_analytics_settings', None)
+            if cached is not None:
+                return cached
+
         settings = AnalyticsSettings.query.first()
-        return settings.to_multiplex_settings() if settings else None
+        result = settings.to_multiplex_settings() if settings else None
+        if has_request_context():
+            g._analytics_settings = result
+        return result
 
     @staticmethod
     def has_valid_config() -> bool:

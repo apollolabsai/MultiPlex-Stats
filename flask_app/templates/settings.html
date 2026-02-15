@@ -219,6 +219,7 @@
     </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/progress-renderer.js') }}"></script>
 <script>
 (function() {
     var mediaStatus = {{ media_sync_status | tojson }};
@@ -229,28 +230,6 @@
     var lifetimePollInterval = null;
     var pipelineInProgress = false;
     var hasServerConfig = {{ 'true' if servers else 'false' }};
-
-    function formatLastUpdatedValue(value) {
-        if (!value) {
-            return 'Never';
-        }
-        var parsed = new Date(value);
-        if (isNaN(parsed.getTime())) {
-            return value;
-        }
-        var year = parsed.getFullYear();
-        var month = String(parsed.getMonth() + 1).padStart(2, '0');
-        var day = String(parsed.getDate()).padStart(2, '0');
-        var hour24 = parsed.getHours();
-        var minute = String(parsed.getMinutes()).padStart(2, '0');
-        var period = hour24 >= 12 ? 'PM' : 'AM';
-        var hour12 = hour24 % 12;
-        if (hour12 === 0) {
-            hour12 = 12;
-        }
-        var hour = String(hour12).padStart(2, '0');
-        return year + '-' + month + '-' + day + ' ' + hour + ':' + minute + ' ' + period;
-    }
 
     function formatTimestampElement(elementId) {
         var element = document.getElementById(elementId);
@@ -275,49 +254,21 @@
         button.textContent = label || getActionButtonLabel();
     }
 
-    function renderServerProgress(containerId, servers, includeHistoryCounts) {
-        var container = document.getElementById(containerId);
-        if (!container) {
-            return;
-        }
+    var settingsProgressClasses = {
+        progress: 'history-server-progress',
+        header: 'history-server-header',
+        name: 'history-server-name',
+        badge: 'history-status-badge',
+        step: 'history-server-step',
+        bar: 'history-server-bar',
+        fill: 'history-server-fill',
+        fetched: 'history-server-fetched',
+        error: 'history-server-error',
+        unitLabel: 'records'
+    };
 
-        var html = '';
-        (servers || []).forEach(function(server) {
-            var percent = 0;
-            if (server.total && server.total > 0) {
-                percent = Math.min(100, (server.fetched / server.total) * 100);
-            } else if (server.status === 'success') {
-                percent = 100;
-            }
-
-            var fillClass = '';
-            if (server.status === 'success') fillClass = 'success';
-            else if (server.status === 'failed') fillClass = 'failed';
-
-            html += '<div class="history-server-progress">';
-            html += '<div class="history-server-header">';
-            html += '<span class="history-server-name">' + (server.name || 'Server');
-            html += '<span class="history-status-badge ' + (server.status || 'idle') + '">' + (server.status || 'idle') + '</span>';
-            html += '</span>';
-            html += '<span class="history-server-step">' + (server.step || '') + '</span>';
-            html += '</div>';
-            html += '<div class="history-server-bar">';
-            html += '<div class="history-server-fill ' + fillClass + '" style="width: ' + percent + '%;"></div>';
-            html += '</div>';
-            html += '<div class="history-server-fetched">' + ((server.fetched || 0).toLocaleString()) + ' records';
-            if (server.total) {
-                html += ' / ' + server.total.toLocaleString() + ' total';
-            }
-            if (includeHistoryCounts) {
-                html += ' (' + ((server.inserted || 0).toLocaleString()) + ' new, ' + ((server.skipped || 0).toLocaleString() + ' duplicates)');
-            }
-            html += '</div>';
-            if (server.error) {
-                html += '<div class="history-server-error">' + server.error + '</div>';
-            }
-            html += '</div>';
-        });
-        container.innerHTML = html;
+    function renderSettingsServerProgress(containerId, servers, includeHistoryCounts) {
+        renderServerProgress(containerId, servers, includeHistoryCounts, settingsProgressClasses);
     }
 
     function failPipeline(message) {
@@ -348,7 +299,7 @@
         if (status.status === 'running') {
             pipelineInProgress = true;
             progressDiv.style.display = 'block';
-            renderServerProgress('media-server-progress-container', status.servers || [], false);
+            renderSettingsServerProgress('media-server-progress-container', status.servers || [], false);
             if (fetchedLabel) {
                 fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
             }
@@ -391,7 +342,7 @@
         if (status.status === 'running') {
             pipelineInProgress = true;
             progressDiv.style.display = 'block';
-            renderServerProgress('history-server-progress-container', status.servers || [], true);
+            renderSettingsServerProgress('history-server-progress-container', status.servers || [], true);
             if (fetchedLabel) fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
             if (totalLabel) totalLabel.textContent = status.records_total ? status.records_total.toLocaleString() : '?';
             if (insertedLabel) insertedLabel.textContent = (status.records_inserted || 0).toLocaleString();
@@ -432,7 +383,7 @@
         if (status.status === 'running') {
             pipelineInProgress = true;
             progressDiv.style.display = 'block';
-            renderServerProgress('lifetime-server-progress-container', status.servers || [], false);
+            renderSettingsServerProgress('lifetime-server-progress-container', status.servers || [], false);
             if (fetchedLabel) {
                 fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
             }

@@ -2,6 +2,8 @@
 Tautulli API client for fetching server statistics.
 """
 
+import time
+import logging
 import requests
 import urllib3
 from typing import Any, Optional
@@ -11,6 +13,11 @@ from multiplex_stats.models import ServerConfig
 
 # Suppress SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+logger = logging.getLogger(__name__)
+
+_MAX_RETRIES = 3
+_RETRY_BACKOFF_BASE = 1  # seconds
 
 
 class TautulliClient:
@@ -47,9 +54,23 @@ class TautulliClient:
         for key, value in params.items():
             url += f"&{key}={value}"
 
-        response = requests.get(url, verify=self.verify_ssl)
-        response.raise_for_status()
-        return response.json()
+        last_exc: Exception | None = None
+        for attempt in range(_MAX_RETRIES):
+            try:
+                response = requests.get(url, verify=self.verify_ssl, timeout=30)
+                response.raise_for_status()
+                return response.json()
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                last_exc = exc
+                if attempt < _MAX_RETRIES - 1:
+                    delay = _RETRY_BACKOFF_BASE * (2 ** attempt)
+                    logger.warning(
+                        "Tautulli API request failed (attempt %d/%d), retrying in %ds: %s",
+                        attempt + 1, _MAX_RETRIES, delay, exc,
+                    )
+                    time.sleep(delay)
+
+        raise last_exc  # type: ignore[misc]
 
     def get_plays_by_date(
         self,
@@ -413,6 +434,6 @@ class TautulliClient:
         url = f"{self.base_url}?apikey={self.api_key}&cmd=pms_image_proxy"
         url += f"&img={img}&width={width}&height={height}&fallback={fallback}"
 
-        response = requests.get(url, verify=self.verify_ssl)
+        response = requests.get(url, verify=self.verify_ssl, timeout=30)
         response.raise_for_status()
         return response.content

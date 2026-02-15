@@ -24,6 +24,7 @@ from multiplex_stats.visualization import (
 )
 from flask_app.services.config_service import ConfigService
 from flask_app.services.history_sync_service import HistorySyncService
+from flask_app.services.utils import normalize_title, to_int
 from flask_app.models import CachedMedia, LifetimeMediaPlayCount, ServerConfig, ViewingHistory
 
 
@@ -561,18 +562,18 @@ class AnalyticsService:
 
             if is_show:
                 title = (record.grandparent_title or record.title or record.full_title or '').strip()
-                normalized = self._normalize_title(title)
+                normalized = normalize_title(title)
                 if not normalized:
                     continue
                 unique_key = ('show', normalized)
-                rating_key = self._safe_int(record.grandparent_rating_key) or self._safe_int(record.rating_key)
+                rating_key = to_int(record.grandparent_rating_key) or to_int(record.rating_key)
             else:
                 title = (record.title or record.full_title or '').strip()
-                normalized = self._normalize_title(title)
+                normalized = normalize_title(title)
                 if not normalized:
                     continue
-                unique_key = ('movie', normalized, self._safe_int(record.year))
-                rating_key = self._safe_int(record.rating_key)
+                unique_key = ('movie', normalized, to_int(record.year))
+                rating_key = to_int(record.rating_key)
 
             if unique_key in seen_keys:
                 continue
@@ -641,14 +642,14 @@ class AnalyticsService:
         )
         for row in lifetime_rows:
             media_type = (row.media_type or '').strip().lower()
-            title_normalized = self._normalize_title(row.title_normalized)
+            title_normalized = normalize_title(row.title_normalized)
             if not title_normalized:
                 continue
 
             if media_type == 'show':
                 key: tuple[Any, ...] = ('show', title_normalized)
             elif media_type == 'movie':
-                key = ('movie', title_normalized, self._safe_int(row.year))
+                key = ('movie', title_normalized, to_int(row.year))
             else:
                 continue
 
@@ -667,14 +668,14 @@ class AnalyticsService:
             )
             for row in cached_rows:
                 media_type = (row.media_type or '').strip().lower()
-                title_normalized = self._normalize_title(row.title)
+                title_normalized = normalize_title(row.title)
                 if not title_normalized:
                     continue
 
                 if media_type == 'show':
                     key = ('show', title_normalized)
                 elif media_type == 'movie':
-                    key = ('movie', title_normalized, self._safe_int(row.year))
+                    key = ('movie', title_normalized, to_int(row.year))
                 else:
                     continue
 
@@ -711,18 +712,18 @@ class AnalyticsService:
 
             if is_show:
                 title = (record.grandparent_title or record.title or record.full_title or '').strip()
-                normalized = self._normalize_title(title)
+                normalized = normalize_title(title)
                 if not normalized:
                     continue
                 key = ('show', normalized)
-                rating_key = self._safe_int(record.grandparent_rating_key) or self._safe_int(record.rating_key)
+                rating_key = to_int(record.grandparent_rating_key) or to_int(record.rating_key)
             else:
                 title = (record.title or record.full_title or '').strip()
-                normalized = self._normalize_title(title)
+                normalized = normalize_title(title)
                 if not normalized:
                     continue
-                key = ('movie', normalized, self._safe_int(record.year))
-                rating_key = self._safe_int(record.rating_key)
+                key = ('movie', normalized, to_int(record.year))
+                rating_key = to_int(record.rating_key)
 
             if key not in target_keys or key in resolved_by_key:
                 continue
@@ -1094,21 +1095,6 @@ class AnalyticsService:
         return 'Unknown'
 
     @staticmethod
-    def _safe_int(value: Any) -> Optional[int]:
-        """Convert incoming API values to int where possible."""
-        try:
-            if value in (None, ''):
-                return None
-            return int(value)
-        except (TypeError, ValueError):
-            return None
-
-    @staticmethod
-    def _normalize_title(value: Any) -> str:
-        """Normalize titles for case-insensitive exact matching."""
-        return str(value or '').strip().lower()
-
-    @staticmethod
     def _split_movie_title_year(full_title: str) -> tuple[str, Optional[int]]:
         """Split a movie label like 'Title (2024)' into title and year."""
         text = str(full_title or '').strip()
@@ -1120,17 +1106,23 @@ class AnalyticsService:
             return text, None
 
         title = (match.group('title') or '').strip() or text
-        year = AnalyticsService._safe_int(match.group('year'))
+        year = to_int(match.group('year'))
         return title, year
 
-    def _build_movie_poster_cards(self, df_movies: pd.DataFrame) -> List[Dict[str, Any]]:
+    def _build_poster_cards(self, df: pd.DataFrame, media_kind: str) -> List[Dict[str, Any]]:
         """
-        Build ordered poster card metadata for top-movie dashboard display.
+        Build ordered poster card metadata for dashboard display.
 
-        Output order always follows df_movies rank order (most watched first).
+        Args:
+            df: DataFrame with top media rows (movies or TV).
+            media_kind: Either ``'movie'`` or ``'tv'``.
+
+        Output order always follows df rank order (most watched first).
         """
-        if df_movies.empty:
+        if df.empty:
             return []
+
+        is_movie = media_kind == 'movie'
 
         servers = ServerConfig.query.filter(ServerConfig.is_active.is_(True)).all()
         server_map = {
@@ -1140,38 +1132,54 @@ class AnalyticsService:
         }
 
         cards: List[Dict[str, Any]] = []
-        for index, row in enumerate(df_movies.itertuples(index=False), start=1):
-            full_title = str(getattr(row, 'full_title', '') or '').strip()
-            if not full_title:
-                continue
+        for index, row in enumerate(df.itertuples(index=False), start=1):
+            if is_movie:
+                full_title = str(getattr(row, 'full_title', '') or '').strip()
+                if not full_title:
+                    continue
+                parsed_title, parsed_year = self._split_movie_title_year(full_title)
+                display_title = parsed_title or full_title
+            else:
+                full_title = str(getattr(row, 'grandparent_title', '') or '').strip()
+                if not full_title:
+                    continue
+                parsed_title, parsed_year = full_title, None
+                display_title = full_title
 
-            plays = self._safe_int(getattr(row, 'count', 0)) or 0
-            parsed_title, parsed_year = self._split_movie_title_year(full_title)
+            plays = to_int(getattr(row, 'count', 0)) or 0
 
-            normalized_candidates = {
-                self._normalize_title(full_title),
-                self._normalize_title(parsed_title),
-            }
-            normalized_candidates = {item for item in normalized_candidates if item}
-            title_filters = []
-            for normalized in normalized_candidates:
-                title_filters.append(func.lower(ViewingHistory.full_title) == normalized)
-                title_filters.append(func.lower(ViewingHistory.title) == normalized)
+            # --- find a ViewingHistory record for the poster thumbnail ---
+            if is_movie:
+                normalized_candidates = {normalize_title(full_title), normalize_title(parsed_title)}
+                normalized_candidates = {item for item in normalized_candidates if item}
+                title_filters = []
+                for normalized in normalized_candidates:
+                    title_filters.append(func.lower(ViewingHistory.full_title) == normalized)
+                    title_filters.append(func.lower(ViewingHistory.title) == normalized)
 
-            query = ViewingHistory.query.filter(func.lower(ViewingHistory.media_type) == 'movie')
-            if title_filters:
-                query = query.filter(or_(*title_filters))
-
-            if parsed_year is not None:
-                query = query.filter(
-                    or_(ViewingHistory.year == parsed_year, ViewingHistory.year.is_(None))
+                query = ViewingHistory.query.filter(func.lower(ViewingHistory.media_type) == 'movie')
+                if title_filters:
+                    query = query.filter(or_(*title_filters))
+                if parsed_year is not None:
+                    query = query.filter(
+                        or_(ViewingHistory.year == parsed_year, ViewingHistory.year.is_(None))
+                    )
+            else:
+                normalized_title = normalize_title(full_title)
+                if not normalized_title:
+                    continue
+                query = (
+                    ViewingHistory.query
+                    .filter(func.lower(ViewingHistory.media_type).in_(['episode', 'tv', 'show']))
+                    .filter(func.lower(ViewingHistory.grandparent_title) == normalized_title)
                 )
 
             record = query.order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc()).first()
+
             media_id = self._resolve_media_id_for_stream(
-                media_type='movie',
-                title=parsed_title or full_title,
-                grandparent_title='',
+                media_type='movie' if is_movie else 'episode',
+                title=display_title if is_movie else '',
+                grandparent_title='' if is_movie else full_title,
                 year=parsed_year,
             )
 
@@ -1186,14 +1194,17 @@ class AnalyticsService:
                         'height': 330,
                         'fallback': 'poster',
                     }
-                    rating_key = self._safe_int(record.rating_key)
+                    if is_movie:
+                        rating_key = to_int(record.rating_key)
+                    else:
+                        rating_key = to_int(record.grandparent_rating_key) or to_int(record.rating_key)
                     if rating_key is not None:
                         params['rating_key'] = rating_key
                     poster_url = f"{protocol}://{server.ip_address}/pms_image_proxy?{urlencode(params)}"
 
             cards.append({
                 'rank': index,
-                'title': parsed_title or full_title,
+                'title': display_title,
                 'full_title': full_title,
                 'plays': plays,
                 'media_id': media_id,
@@ -1202,74 +1213,11 @@ class AnalyticsService:
 
         return cards
 
+    def _build_movie_poster_cards(self, df_movies: pd.DataFrame) -> List[Dict[str, Any]]:
+        return self._build_poster_cards(df_movies, 'movie')
+
     def _build_tv_poster_cards(self, df_tv: pd.DataFrame) -> List[Dict[str, Any]]:
-        """
-        Build ordered poster card metadata for top-TV dashboard display.
-
-        Output order always follows df_tv rank order (most watched first).
-        """
-        if df_tv.empty:
-            return []
-
-        servers = ServerConfig.query.filter(ServerConfig.is_active.is_(True)).all()
-        server_map = {
-            (server.name or '').strip(): server
-            for server in servers
-            if server.name and server.ip_address
-        }
-
-        cards: List[Dict[str, Any]] = []
-        for index, row in enumerate(df_tv.itertuples(index=False), start=1):
-            show_title = str(getattr(row, 'grandparent_title', '') or '').strip()
-            if not show_title:
-                continue
-
-            plays = self._safe_int(getattr(row, 'count', 0)) or 0
-            normalized_title = self._normalize_title(show_title)
-            if not normalized_title:
-                continue
-
-            record = (
-                ViewingHistory.query
-                .filter(func.lower(ViewingHistory.media_type).in_(['episode', 'tv', 'show']))
-                .filter(func.lower(ViewingHistory.grandparent_title) == normalized_title)
-                .order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc())
-                .first()
-            )
-
-            media_id = self._resolve_media_id_for_stream(
-                media_type='episode',
-                title='',
-                grandparent_title=show_title,
-                year=None,
-            )
-
-            poster_url = ''
-            if record and record.thumb:
-                server = server_map.get((record.server_name or '').strip())
-                if server:
-                    protocol = 'https' if server.use_ssl else 'http'
-                    params: Dict[str, Any] = {
-                        'img': record.thumb,
-                        'width': 220,
-                        'height': 330,
-                        'fallback': 'poster',
-                    }
-                    rating_key = self._safe_int(record.grandparent_rating_key) or self._safe_int(record.rating_key)
-                    if rating_key is not None:
-                        params['rating_key'] = rating_key
-                    poster_url = f"{protocol}://{server.ip_address}/pms_image_proxy?{urlencode(params)}"
-
-            cards.append({
-                'rank': index,
-                'title': show_title,
-                'full_title': show_title,
-                'plays': plays,
-                'media_id': media_id,
-                'poster_url': poster_url,
-            })
-
-        return cards
+        return self._build_poster_cards(df_tv, 'tv')
 
     def _resolve_history_id_for_stream(
         self,
@@ -1285,8 +1233,8 @@ class AnalyticsService:
         can route to the content detail page.
         """
         is_episode = (media_type or '').lower() == 'episode'
-        target_key = self._safe_int(grandparent_rating_key if is_episode else rating_key)
-        target_title = self._normalize_title(grandparent_title if is_episode else title)
+        target_key = to_int(grandparent_rating_key if is_episode else rating_key)
+        target_title = normalize_title(grandparent_title if is_episode else title)
 
         base_query = ViewingHistory.query.filter(ViewingHistory.server_name == server_name)
 
@@ -1299,7 +1247,7 @@ class AnalyticsService:
                     candidate_title = (
                         candidate.grandparent_title if is_episode else candidate.title or candidate.full_title
                     )
-                    if self._normalize_title(candidate_title) == target_title:
+                    if normalize_title(candidate_title) == target_title:
                         return candidate.id
             return candidates[0].id
 
@@ -1337,7 +1285,7 @@ class AnalyticsService:
         route through the media-based content detail endpoint.
         """
         is_episode = (media_type or '').lower() == 'episode'
-        target_title = self._normalize_title(grandparent_title if is_episode else title)
+        target_title = normalize_title(grandparent_title if is_episode else title)
         if not target_title:
             return None
 
@@ -1356,7 +1304,7 @@ class AnalyticsService:
             .filter(func.lower(CachedMedia.title) == target_title)
         )
 
-        target_year = self._safe_int(year)
+        target_year = to_int(year)
         if target_year is not None:
             exact_year = record_query.filter(CachedMedia.year == target_year).first()
             if exact_year:
@@ -1370,6 +1318,95 @@ class AnalyticsService:
         best = max(matches, key=lambda item: (item.added_at or -1, item.id))
         return best.id
 
+    def _parse_session(self, session: dict, server_config, server_order: str) -> Dict[str, Any]:
+        """Parse a single Tautulli session into a stream dictionary."""
+        ip_address = session.get('ip_address', 'Unknown')
+        location = self._get_location_from_ip(ip_address)
+
+        media_type = session.get('media_type', '')
+        if media_type == 'episode':
+            poster_thumb = session.get('grandparent_thumb', session.get('thumb', ''))
+        else:
+            poster_thumb = session.get('thumb', '')
+
+        rating_key = session.get('rating_key', '')
+        poster_url = ''
+        if poster_thumb and rating_key:
+            poster_url = f"{server_config.ip_address}/pms_image_proxy?img={poster_thumb}&rating_key={rating_key}&width=150&height=225&fallback=poster"
+
+        full_title = session.get('full_title', session.get('title', 'Unknown'))
+        grandparent_title = session.get('grandparent_title', '')
+        title = full_title
+        subtitle = ''
+
+        if media_type == 'episode':
+            season = session.get('parent_media_index', '')
+            episode = session.get('media_index', '')
+            if season and episode:
+                try:
+                    subtitle = f"S{int(season):02d}E{int(episode):02d}"
+                    if full_title and grandparent_title and full_title != grandparent_title:
+                        if ' - ' in full_title:
+                            episode_name = full_title.split(' - ', 1)[1]
+                            subtitle += f" - {episode_name}"
+                except (ValueError, TypeError):
+                    pass
+            title = grandparent_title if grandparent_title else full_title
+        elif media_type == 'movie':
+            year = session.get('year', '')
+            if year:
+                try:
+                    subtitle = f"({int(year)})"
+                except (ValueError, TypeError):
+                    pass
+
+        transcode_decision = session.get('transcode_decision', '').lower()
+        video_resolution = session.get('stream_video_full_resolution', '')
+        if transcode_decision == 'direct play':
+            quality = 'Direct Play'
+        elif transcode_decision == 'transcode':
+            quality = 'Transcode'
+        elif transcode_decision == 'copy':
+            quality = 'Direct Stream'
+        else:
+            quality = transcode_decision.title() if transcode_decision else ''
+
+        if quality and video_resolution:
+            quality = f"{quality} - {video_resolution}"
+
+        platform = session.get('platform', 'Unknown')
+        product = session.get('product', '')
+
+        try:
+            bandwidth_kbps = int(session.get('bandwidth', 0) or 0)
+            bandwidth_mbps = round(bandwidth_kbps / 1000, 1) if bandwidth_kbps else 0
+        except (ValueError, TypeError):
+            bandwidth_mbps = 0
+
+        return {
+            'server': server_config.name,
+            'server_order': server_order,
+            'user': session.get('friendly_name', session.get('username', 'Unknown')),
+            'title': title,
+            'subtitle': subtitle,
+            'media_type': media_type,
+            'state': session.get('state', 'unknown'),
+            'progress_percent': session.get('progress_percent', 0),
+            'platform': platform,
+            'product': product,
+            'quality': quality,
+            'bandwidth_mbps': bandwidth_mbps,
+            'ip_address': ip_address,
+            'location': location,
+            'poster_url': poster_url,
+            'media_id': self._resolve_media_id_for_stream(
+                media_type=media_type,
+                title=session.get('title', title),
+                grandparent_title=grandparent_title,
+                year=session.get('year'),
+            )
+        }
+
     def get_current_activity(self) -> list:
         """
         Get current streaming activity from all configured servers.
@@ -1379,230 +1416,29 @@ class AnalyticsService:
         """
         from multiplex_stats import TautulliClient
 
-        # Load server configurations
         server_a_config, server_b_config = ConfigService.get_server_configs()
 
         if not server_a_config:
             return []
 
         current_streams = []
-
-        # Fetch activity from Server A
-        try:
-            client_a = TautulliClient(server_a_config)
-            activity_a = client_a.get_activity()
-
-            if activity_a and 'response' in activity_a and 'data' in activity_a['response']:
-                sessions = activity_a['response']['data'].get('sessions', [])
-                for session in sessions:
-                    ip_address = session.get('ip_address', 'Unknown')
-                    location = self._get_location_from_ip(ip_address)
-
-                    # Build poster URL for hover preview
-                    # For TV episodes, use grandparent_thumb (show poster), otherwise use thumb
-                    media_type = session.get('media_type', '')
-                    if media_type == 'episode':
-                        poster_thumb = session.get('grandparent_thumb', session.get('thumb', ''))
-                    else:
-                        poster_thumb = session.get('thumb', '')
-
-                    rating_key = session.get('rating_key', '')
-                    poster_url = ''
-                    if poster_thumb and rating_key:
-                        # Use Tautulli's pms_image_proxy to serve the poster (150x225)
-                        poster_url = f"{server_a_config.ip_address}/pms_image_proxy?img={poster_thumb}&rating_key={rating_key}&width=150&height=225&fallback=poster"
-
-                    # Format title and subtitle like viewing history table
-                    full_title = session.get('full_title', session.get('title', 'Unknown'))
-                    grandparent_title = session.get('grandparent_title', '')
-                    title = full_title
-                    subtitle = ''
-
-                    if media_type == 'episode':
-                        # For TV shows, build "S01E04 - Episode Name" subtitle
-                        season = session.get('parent_media_index', '')
-                        episode = session.get('media_index', '')
-                        if season and episode:
-                            try:
-                                subtitle = f"S{int(season):02d}E{int(episode):02d}"
-                                # If full_title is different from grandparent_title, append episode name
-                                if full_title and grandparent_title and full_title != grandparent_title:
-                                    if ' - ' in full_title:
-                                        episode_name = full_title.split(' - ', 1)[1]
-                                        subtitle += f" - {episode_name}"
-                            except (ValueError, TypeError):
-                                pass
-                        title = grandparent_title if grandparent_title else full_title
-                    elif media_type == 'movie':
-                        # For movies, use year as subtitle
-                        year = session.get('year', '')
-                        if year:
-                            try:
-                                subtitle = f"({int(year)})"
-                            except (ValueError, TypeError):
-                                pass
-
-                    # Format quality like viewing history table
-                    transcode_decision = session.get('transcode_decision', '').lower()
-                    video_resolution = session.get('stream_video_full_resolution', '')
-                    if transcode_decision == 'direct play':
-                        quality = 'Direct Play'
-                    elif transcode_decision == 'transcode':
-                        quality = 'Transcode'
-                    elif transcode_decision == 'copy':
-                        quality = 'Direct Stream'
-                    else:
-                        quality = transcode_decision.title() if transcode_decision else ''
-
-                    # Append video resolution if available
-                    if quality and video_resolution:
-                        quality = f"{quality} - {video_resolution}"
-
-                    # Format platform and product like viewing history table
-                    platform = session.get('platform', 'Unknown')
-                    product = session.get('product', '')
-
-                    # Get bandwidth in Mbps (API returns kbps as string)
-                    try:
-                        bandwidth_kbps = int(session.get('bandwidth', 0) or 0)
-                        bandwidth_mbps = round(bandwidth_kbps / 1000, 1) if bandwidth_kbps else 0
-                    except (ValueError, TypeError):
-                        bandwidth_mbps = 0
-
-                    current_streams.append({
-                        'server': server_a_config.name,
-                        'server_order': 'server-a',
-                        'user': session.get('friendly_name', session.get('username', 'Unknown')),
-                        'title': title,
-                        'subtitle': subtitle,
-                        'media_type': media_type,
-                        'state': session.get('state', 'unknown'),
-                        'progress_percent': session.get('progress_percent', 0),
-                        'platform': platform,
-                        'product': product,
-                        'quality': quality,
-                        'bandwidth_mbps': bandwidth_mbps,
-                        'ip_address': ip_address,
-                        'location': location,
-                        'poster_url': poster_url,
-                        'media_id': self._resolve_media_id_for_stream(
-                            media_type=media_type,
-                            title=session.get('title', title),
-                            grandparent_title=grandparent_title,
-                            year=session.get('year'),
-                        )
-                    })
-        except Exception as e:
-            print(f"Error fetching activity from {server_a_config.name}: {e}")
-
-        # Fetch activity from Server B if configured
+        server_configs = [(server_a_config, 'server-a')]
         if server_b_config:
+            server_configs.append((server_b_config, 'server-b'))
+
+        for server_config, server_order in server_configs:
             try:
-                client_b = TautulliClient(server_b_config)
-                activity_b = client_b.get_activity()
+                client = TautulliClient(server_config)
+                activity = client.get_activity()
 
-                if activity_b and 'response' in activity_b and 'data' in activity_b['response']:
-                    sessions = activity_b['response']['data'].get('sessions', [])
+                if activity and 'response' in activity and 'data' in activity['response']:
+                    sessions = activity['response']['data'].get('sessions', [])
                     for session in sessions:
-                        ip_address = session.get('ip_address', 'Unknown')
-                        location = self._get_location_from_ip(ip_address)
-
-                        # Build poster URL for hover preview
-                        # For TV episodes, use grandparent_thumb (show poster), otherwise use thumb
-                        media_type = session.get('media_type', '')
-                        if media_type == 'episode':
-                            poster_thumb = session.get('grandparent_thumb', session.get('thumb', ''))
-                        else:
-                            poster_thumb = session.get('thumb', '')
-
-                        rating_key = session.get('rating_key', '')
-                        poster_url = ''
-                        if poster_thumb and rating_key:
-                            # Use Tautulli's pms_image_proxy to serve the poster (150x225)
-                            poster_url = f"{server_b_config.ip_address}/pms_image_proxy?img={poster_thumb}&rating_key={rating_key}&width=150&height=225&fallback=poster"
-
-                        # Format title and subtitle like viewing history table
-                        full_title = session.get('full_title', session.get('title', 'Unknown'))
-                        grandparent_title = session.get('grandparent_title', '')
-                        title = full_title
-                        subtitle = ''
-
-                        if media_type == 'episode':
-                            # For TV shows, build "S01E04 - Episode Name" subtitle
-                            season = session.get('parent_media_index', '')
-                            episode = session.get('media_index', '')
-                            if season and episode:
-                                try:
-                                    subtitle = f"S{int(season):02d}E{int(episode):02d}"
-                                    # If full_title is different from grandparent_title, append episode name
-                                    if full_title and grandparent_title and full_title != grandparent_title:
-                                        if ' - ' in full_title:
-                                            episode_name = full_title.split(' - ', 1)[1]
-                                            subtitle += f" - {episode_name}"
-                                except (ValueError, TypeError):
-                                    pass
-                            title = grandparent_title if grandparent_title else full_title
-                        elif media_type == 'movie':
-                            # For movies, use year as subtitle
-                            year = session.get('year', '')
-                            if year:
-                                try:
-                                    subtitle = f"({int(year)})"
-                                except (ValueError, TypeError):
-                                    pass
-
-                        # Format quality like viewing history table
-                        transcode_decision = session.get('transcode_decision', '').lower()
-                        video_resolution = session.get('stream_video_full_resolution', '')
-                        if transcode_decision == 'direct play':
-                            quality = 'Direct Play'
-                        elif transcode_decision == 'transcode':
-                            quality = 'Transcode'
-                        elif transcode_decision == 'copy':
-                            quality = 'Direct Stream'
-                        else:
-                            quality = transcode_decision.title() if transcode_decision else ''
-
-                        # Append video resolution if available
-                        if quality and video_resolution:
-                            quality = f"{quality} - {video_resolution}"
-
-                        # Format platform and product like viewing history table
-                        platform = session.get('platform', 'Unknown')
-                        product = session.get('product', '')
-
-                        # Get bandwidth in Mbps (API returns kbps as string)
-                        try:
-                            bandwidth_kbps = int(session.get('bandwidth', 0) or 0)
-                            bandwidth_mbps = round(bandwidth_kbps / 1000, 1) if bandwidth_kbps else 0
-                        except (ValueError, TypeError):
-                            bandwidth_mbps = 0
-
-                        current_streams.append({
-                            'server': server_b_config.name,
-                            'server_order': 'server-b',
-                            'user': session.get('friendly_name', session.get('username', 'Unknown')),
-                            'title': title,
-                            'subtitle': subtitle,
-                            'media_type': media_type,
-                            'state': session.get('state', 'unknown'),
-                            'progress_percent': session.get('progress_percent', 0),
-                            'platform': platform,
-                            'product': product,
-                            'quality': quality,
-                            'bandwidth_mbps': bandwidth_mbps,
-                            'ip_address': ip_address,
-                            'location': location,
-                            'poster_url': poster_url,
-                            'media_id': self._resolve_media_id_for_stream(
-                                media_type=media_type,
-                                title=session.get('title', title),
-                                grandparent_title=grandparent_title,
-                                year=session.get('year'),
-                            )
-                        })
+                        current_streams.append(
+                            self._parse_session(session, server_config, server_order)
+                        )
             except Exception as e:
-                print(f"Error fetching activity from {server_b_config.name}: {e}")
+                print(f"Error fetching activity from {server_config.name}: {e}")
 
         return current_streams
 
@@ -1657,34 +1493,39 @@ class AnalyticsService:
 
         Fetches user info from get_users API, play counts from get_library_user_stats,
         and last play dates from the local ViewingHistory database.
+        Servers are queried in parallel using a thread pool.
 
         Returns:
             List of dictionaries containing user information from all servers
         """
+        from concurrent.futures import ThreadPoolExecutor
         from multiplex_stats import TautulliClient
         from sqlalchemy import func
 
-        # Load server configurations
         server_a_config, server_b_config = ConfigService.get_server_configs()
 
         if not server_a_config:
             return []
 
-        # Dictionary to aggregate user data by friendly_name
-        users_by_name: Dict[str, Dict[str, Any]] = {}
-
         server_a_key = 'server_a_plays'
         server_b_key = 'server_b_plays' if server_b_config else None
+        play_keys = [server_a_key]
+        if server_b_key:
+            play_keys.append(server_b_key)
 
         def ensure_play_keys(user_data: Dict[str, Any]) -> None:
-            if server_a_key not in user_data:
-                user_data[server_a_key] = 0
-            if server_b_key and server_b_key not in user_data:
-                user_data[server_b_key] = 0
+            for key in play_keys:
+                if key not in user_data:
+                    user_data[key] = 0
 
-        def process_server(client: TautulliClient, server_config, server_ip: str, plays_key: str):
-            """Process users and play counts from a single server."""
-            # First, get user list for metadata (username, email, thumb, etc.)
+        def fetch_server_data(server_config, server_ip: str, plays_key: str):
+            """Fetch users and play counts from a single server (thread-safe)."""
+            users: Dict[str, Dict[str, Any]] = {}  # friendly_name -> user_data
+            play_counts: Dict[str, int] = {}  # friendly_name -> plays for this server
+            library_counts: Dict[str, int] = {}  # friendly_name -> library count
+
+            client = TautulliClient(server_config)
+
             try:
                 users_response = client.get_users()
                 if users_response and 'response' in users_response and 'data' in users_response['response']:
@@ -1693,38 +1534,28 @@ class AnalyticsService:
                         if not friendly_name:
                             continue
 
-                        # Count shared libraries from the shared_libraries list
                         shared_libs = user.get('shared_libraries', [])
-                        library_count = len(shared_libs) if shared_libs else 0
+                        library_counts[friendly_name] = len(shared_libs) if shared_libs else 0
 
-                        if friendly_name not in users_by_name:
-                            # Build user thumb URL
-                            user_thumb = user.get('user_thumb', '')
-                            thumb_url = ''
-                            if user_thumb:
-                                thumb_url = f"{server_ip}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
+                        user_thumb = user.get('user_thumb', '')
+                        thumb_url = ''
+                        if user_thumb:
+                            thumb_url = f"{server_ip}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
 
-                            user_data = {
-                                'user_id': user.get('user_id'),
-                                'friendly_name': friendly_name,
-                                'username': user.get('username', ''),
-                                'email': user.get('email', ''),
-                                'total_plays': 0,
-                                'last_play': None,  # Unix timestamp of most recent play
-                                'user_thumb': thumb_url,
-                                'is_active': user.get('is_active', 1),
-                                'library_count': library_count,
-                            }
-                            ensure_play_keys(user_data)
-                            users_by_name[friendly_name] = user_data
-                        else:
-                            # User already exists from another server, add library count
-                            ensure_play_keys(users_by_name[friendly_name])
-                            users_by_name[friendly_name]['library_count'] += library_count
+                        users[friendly_name] = {
+                            'user_id': user.get('user_id'),
+                            'friendly_name': friendly_name,
+                            'username': user.get('username', ''),
+                            'email': user.get('email', ''),
+                            'total_plays': 0,
+                            'last_play': None,
+                            'user_thumb': thumb_url,
+                            'is_active': user.get('is_active', 1),
+                            'library_count': 0,
+                        }
             except Exception as e:
                 print(f"Error fetching users from {server_config.name}: {e}")
 
-            # Now get play counts from library stats (Movies = section 1, TV = section 2)
             for section_id in [1, 2]:
                 try:
                     stats_response = client.get_library_user_stats(section_id=section_id)
@@ -1732,38 +1563,56 @@ class AnalyticsService:
                         for stat in stats_response['response']['data']:
                             friendly_name = stat.get('friendly_name', '')
                             plays = stat.get('total_plays', 0)
+                            if friendly_name:
+                                play_counts[friendly_name] = play_counts.get(friendly_name, 0) + plays
 
-                            if friendly_name in users_by_name:
-                                ensure_play_keys(users_by_name[friendly_name])
-                                users_by_name[friendly_name]['total_plays'] += plays
-                                users_by_name[friendly_name][plays_key] += plays
-                            elif friendly_name:
-                                # User exists in library stats but not in users list
-                                user_data = {
-                                    'user_id': stat.get('user_id'),
-                                    'friendly_name': friendly_name,
-                                    'username': '',
-                                    'email': '',
-                                    'total_plays': plays,
-                                    'last_play': None,
-                                    'user_thumb': '',
-                                    'is_active': 1,
-                                    'library_count': 0,
-                                }
-                                ensure_play_keys(user_data)
-                                user_data[plays_key] = plays
-                                users_by_name[friendly_name] = user_data
+                                if friendly_name not in users:
+                                    users[friendly_name] = {
+                                        'user_id': stat.get('user_id'),
+                                        'friendly_name': friendly_name,
+                                        'username': '',
+                                        'email': '',
+                                        'total_plays': 0,
+                                        'last_play': None,
+                                        'user_thumb': '',
+                                        'is_active': 1,
+                                        'library_count': 0,
+                                    }
                 except Exception as e:
                     print(f"Error fetching library stats (section {section_id}) from {server_config.name}: {e}")
 
-        # Process Server A
-        client_a = TautulliClient(server_a_config)
-        process_server(client_a, server_a_config, server_a_config.ip_address, server_a_key)
+            return users, play_counts, library_counts, plays_key
 
-        # Process Server B if configured
+        # Build task list and run in parallel
+        tasks = [(server_a_config, server_a_config.ip_address, server_a_key)]
         if server_b_config:
-            client_b = TautulliClient(server_b_config)
-            process_server(client_b, server_b_config, server_b_config.ip_address, server_b_key)
+            tasks.append((server_b_config, server_b_config.ip_address, server_b_key))
+
+        with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+            results = list(executor.map(lambda t: fetch_server_data(*t), tasks))
+
+        # Merge results from all servers
+        users_by_name: Dict[str, Dict[str, Any]] = {}
+        for users, play_counts, library_counts, plays_key in results:
+            for friendly_name, user_data in users.items():
+                if friendly_name not in users_by_name:
+                    users_by_name[friendly_name] = user_data
+                    ensure_play_keys(users_by_name[friendly_name])
+                else:
+                    users_by_name[friendly_name]['library_count'] += library_counts.get(friendly_name, 0)
+
+            for friendly_name, plays in play_counts.items():
+                if friendly_name in users_by_name:
+                    ensure_play_keys(users_by_name[friendly_name])
+                    users_by_name[friendly_name]['total_plays'] += plays
+                    users_by_name[friendly_name][plays_key] += plays
+
+            # Apply library counts for first occurrence
+            for friendly_name, count in library_counts.items():
+                if friendly_name in users_by_name:
+                    # Only set (not add) if this is the first server that created the user
+                    if users_by_name[friendly_name]['library_count'] == 0:
+                        users_by_name[friendly_name]['library_count'] = count
 
         # Get last play dates from ViewingHistory database
         # Query for max(started) grouped by user (username field in ViewingHistory)

@@ -173,6 +173,9 @@
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="{{ url_for('static', filename='js/hero-quilt.js') }}"></script>
+<script src="{{ url_for('static', filename='js/nav-loading.js') }}"></script>
+<script src="{{ url_for('static', filename='js/progress-renderer.js') }}"></script>
 
 <style>
 #stats-grid .stat-card {
@@ -599,103 +602,14 @@ $(document).ready(function() {
     var settingsDataSyncUrl = '{{ url_for("settings.index") }}#data-sync-section';
     var currentMediaView = 'movies';
     var contentDetailBase = '{{ url_for("main.media_content_details", media_id=0) }}';
-    var mediaHeroRows = 2;
-    var mediaHeroGap = 2;
-    var mediaHeroOverflowColumns = 3;
-    var mediaHeroPosters = [];
-    var mediaHeroBackdrop = document.getElementById('media-hero-backdrop');
-    var mediaHeroElement = document.getElementById('media-hero');
-    var mediaHeroResizeTimer = null;
-
-    function calculateMediaHeroQuiltLayout() {
-        if (!mediaHeroBackdrop || !mediaHeroElement) {
-            return null;
-        }
-
-        var heroHeight = Math.max(124, mediaHeroElement.clientHeight || 0);
-        var heroWidth = Math.max(320, mediaHeroElement.clientWidth || 0);
-        var tileHeight = Math.max(60, Math.floor((heroHeight - mediaHeroGap * (mediaHeroRows - 1)) / mediaHeroRows));
-        var tileWidth = Math.max(40, Math.round(tileHeight * (2 / 3))); // poster ratio 2:3
-        var columns = Math.max(1, Math.ceil(heroWidth / (tileWidth + mediaHeroGap)) + mediaHeroOverflowColumns);
-
-        return {
-            rows: mediaHeroRows,
-            gap: mediaHeroGap,
-            tileHeight: tileHeight,
-            tileWidth: tileWidth,
-            columns: columns,
-            tileCount: columns * mediaHeroRows
-        };
-    }
-
-    function renderMediaHeroPosters(posters) {
-        if (!mediaHeroBackdrop) {
-            return;
-        }
-
-        mediaHeroBackdrop.innerHTML = '';
-        if (!Array.isArray(posters) || posters.length === 0) {
-            return;
-        }
-
-        var normalizedPosters = posters.filter(function(item) {
-            return item && item.poster_url;
-        });
-        if (normalizedPosters.length === 0) {
-            return;
-        }
-
-        var layout = calculateMediaHeroQuiltLayout();
-        if (!layout) {
-            return;
-        }
-
-        mediaHeroBackdrop.style.gridTemplateRows = 'repeat(' + layout.rows + ', ' + layout.tileHeight + 'px)';
-        mediaHeroBackdrop.style.gridAutoColumns = layout.tileWidth + 'px';
-        mediaHeroBackdrop.style.rowGap = layout.gap + 'px';
-        mediaHeroBackdrop.style.columnGap = layout.gap + 'px';
-
-        for (var i = 0; i < layout.tileCount; i++) {
-            var item = normalizedPosters[i % normalizedPosters.length];
-            var posterUrl = String(item.poster_url || '').replace(/"/g, '\\"');
-            var tile = document.createElement('div');
-            tile.className = 'media-hero-tile';
-            tile.style.backgroundImage = 'url("' + posterUrl + '")';
-            if (item.title) {
-                tile.setAttribute('title', item.title);
-            }
-            mediaHeroBackdrop.appendChild(tile);
-        }
-    }
-
-    function loadMediaHeroPosters() {
-        fetch('{{ url_for("main.api_media_top_posters") }}')
-            .then(function(response) {
-                if (!response.ok) {
-                    throw new Error('Failed to load media hero posters.');
-                }
-                return response.json();
-            })
-            .then(function(payload) {
-                mediaHeroPosters = Array.isArray(payload.posters) ? payload.posters : [];
-                renderMediaHeroPosters(mediaHeroPosters);
-            })
-            .catch(function(error) {
-                console.error('Error loading media hero posters:', error);
-            });
-    }
-
-    function scheduleMediaHeroRerender() {
-        if (!mediaHeroPosters.length) {
-            return;
-        }
-        if (mediaHeroResizeTimer) {
-            clearTimeout(mediaHeroResizeTimer);
-        }
-        mediaHeroResizeTimer = setTimeout(function() {
-            renderMediaHeroPosters(mediaHeroPosters);
-        }, 120);
-    }
+    var mediaHero = new HeroQuilt({
+        backdropId: 'media-hero-backdrop',
+        heroId: 'media-hero',
+        tileClass: 'media-hero-tile',
+        rows: 2,
+        minHeight: 124,
+        fetchUrl: '{{ url_for("main.api_media_top_posters") }}'
+    });
 
     function escapeHtml(value) {
         return String(value || '')
@@ -704,19 +618,6 @@ $(document).ready(function() {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
-    }
-
-    function showNavigationLoading(titleText) {
-        var overlay = document.getElementById('nav-loading-overlay');
-        var titleEl = document.getElementById('nav-loading-title');
-        var subtitleEl = document.getElementById('nav-loading-subtitle');
-        if (!overlay || !titleEl || !subtitleEl) {
-            return;
-        }
-        titleEl.textContent = 'Loading content details...';
-        subtitleEl.textContent = titleText || 'Please wait';
-        overlay.classList.add('is-open');
-        overlay.setAttribute('aria-hidden', 'false');
     }
 
     function setDataSectionsVisible(visible) {
@@ -777,28 +678,6 @@ $(document).ready(function() {
         button.textContent = text || getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data));
     }
 
-    function formatLastUpdatedValue(isoString) {
-        if (!isoString) {
-            return 'Never';
-        }
-        var parsed = new Date(isoString);
-        if (isNaN(parsed.getTime())) {
-            return isoString;
-        }
-        var year = parsed.getFullYear();
-        var month = String(parsed.getMonth() + 1).padStart(2, '0');
-        var day = String(parsed.getDate()).padStart(2, '0');
-        var hour24 = parsed.getHours();
-        var minute = String(parsed.getMinutes()).padStart(2, '0');
-        var period = hour24 >= 12 ? 'PM' : 'AM';
-        var hour12 = hour24 % 12;
-        if (hour12 === 0) {
-            hour12 = 12;
-        }
-        var hour = String(hour12).padStart(2, '0');
-        return year + '-' + month + '-' + day + ' ' + hour + ':' + minute + ' ' + period;
-    }
-
     function formatLabeledTimestampElement(elementId, labelPrefix) {
         var element = document.getElementById(elementId);
         if (!element) {
@@ -819,45 +698,7 @@ $(document).ready(function() {
     }
 
     function renderLifetimeServerProgress(servers) {
-        var container = document.getElementById('lifetime-server-progress-container');
-        if (!container) {
-            return;
-        }
-
-        var html = '';
-        (servers || []).forEach(function(server) {
-            var percent = 0;
-            if (server.total && server.total > 0) {
-                percent = Math.min(100, (server.fetched / server.total) * 100);
-            } else if (server.status === 'success') {
-                percent = 100;
-            }
-
-            var fillClass = '';
-            if (server.status === 'success') fillClass = 'success';
-            else if (server.status === 'failed') fillClass = 'failed';
-
-            html += '<div class="server-progress">';
-            html += '<div class="server-progress-header">';
-            html += '<span class="server-name">' + (server.name || 'Server');
-            html += '<span class="server-status-badge ' + (server.status || 'idle') + '">' + (server.status || 'idle') + '</span>';
-            html += '</span>';
-            html += '<span class="server-step">' + (server.step || '') + '</span>';
-            html += '</div>';
-            html += '<div class="server-progress-bar">';
-            html += '<div class="server-progress-fill ' + fillClass + '" style="width: ' + percent + '%;"></div>';
-            html += '</div>';
-            html += '<div class="server-fetched">' + ((server.fetched || 0).toLocaleString()) + ' rows';
-            if (server.total) {
-                html += ' / ' + server.total.toLocaleString() + ' total';
-            }
-            html += '</div>';
-            if (server.error) {
-                html += '<div class="server-error">' + server.error + '</div>';
-            }
-            html += '</div>';
-        });
-        container.innerHTML = html;
+        renderServerProgress('lifetime-server-progress-container', servers, false);
     }
 
     function updateLifetimeSyncStatus(status) {
@@ -1385,44 +1226,8 @@ $(document).ready(function() {
 
     setMediaTableView('movies');
 
-    function renderServerProgress(servers) {
-        var container = document.getElementById('server-progress-container');
-        var html = '';
-
-        servers.forEach(function(server) {
-            var percent = 0;
-            if (server.total && server.total > 0) {
-                percent = Math.min(100, (server.fetched / server.total) * 100);
-            } else if (server.status === 'success') {
-                percent = 100;
-            }
-
-            var fillClass = '';
-            if (server.status === 'success') fillClass = 'success';
-            else if (server.status === 'failed') fillClass = 'failed';
-
-            html += '<div class="server-progress">';
-            html += '<div class="server-progress-header">';
-            html += '<span class="server-name">' + server.name;
-            html += '<span class="server-status-badge ' + server.status + '">' + server.status + '</span>';
-            html += '</span>';
-            html += '<span class="server-step">' + (server.step || '') + '</span>';
-            html += '</div>';
-            html += '<div class="server-progress-bar">';
-            html += '<div class="server-progress-fill ' + fillClass + '" style="width: ' + percent + '%;"></div>';
-            html += '</div>';
-            html += '<div class="server-fetched">' + (server.fetched || 0).toLocaleString() + ' records';
-            if (server.total) {
-                html += ' / ' + server.total.toLocaleString() + ' total';
-            }
-            html += '</div>';
-            if (server.error) {
-                html += '<div class="server-error">' + server.error + '</div>';
-            }
-            html += '</div>';
-        });
-
-        container.innerHTML = html;
+    function renderMediaServerProgress(servers) {
+        renderServerProgress('server-progress-container', servers, false, { unitLabel: 'records' });
     }
 
     function updateProgress(status) {
@@ -1442,7 +1247,7 @@ $(document).ready(function() {
             setCombinedRefreshButtonState(true, 'Loading Media Library...');
 
             if (status.servers && status.servers.length > 0) {
-                renderServerProgress(status.servers);
+                renderMediaServerProgress(status.servers);
             }
 
             document.getElementById('progress-fetched').textContent = (status.records_fetched || 0).toLocaleString();
@@ -1552,8 +1357,8 @@ $(document).ready(function() {
     updateLifetimeSyncStatus(lifetimeStatus);
     setCombinedRefreshButtonState(false, getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data)));
     updateExportButtonLabel();
-    loadMediaHeroPosters();
-    window.addEventListener('resize', scheduleMediaHeroRerender);
+    mediaHero.load();
+    window.addEventListener('resize', function() { mediaHero.scheduleRerender(); });
 
     $('#moviesTable, #tvShowsTable').on('click', 'a.content-link', function(event) {
         var href = this.getAttribute('href');

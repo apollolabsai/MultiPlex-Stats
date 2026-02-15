@@ -86,7 +86,7 @@ class ViewingHistory(db.Model):
 
     # User info
     user_id = db.Column(db.Integer, nullable=True)
-    user = db.Column(db.String(255), nullable=True)
+    user = db.Column(db.String(255), nullable=True, index=True)
 
     # Media info
     media_type = db.Column(db.String(50), nullable=True)  # movie, episode, track
@@ -102,7 +102,7 @@ class ViewingHistory(db.Model):
     thumb = db.Column(db.String(500), nullable=True)
 
     # Playback info
-    started = db.Column(db.Integer, nullable=True)  # Unix timestamp
+    started = db.Column(db.Integer, nullable=True, index=True)  # Unix timestamp
     stopped = db.Column(db.Integer, nullable=True)  # Unix timestamp
     duration = db.Column(db.Integer, nullable=True)  # Duration in seconds
     play_duration = db.Column(db.Integer, nullable=True)  # Actual play time
@@ -217,7 +217,7 @@ class CachedMedia(db.Model):
     # Common fields
     title = db.Column(db.String(500), nullable=False)
     year = db.Column(db.Integer, nullable=True)
-    added_at = db.Column(db.Integer, nullable=True)  # Unix timestamp (MAX across servers)
+    added_at = db.Column(db.Integer, nullable=True, index=True)  # Unix timestamp (MAX across servers)
     last_played = db.Column(db.Integer, nullable=True)  # Unix timestamp (MAX across servers)
     play_count = db.Column(db.Integer, default=0)  # SUM across servers
     file_size = db.Column(db.BigInteger, default=0)  # SUM across servers (bytes)
@@ -252,6 +252,7 @@ class LifetimeMediaPlayCount(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('media_type', 'title_normalized', 'year', name='uq_lifetime_media_key'),
+        db.Index('ix_lifetime_media_type_title_year', 'media_type', 'title_normalized', 'year'),
     )
 
 
