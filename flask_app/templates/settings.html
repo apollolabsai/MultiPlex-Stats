@@ -238,7 +238,19 @@
         if (isNaN(parsed.getTime())) {
             return value;
         }
-        return parsed.toLocaleString();
+        return parsed
+            .toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })
+            .replace('AM', 'am')
+            .replace('PM', 'pm');
+    }
+
+    function formatTimestampElement(elementId) {
+        var element = document.getElementById(elementId);
+        if (!element) {
+            return;
+        }
+        var rawValue = (element.textContent || '').trim();
+        element.textContent = formatLastUpdatedValue(rawValue);
     }
 
     function getActionButtonLabel() {
@@ -546,6 +558,10 @@
     if (fullSyncButton) {
         fullSyncButton.addEventListener('click', startFullPipeline);
     }
+
+    formatTimestampElement('last-media-sync-value');
+    formatTimestampElement('last-history-sync-value');
+    formatTimestampElement('last-lifetime-sync-value');
 
     if (mediaStatus && mediaStatus.status === 'running') {
         pipelineInProgress = true;
