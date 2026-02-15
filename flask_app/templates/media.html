@@ -785,7 +785,37 @@ $(document).ready(function() {
         if (isNaN(parsed.getTime())) {
             return isoString;
         }
-        return parsed.toLocaleString();
+        var year = parsed.getFullYear();
+        var month = String(parsed.getMonth() + 1).padStart(2, '0');
+        var day = String(parsed.getDate()).padStart(2, '0');
+        var hour24 = parsed.getHours();
+        var minute = String(parsed.getMinutes()).padStart(2, '0');
+        var period = hour24 >= 12 ? 'PM' : 'AM';
+        var hour12 = hour24 % 12;
+        if (hour12 === 0) {
+            hour12 = 12;
+        }
+        var hour = String(hour12).padStart(2, '0');
+        return year + '-' + month + '-' + day + ' ' + hour + ':' + minute + ' ' + period;
+    }
+
+    function formatLabeledTimestampElement(elementId, labelPrefix) {
+        var element = document.getElementById(elementId);
+        if (!element) {
+            return;
+        }
+        var text = (element.textContent || '').trim();
+        if (!text) {
+            return;
+        }
+
+        if (text.indexOf(labelPrefix) === 0) {
+            var rawValue = text.slice(labelPrefix.length).trim();
+            element.textContent = labelPrefix + formatLastUpdatedValue(rawValue);
+            return;
+        }
+
+        element.textContent = formatLastUpdatedValue(text);
     }
 
     function renderLifetimeServerProgress(servers) {
@@ -1515,6 +1545,9 @@ $(document).ready(function() {
             startCombinedRefresh();
         });
     }
+
+    formatLabeledTimestampElement('media-last-sync-label', 'Last media load: ');
+    formatLabeledTimestampElement('lifetime-last-sync-label', 'Last lifetime cache refresh: ');
 
     updateLifetimeSyncStatus(lifetimeStatus);
     setCombinedRefreshButtonState(false, getRunButtonLabel(!!(mediaStatus && mediaStatus.has_data)));

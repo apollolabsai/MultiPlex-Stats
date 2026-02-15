@@ -238,10 +238,18 @@
         if (isNaN(parsed.getTime())) {
             return value;
         }
-        return parsed
-            .toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })
-            .replace('AM', 'am')
-            .replace('PM', 'pm');
+        var year = parsed.getFullYear();
+        var month = String(parsed.getMonth() + 1).padStart(2, '0');
+        var day = String(parsed.getDate()).padStart(2, '0');
+        var hour24 = parsed.getHours();
+        var minute = String(parsed.getMinutes()).padStart(2, '0');
+        var period = hour24 >= 12 ? 'PM' : 'AM';
+        var hour12 = hour24 % 12;
+        if (hour12 === 0) {
+            hour12 = 12;
+        }
+        var hour = String(hour12).padStart(2, '0');
+        return year + '-' + month + '-' + day + ' ' + hour + ':' + minute + ' ' + period;
     }
 
     function formatTimestampElement(elementId) {
