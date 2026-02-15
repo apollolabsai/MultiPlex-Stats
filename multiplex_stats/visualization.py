@@ -422,7 +422,7 @@ def get_day_of_week_stacked_data(
         0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri', 5: 'Sat', 6: 'Sun',
     }
 
-    working = df.copy()
+    working = df[['date_pt', 'Server', 'count']].copy() if 'date_pt' in df.columns else df[['Server', 'count']].copy()
     if not working.empty and 'date_pt' in working.columns:
         working['day_index'] = pd.to_datetime(
             working['date_pt'],
@@ -469,7 +469,7 @@ def get_stream_type_stacked_data(
         'direct stream': 'Direct Stream',
     }
 
-    working = df.copy()
+    working = df[['transcode_decision', 'Server', 'count']].copy() if 'transcode_decision' in df.columns else df[['Server', 'count']].copy()
     if not working.empty and 'transcode_decision' in working.columns:
         decisions = (
             working['transcode_decision']
@@ -508,7 +508,7 @@ def get_hour_of_day_stacked_data(
     categories = [f"{(hour % 12) or 12} {'AM' if hour < 12 else 'PM'}" for hour in range(24)]
     hour_to_label = {hour: categories[hour] for hour in range(24)}
 
-    working = df.copy()
+    working = df[['time_pt', 'Server', 'count']].copy() if 'time_pt' in df.columns else df[['Server', 'count']].copy()
     if not working.empty and 'time_pt' in working.columns:
         parsed = pd.to_datetime(
             working['time_pt'].fillna('').astype(str).str.upper(),
