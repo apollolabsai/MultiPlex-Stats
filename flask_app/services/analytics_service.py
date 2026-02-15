@@ -107,6 +107,9 @@ class AnalyticsService:
         movie_chart = get_movie_chart_data(df_movies, settings.history_days)
         movie_chart['poster_cards'] = self._build_movie_poster_cards(df_movies)
 
+        tv_chart = get_tv_chart_data(df_tv, settings.history_days)
+        tv_chart['poster_cards'] = self._build_tv_poster_cards(df_tv)
+
         charts_json = {
             'daily': get_daily_chart_data(df_daily, server_a_config.name, server_b_config.name if server_b_config else None),
             'monthly': get_monthly_chart_data(df_monthly, server_a_config.name, server_b_config.name if server_b_config else None),
@@ -118,7 +121,7 @@ class AnalyticsService:
                 top_n=settings.top_users
             ),
             'movies': movie_chart,
-            'tv': get_tv_chart_data(df_tv, settings.history_days),
+            'tv': tv_chart,
             'category': get_category_pie_data(df_daily_dist, settings.history_days),
             'server': get_server_pie_data(
                 df_daily_dist, server_a_config.name,
@@ -417,11 +420,13 @@ class AnalyticsService:
 
         df_tv = aggregate_tv_stats(df_history, top_n=tv_count)
         chart_data = get_tv_chart_data(df_tv, history_days)
+        tv_poster_cards = self._build_tv_poster_cards(df_tv)
 
         return {
             'chart_data': chart_data,
             'tv_chart_days': history_days,
-            'top_tv_shows': tv_count
+            'top_tv_shows': tv_count,
+            'tv_poster_cards': tv_poster_cards,
         }
 
     def get_concurrent_streams_json(self, days: int | None = None) -> Dict[str, Any]:
@@ -1190,6 +1195,75 @@ class AnalyticsService:
                 'rank': index,
                 'title': parsed_title or full_title,
                 'full_title': full_title,
+                'plays': plays,
+                'media_id': media_id,
+                'poster_url': poster_url,
+            })
+
+        return cards
+
+    def _build_tv_poster_cards(self, df_tv: pd.DataFrame) -> List[Dict[str, Any]]:
+        """
+        Build ordered poster card metadata for top-TV dashboard display.
+
+        Output order always follows df_tv rank order (most watched first).
+        """
+        if df_tv.empty:
+            return []
+
+        servers = ServerConfig.query.filter(ServerConfig.is_active.is_(True)).all()
+        server_map = {
+            (server.name or '').strip(): server
+            for server in servers
+            if server.name and server.ip_address
+        }
+
+        cards: List[Dict[str, Any]] = []
+        for index, row in enumerate(df_tv.itertuples(index=False), start=1):
+            show_title = str(getattr(row, 'grandparent_title', '') or '').strip()
+            if not show_title:
+                continue
+
+            plays = self._safe_int(getattr(row, 'count', 0)) or 0
+            normalized_title = self._normalize_title(show_title)
+            if not normalized_title:
+                continue
+
+            record = (
+                ViewingHistory.query
+                .filter(func.lower(ViewingHistory.media_type).in_(['episode', 'tv', 'show']))
+                .filter(func.lower(ViewingHistory.grandparent_title) == normalized_title)
+                .order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc())
+                .first()
+            )
+
+            media_id = self._resolve_media_id_for_stream(
+                media_type='episode',
+                title='',
+                grandparent_title=show_title,
+                year=None,
+            )
+
+            poster_url = ''
+            if record and record.thumb:
+                server = server_map.get((record.server_name or '').strip())
+                if server:
+                    protocol = 'https' if server.use_ssl else 'http'
+                    params: Dict[str, Any] = {
+                        'img': record.thumb,
+                        'width': 220,
+                        'height': 330,
+                        'fallback': 'poster',
+                    }
+                    rating_key = self._safe_int(record.grandparent_rating_key) or self._safe_int(record.rating_key)
+                    if rating_key is not None:
+                        params['rating_key'] = rating_key
+                    poster_url = f"{protocol}://{server.ip_address}/pms_image_proxy?{urlencode(params)}"
+
+            cards.append({
+                'rank': index,
+                'title': show_title,
+                'full_title': show_title,
                 'plays': plays,
                 'media_id': media_id,
                 'poster_url': poster_url,

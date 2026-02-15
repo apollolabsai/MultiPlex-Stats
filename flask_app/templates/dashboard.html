@@ -329,6 +329,13 @@
     <div class="chart-container" id="tv-chart-container">
         <!-- Chart rendered by Highcharts -->
     </div>
+    <div class="movie-poster-panel" id="tv-poster-panel" aria-live="polite">
+        <div class="movie-poster-panel-header">
+            <div class="movie-poster-panel-title">Top TV Show Posters</div>
+            <div class="movie-poster-panel-subtitle" id="tv-poster-panel-subtitle"></div>
+        </div>
+        <div class="movie-poster-rail" id="tv-poster-rail"></div>
+    </div>
 </div>
 
 <div class="nav-loading-overlay" id="nav-loading-overlay" aria-hidden="true">
@@ -983,10 +990,10 @@ $(document).ready(function() {
         return link;
     }
 
-    function renderMoviePosterRail(cards) {
-        var panel = document.getElementById('movie-poster-panel');
-        var subtitle = document.getElementById('movie-poster-panel-subtitle');
-        var rail = document.getElementById('movie-poster-rail');
+    function renderPosterRail(cards, options) {
+        var panel = document.getElementById(options.panelId);
+        var subtitle = document.getElementById(options.subtitleId);
+        var rail = document.getElementById(options.railId);
         if (!panel || !subtitle || !rail) {
             return;
         }
@@ -998,7 +1005,9 @@ $(document).ready(function() {
         }
 
         panel.style.display = 'block';
-        subtitle.textContent = cards.length === 1 ? 'Showing 1 movie' : ('Showing ' + cards.length + ' movies');
+        subtitle.textContent = cards.length === 1
+            ? ('Showing 1 ' + options.singularLabel)
+            : ('Showing ' + cards.length + ' ' + options.pluralLabel);
 
         var rows = [cards];
         if (cards.length > 8) {
@@ -1016,6 +1025,26 @@ $(document).ready(function() {
                 row.appendChild(createMoviePosterCard(card));
             });
             rail.appendChild(row);
+        });
+    }
+
+    function renderMoviePosterRail(cards) {
+        renderPosterRail(cards, {
+            panelId: 'movie-poster-panel',
+            subtitleId: 'movie-poster-panel-subtitle',
+            railId: 'movie-poster-rail',
+            singularLabel: 'movie',
+            pluralLabel: 'movies'
+        });
+    }
+
+    function renderTvPosterRail(cards) {
+        renderPosterRail(cards, {
+            panelId: 'tv-poster-panel',
+            subtitleId: 'tv-poster-panel-subtitle',
+            railId: 'tv-poster-rail',
+            singularLabel: 'show',
+            pluralLabel: 'shows'
         });
     }
 
@@ -1290,6 +1319,11 @@ $(document).ready(function() {
         handleContentNavigationClick(event, this, titleText);
     });
 
+    $(document).on('click', '#tv-poster-rail a.movie-poster-card', function(event) {
+        var titleText = this.getAttribute('data-title') || '';
+        handleContentNavigationClick(event, this, titleText);
+    });
+
     bindPosterPreviewHandlers();
     bindAnalyticsRefreshForm();
     bindRefreshHelpTooltip();
@@ -1339,6 +1373,7 @@ $(document).ready(function() {
     }
     if (chartsJson.tv) {
         renderGradientBarChart('tv-chart-container', chartsJson.tv);
+        renderTvPosterRail(chartsJson.tv.poster_cards || []);
     }
 
     // Backward-compatibility: older cached dashboard payloads don't include poster_cards yet.
@@ -1351,6 +1386,17 @@ $(document).ready(function() {
         var initialTopInput = document.getElementById('movie-top-n');
         var initialMovieTop = initialTopInput ? parseInt(initialTopInput.value, 10) : null;
         fetchMovieChart(initialMovieDays, initialMovieTop);
+    }
+
+    // Backward-compatibility: older cached dashboard payloads don't include TV poster_cards yet.
+    var initialTvCards = chartsJson.tv && Array.isArray(chartsJson.tv.poster_cards)
+        ? chartsJson.tv.poster_cards
+        : [];
+    if (!initialTvCards.length) {
+        var initialTvDays = {{ summary.tv_chart_days|default(60) }};
+        var initialTvTopInput = document.getElementById('tv-top-n');
+        var initialTvTop = initialTvTopInput ? parseInt(initialTvTopInput.value, 10) : null;
+        fetchTvChart(initialTvDays, initialTvTop);
     }
 
     // Load users for filter dropdown
@@ -1826,6 +1872,7 @@ $(document).ready(function() {
             })
             .then(function(payload) {
                 renderGradientBarChart('tv-chart-container', payload.chart_data);
+                renderTvPosterRail(payload.tv_poster_cards || []);
                 setActiveRange('tv-range-form', 'tv_days_custom', payload.tv_chart_days, [7, 30, 60, 90]);
                 if (topNInput && payload.top_tv_shows) {
                     topNInput.value = payload.top_tv_shows;
