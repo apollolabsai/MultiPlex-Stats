@@ -3,14 +3,13 @@ Service for content detail pages linked from viewing history.
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlencode
 
 from sqlalchemy import func, or_
 
-from flask_app.models import CachedMedia, ServerConfig, ViewingHistory
+from flask_app.models import CachedMedia, LifetimeMediaPlayCount, ServerConfig, ViewingHistory
 from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
 
@@ -63,6 +62,7 @@ class ContentService:
             is_movie=is_movie,
             content_title=content_title,
             content_year=record.year if is_movie else None,
+            fallback_total_plays=None,
         )
         watch_history = [self._format_watch_history_row(item, content_title) for item in plays]
         plays_chart = self._build_plays_by_year_chart(plays, details_title)
@@ -147,6 +147,7 @@ class ContentService:
             is_movie=is_movie,
             content_title=content_title,
             content_year=media.year if is_movie else None,
+            fallback_total_plays=media.play_count,
         )
         watch_history = [self._format_watch_history_row(item, content_title) for item in plays]
         plays_chart = self._build_plays_by_year_chart(plays, details_title)
@@ -955,92 +956,74 @@ class ContentService:
         is_movie: bool,
         content_title: str,
         content_year: int | None = None,
+        fallback_total_plays: int | None = None,
     ) -> dict[str, Any]:
+        # Content detail should stay fast: prefer local lifetime/cache data and
+        # avoid blocking per-request Tautulli lifetime stat calls.
         local_total_plays = len(plays)
         local_unique_users = len({(item.user or '').strip().lower() for item in plays if item.user})
-
-        active_servers = (
-            ServerConfig.query
-            .filter(ServerConfig.is_active.is_(True))
-            .all()
-        )
-        server_lookup = {server.name: server for server in active_servers if server.name}
-
-        server_rating_keys = self._resolve_server_rating_keys(
-            record=record,
-            plays=plays,
+        lifetime_total = self._lookup_local_lifetime_total(
             is_movie=is_movie,
             content_title=content_title,
             content_year=content_year,
-            active_servers=active_servers,
         )
-        if not server_rating_keys:
-            return {
-                'total_plays': local_total_plays,
-                'unique_users': local_unique_users,
-            }
 
-        endpoint_total_plays = 0
-        user_play_counts: dict[str, int] = {}
-        user_display_names: dict[str, str] = {}
-        user_key_sources = 0
-        item_media_type = 'movie' if is_movie else 'show'
-        endpoint_play_sources = 0
-
-        server_jobs: list[tuple[str, ServerConfig, set[int]]] = []
-        for server_name, rating_keys in server_rating_keys.items():
-            server = server_lookup.get(server_name)
-            if not server:
-                continue
-            server_jobs.append((server_name, server, rating_keys))
-
-        per_server_results: dict[str, dict[str, Any]] = {}
-        if server_jobs:
-            max_workers = min(len(server_jobs), 2)
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_server = {
-                    executor.submit(
-                        self._collect_server_lifetime_stats,
-                        server=server,
-                        rating_keys=rating_keys,
-                        item_media_type=item_media_type,
-                    ): server_name
-                    for server_name, server, rating_keys in server_jobs
-                }
-
-                for future in as_completed(future_to_server):
-                    server_name = future_to_server[future]
-                    try:
-                        result = future.result()
-                    except Exception:
-                        result = None
-                    if result is not None:
-                        per_server_results[server_name] = result
-
-        for server_name, _server, _rating_keys in server_jobs:
-            result = per_server_results.get(server_name)
-            if result is None:
-                continue
-
-            endpoint_total_plays += result['endpoint_total_plays']
-            endpoint_play_sources += result['endpoint_play_sources']
-            user_key_sources += result['user_key_sources']
-
-            for token, count in result['user_play_counts'].items():
-                user_play_counts[token] = user_play_counts.get(token, 0) + count
-            for token, display_name in result['user_display_names'].items():
-                if token not in user_display_names and display_name:
-                    user_display_names[token] = display_name
-
-        total_plays = endpoint_total_plays if endpoint_play_sources > 0 else local_total_plays
-        unique_users = len(user_play_counts) if user_key_sources > 0 else local_unique_users
+        fallback_total = self._to_int(fallback_total_plays) or 0
+        total_plays = lifetime_total
+        if total_plays is None:
+            if local_total_plays > 0:
+                total_plays = local_total_plays
+            else:
+                total_plays = fallback_total
+        unique_users = local_unique_users
 
         return {
             'total_plays': total_plays,
             'unique_users': unique_users,
-            'user_play_counts': user_play_counts if user_key_sources > 0 else {},
-            'user_display_names': user_display_names if user_key_sources > 0 else {},
+            'user_play_counts': {},
+            'user_display_names': {},
         }
+
+    def _lookup_local_lifetime_total(
+        self,
+        is_movie: bool,
+        content_title: str,
+        content_year: int | None,
+    ) -> int | None:
+        normalized_title = self._normalize_content_title(content_title)
+        if not normalized_title:
+            return None
+
+        if is_movie:
+            query = LifetimeMediaPlayCount.query.filter_by(
+                media_type='movie',
+                title_normalized=normalized_title,
+            )
+            if content_year is not None:
+                exact_row = query.filter(LifetimeMediaPlayCount.year == content_year).first()
+                if exact_row:
+                    return int(exact_row.total_plays or 0)
+
+            rows = query.all()
+            if not rows:
+                return None
+
+            # For yearless lookup, sum all matching movie variants.
+            if content_year is None:
+                return sum(int(row.total_plays or 0) for row in rows)
+
+            # If only one variant exists, treat it as the best local lifetime match.
+            if len(rows) == 1:
+                return int(rows[0].total_plays or 0)
+            return None
+
+        show_row = LifetimeMediaPlayCount.query.filter_by(
+            media_type='show',
+            title_normalized=normalized_title,
+        ).first()
+        if not show_row:
+            return None
+        return int(show_row.total_plays or 0)
 
     def _collect_server_lifetime_stats(
         self,
