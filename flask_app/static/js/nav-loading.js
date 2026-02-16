@@ -21,5 +21,23 @@
         overlay.setAttribute('aria-hidden', 'false');
     }
 
+    function hideNavigationLoading() {
+        var overlay = document.getElementById('nav-loading-overlay');
+        if (overlay) {
+            overlay.classList.remove('is-open');
+            overlay.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    // Dismiss the overlay when the user navigates back/forward.
+    // The pageshow event fires on bfcache restores where the DOM still
+    // has the overlay visible from the previous navigation.
+    window.addEventListener('pageshow', function(event) {
+        if (event.persisted) {
+            hideNavigationLoading();
+        }
+    });
+
     root.showNavigationLoading = showNavigationLoading;
+    root.hideNavigationLoading = hideNavigationLoading;
 })(window);
