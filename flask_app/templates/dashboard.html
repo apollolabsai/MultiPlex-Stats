@@ -988,6 +988,12 @@ $(document).ready(function() {
         }, 35);
     }
 
+    window.addEventListener('pageshow', function(event) {
+        if (event.persisted) {
+            navigationInProgress = false;
+        }
+    });
+
     function showAnalyticsRefreshLoading() {
         var overlay = document.getElementById('nav-loading-overlay');
         var titleEl = document.getElementById('nav-loading-title');

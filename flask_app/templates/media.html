@@ -1360,6 +1360,12 @@ $(document).ready(function() {
     mediaHero.load();
     window.addEventListener('resize', function() { mediaHero.scheduleRerender(); });
 
+    window.addEventListener('pageshow', function(event) {
+        if (event.persisted) {
+            navigationInProgress = false;
+        }
+    });
+
     $('#moviesTable, #tvShowsTable').on('click', 'a.content-link', function(event) {
         var href = this.getAttribute('href');
         if (!href) {
