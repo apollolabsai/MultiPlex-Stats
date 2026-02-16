@@ -119,11 +119,15 @@ To add a second server, repeat the process and select "Server B".
 
 ### Import Viewing History
 
-The viewing history table requires a one-time data load from Tautulli:
+MultiPlex Stats requires a one-time data load from Tautulli in the settings page.
+When you click import data the following steps are automatically performed:
+Step 1 — Media Sync → populates the cached_media table
+Imports the movie and TV show libraries from each configured Tautulli server (titles, posters, metadata, etc.)
 
-1. Set the number of days to load (default: 365)
-2. Click "Load History Data"
-3. Wait for the import to complete
+Step 2 — History Sync + Lifetime Cache Rebuild → populates the viewing_history table, then rebuilds the lifetime_media_play_count table
+Imports the full viewing history (play records) from each server into viewing_history
+Once complete, scans all local history rows to rebuild lifetime_media_play_count, which merges play counts across servers for titles that may have different rating keys
+Both steps run sequentially as a single "Full Data Sync" pipeline triggered by one button.
 
 After the initial load, new records are automatically appended when you refresh the dashboard.
 
