@@ -151,6 +151,15 @@
                         <div class="status-row">
                             <span class="status-label">Last media sync ({{ timezone_name }}):</span>
                             <span class="status-value" id="last-media-sync-value">{{ media_sync_status.last_sync_date or 'Never' }}</span>
+                            {% if servers %}
+                            <button type="button" class="btn-media-refresh" id="media-refresh-btn" title="Refresh media libraries only">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                </svg>
+                            </button>
+                            {% endif %}
                         </div>
                         <div class="status-row">
                             <span class="status-label">Last full history sync ({{ timezone_name }}):</span>
@@ -229,6 +238,7 @@
     var historyPollInterval = null;
     var lifetimePollInterval = null;
     var pipelineInProgress = false;
+    var mediaOnlyInProgress = false;
     var hasServerConfig = {{ 'true' if servers else 'false' }};
 
     function formatTimestampElement(elementId) {
@@ -254,6 +264,13 @@
         button.textContent = label || getActionButtonLabel();
     }
 
+    function setMediaRefreshState(disabled) {
+        var btn = document.getElementById('media-refresh-btn');
+        if (btn) {
+            btn.disabled = !!disabled;
+        }
+    }
+
     var settingsProgressClasses = {
         progress: 'history-server-progress',
         header: 'history-server-header',
@@ -276,7 +293,9 @@
         historyPollInterval = stopPoll(historyPollInterval);
         lifetimePollInterval = stopPoll(lifetimePollInterval);
         pipelineInProgress = false;
+        mediaOnlyInProgress = false;
         setActionButtonState(false, getActionButtonLabel());
+        setMediaRefreshState(false);
         if (message) {
             alert(message);
         }
@@ -297,13 +316,17 @@
         var lastSyncLabel = document.getElementById('last-media-sync-value');
 
         if (status.status === 'running') {
-            pipelineInProgress = true;
+            if (!mediaOnlyInProgress) {
+                pipelineInProgress = true;
+            }
             progressDiv.style.display = 'block';
             renderSettingsServerProgress('media-server-progress-container', status.servers || [], false);
             if (fetchedLabel) {
                 fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
             }
-            setActionButtonState(true, 'Step 1/2: Syncing Media...');
+            var label = mediaOnlyInProgress ? 'Refreshing Media Libraries...' : 'Step 1/2: Syncing Media...';
+            setActionButtonState(true, label);
+            setMediaRefreshState(true);
             return;
         }
 
@@ -314,8 +337,19 @@
 
         mediaPollInterval = stopPoll(mediaPollInterval);
 
+        if (mediaOnlyInProgress) {
+            mediaOnlyInProgress = false;
+            setActionButtonState(false, getActionButtonLabel());
+            setMediaRefreshState(false);
+            if (status.status === 'failed') {
+                alert('Media sync failed: ' + (status.error_message || 'Unknown error'));
+            }
+            return;
+        }
+
         if (!pipelineInProgress) {
             setActionButtonState(false, getActionButtonLabel());
+            setMediaRefreshState(false);
             return;
         }
 
@@ -513,9 +547,44 @@
         startMediaSync();
     }
 
+    function startMediaOnlySync() {
+        if (!hasServerConfig || pipelineInProgress || mediaOnlyInProgress) {
+            return;
+        }
+        mediaOnlyInProgress = true;
+        setActionButtonState(true, 'Refreshing Media Libraries...');
+        setMediaRefreshState(true);
+        fetch('{{ url_for("main.api_media_start_load") }}', { method: 'POST' })
+            .then(function(response) {
+                return response.json().then(function(payload) {
+                    if (!response.ok && response.status !== 409) {
+                        throw new Error(payload.error || 'Failed to start media sync');
+                    }
+                    return payload;
+                });
+            })
+            .then(function() {
+                if (!mediaPollInterval) {
+                    mediaPollInterval = setInterval(pollMediaStatus, 1000);
+                }
+                pollMediaStatus();
+            })
+            .catch(function(error) {
+                mediaOnlyInProgress = false;
+                setActionButtonState(false, getActionButtonLabel());
+                setMediaRefreshState(false);
+                alert(error.message);
+            });
+    }
+
     var fullSyncButton = document.getElementById('full-sync-btn');
     if (fullSyncButton) {
         fullSyncButton.addEventListener('click', startFullPipeline);
+    }
+
+    var mediaRefreshButton = document.getElementById('media-refresh-btn');
+    if (mediaRefreshButton) {
+        mediaRefreshButton.addEventListener('click', startMediaOnlySync);
     }
 
     formatTimestampElement('last-media-sync-value');
@@ -524,6 +593,7 @@
 
     if (mediaStatus && mediaStatus.status === 'running') {
         pipelineInProgress = true;
+        setMediaRefreshState(true);
         if (!mediaPollInterval) {
             mediaPollInterval = setInterval(pollMediaStatus, 1000);
         }
@@ -533,6 +603,7 @@
 
     if (historyStatus && historyStatus.status === 'running') {
         pipelineInProgress = true;
+        setMediaRefreshState(true);
         if (!historyPollInterval) {
             historyPollInterval = setInterval(pollHistoryStatus, 1000);
         }
@@ -542,6 +613,7 @@
 
     if (lifetimeStatus && lifetimeStatus.status === 'running') {
         pipelineInProgress = true;
+        setMediaRefreshState(true);
         if (!lifetimePollInterval) {
             lifetimePollInterval = setInterval(pollLifetimeStatus, 1000);
         }
@@ -550,6 +622,7 @@
     }
 
     setActionButtonState(false, getActionButtonLabel());
+    setMediaRefreshState(false);
 })();
 </script>
 
@@ -585,6 +658,29 @@
 .status-value {
     color: #f18a3d;
     font-weight: 600;
+}
+
+.btn-media-refresh {
+    background: none;
+    border: 1px solid rgba(241, 138, 61, 0.4);
+    border-radius: 4px;
+    color: #f18a3d;
+    cursor: pointer;
+    padding: 2px 6px;
+    margin-left: 8px;
+    display: inline-flex;
+    align-items: center;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-media-refresh:hover:not(:disabled) {
+    background: rgba(241, 138, 61, 0.15);
+    border-color: #f18a3d;
+}
+
+.btn-media-refresh:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
 }
 
 .sync-progress {
