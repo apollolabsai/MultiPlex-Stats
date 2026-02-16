@@ -149,17 +149,19 @@
                             <span class="status-value">{{ history_stats.unique_users }}</span>
                         </div>
                         <div class="status-row">
-                            <span class="status-label">Last media sync ({{ timezone_name }}):</span>
+                            <span class="status-label">
+                                {% if servers %}
+                                <button type="button" class="btn-media-refresh" id="media-refresh-btn" title="Refresh media libraries only">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="23 4 23 10 17 10"></polyline>
+                                        <polyline points="1 20 1 14 7 14"></polyline>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                    </svg>
+                                </button>
+                                {% endif %}
+                                Last media sync ({{ timezone_name }}):
+                            </span>
                             <span class="status-value" id="last-media-sync-value">{{ media_sync_status.last_sync_date or 'Never' }}</span>
-                            {% if servers %}
-                            <button type="button" class="btn-media-refresh" id="media-refresh-btn" title="Refresh media libraries only">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="23 4 23 10 17 10"></polyline>
-                                    <polyline points="1 20 1 14 7 14"></polyline>
-                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                                </svg>
-                            </button>
-                            {% endif %}
                         </div>
                         <div class="status-row">
                             <span class="status-label">Last full history sync ({{ timezone_name }}):</span>
@@ -667,7 +669,7 @@
     color: #f18a3d;
     cursor: pointer;
     padding: 2px 6px;
-    margin-left: 8px;
+    margin-right: 6px;
     display: inline-flex;
     align-items: center;
     transition: background 0.15s, border-color 0.15s;
