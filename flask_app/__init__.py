@@ -87,7 +87,17 @@ def create_app(config_name='development'):
 
     # Initialize extensions
     from flask_app.models import db
+    from sqlalchemy import event
+
     db.init_app(app)
+
+    # Enable SQLite WAL mode for concurrent read/write support.
+    with app.app_context():
+        @event.listens_for(db.engine, 'connect')
+        def _set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute('PRAGMA journal_mode=WAL')
+            cursor.close()
 
     # Register blueprints
     from flask_app.routes.main import main_bp
