@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 import pandas as pd
-from sqlalchemy import func, or_
+from sqlalchemy import and_, func, or_
 
 from multiplex_stats import TautulliClient
 from multiplex_stats.data_processing import (
@@ -26,7 +26,7 @@ from multiplex_stats.visualization import (
 from flask_app.services.config_service import ConfigService
 from flask_app.services.history_sync_service import HistorySyncService
 from flask_app.services.utils import normalize_title, to_int
-from flask_app.models import CachedMedia, LifetimeMediaPlayCount, ServerConfig, ViewingHistory
+from flask_app.models import CachedMedia, LifetimeMediaPlayCount, ServerConfig, ViewingHistory, db
 
 
 class AnalyticsService:
@@ -1555,41 +1555,106 @@ class AnalyticsService:
                 if key not in user_data:
                     user_data[key] = 0
 
+        def normalize_user_key(username: Any = '', user_id: Any = None, friendly_name: Any = '') -> str:
+            """Build a stable, case-insensitive identifier for a user."""
+            username_text = str(username or '').strip()
+            if username_text:
+                return username_text.lower()
+
+            numeric_user_id = to_int(user_id)
+            if numeric_user_id is not None:
+                return f'user_id:{numeric_user_id}'
+
+            friendly_text = str(friendly_name or '').strip()
+            return friendly_text.lower()
+
         def fetch_server_data(server_config, server_ip: str, plays_key: str):
             """Fetch users and play counts from a single server (thread-safe)."""
-            users: Dict[str, Dict[str, Any]] = {}  # friendly_name -> user_data
-            play_counts: Dict[str, int] = {}  # friendly_name -> plays for this server
-            library_counts: Dict[str, int] = {}  # friendly_name -> library count
+            users: Dict[str, Dict[str, Any]] = {}  # user_key -> user_data
+            play_counts: Dict[str, int] = {}  # user_key -> plays for this server
+            library_counts: Dict[str, int] = {}  # user_key -> library count
+            user_id_to_key: Dict[int, str] = {}
+            friendly_to_key: Dict[str, str] = {}
 
             client = TautulliClient(server_config)
+
+            def ensure_user_entry(
+                user_key: str,
+                user_id: Any = None,
+                username: str = '',
+                friendly_name: str = '',
+                email: str = '',
+                thumb_url: str = '',
+                is_active: int = 1,
+            ) -> Dict[str, Any]:
+                entry = users.get(user_key)
+                if not entry:
+                    entry = {
+                        'user_id': to_int(user_id),
+                        'friendly_name': friendly_name,
+                        'username': username,
+                        'email': email,
+                        'total_plays': 0,
+                        'last_play': None,
+                        'user_thumb': thumb_url,
+                        'is_active': is_active,
+                        'library_count': 0,
+                        '_friendly_names_by_server': {},
+                    }
+                    users[user_key] = entry
+                else:
+                    if entry.get('user_id') is None:
+                        entry['user_id'] = to_int(user_id)
+                    if username and not entry.get('username'):
+                        entry['username'] = username
+                    if email and not entry.get('email'):
+                        entry['email'] = email
+                    if thumb_url and not entry.get('user_thumb'):
+                        entry['user_thumb'] = thumb_url
+                    if is_active == 1:
+                        entry['is_active'] = 1
+
+                if friendly_name:
+                    entry['_friendly_names_by_server'][server_config.name] = friendly_name
+                    if not entry.get('friendly_name'):
+                        entry['friendly_name'] = friendly_name
+
+                return entry
 
             try:
                 users_response = client.get_users()
                 if users_response and 'response' in users_response and 'data' in users_response['response']:
                     for user in users_response['response']['data']:
-                        friendly_name = user.get('friendly_name', '')
-                        if not friendly_name:
+                        username = str(user.get('username') or '').strip()
+                        friendly_name = str(user.get('friendly_name') or '').strip()
+                        user_id = to_int(user.get('user_id'))
+                        user_key = normalize_user_key(username=username, user_id=user_id, friendly_name=friendly_name)
+                        if not user_key:
                             continue
 
                         shared_libs = user.get('shared_libraries', [])
-                        library_counts[friendly_name] = len(shared_libs) if shared_libs else 0
+                        library_counts[user_key] = len(shared_libs) if shared_libs else 0
 
                         user_thumb = user.get('user_thumb', '')
                         thumb_url = ''
                         if user_thumb:
                             thumb_url = f"{server_ip}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
+                        active_flag = to_int(user.get('is_active'))
 
-                        users[friendly_name] = {
-                            'user_id': user.get('user_id'),
-                            'friendly_name': friendly_name,
-                            'username': user.get('username', ''),
-                            'email': user.get('email', ''),
-                            'total_plays': 0,
-                            'last_play': None,
-                            'user_thumb': thumb_url,
-                            'is_active': user.get('is_active', 1),
-                            'library_count': 0,
-                        }
+                        ensure_user_entry(
+                            user_key=user_key,
+                            user_id=user_id,
+                            username=username,
+                            friendly_name=friendly_name,
+                            email=str(user.get('email') or '').strip(),
+                            thumb_url=thumb_url,
+                            is_active=active_flag if active_flag is not None else 1,
+                        )
+
+                        if user_id is not None:
+                            user_id_to_key[user_id] = user_key
+                        if friendly_name:
+                            friendly_to_key[friendly_name.lower()] = user_key
             except Exception as e:
                 print(f"Error fetching users from {server_config.name}: {e}")
 
@@ -1598,23 +1663,40 @@ class AnalyticsService:
                     stats_response = client.get_library_user_stats(section_id=section_id)
                     if stats_response and 'response' in stats_response and 'data' in stats_response['response']:
                         for stat in stats_response['response']['data']:
-                            friendly_name = stat.get('friendly_name', '')
-                            plays = stat.get('total_plays', 0)
-                            if friendly_name:
-                                play_counts[friendly_name] = play_counts.get(friendly_name, 0) + plays
+                            stat_user_id = to_int(stat.get('user_id'))
+                            stat_username = str(stat.get('username') or '').strip()
+                            stat_friendly = str(stat.get('friendly_name') or '').strip()
+                            plays = to_int(stat.get('total_plays')) or 0
 
-                                if friendly_name not in users:
-                                    users[friendly_name] = {
-                                        'user_id': stat.get('user_id'),
-                                        'friendly_name': friendly_name,
-                                        'username': '',
-                                        'email': '',
-                                        'total_plays': 0,
-                                        'last_play': None,
-                                        'user_thumb': '',
-                                        'is_active': 1,
-                                        'library_count': 0,
-                                    }
+                            user_key = ''
+                            if stat_user_id is not None:
+                                user_key = user_id_to_key.get(stat_user_id, '')
+                            if not user_key and stat_username:
+                                user_key = normalize_user_key(username=stat_username)
+                            if not user_key and stat_friendly:
+                                user_key = friendly_to_key.get(stat_friendly.lower(), '')
+                            if not user_key:
+                                user_key = normalize_user_key(
+                                    username=stat_username,
+                                    user_id=stat_user_id,
+                                    friendly_name=stat_friendly,
+                                )
+
+                            if not user_key:
+                                continue
+
+                            ensure_user_entry(
+                                user_key=user_key,
+                                user_id=stat_user_id,
+                                username=stat_username,
+                                friendly_name=stat_friendly,
+                            )
+                            play_counts[user_key] = play_counts.get(user_key, 0) + plays
+
+                            if stat_user_id is not None:
+                                user_id_to_key[stat_user_id] = user_key
+                            if stat_friendly:
+                                friendly_to_key.setdefault(stat_friendly.lower(), user_key)
                 except Exception as e:
                     print(f"Error fetching library stats (section {section_id}) from {server_config.name}: {e}")
 
@@ -1629,27 +1711,53 @@ class AnalyticsService:
             results = list(executor.map(lambda t: fetch_server_data(*t), tasks))
 
         # Merge results from all servers
-        users_by_name: Dict[str, Dict[str, Any]] = {}
+        users_by_username: Dict[str, Dict[str, Any]] = {}
         for users, play_counts, library_counts, plays_key in results:
-            for friendly_name, user_data in users.items():
-                if friendly_name not in users_by_name:
-                    users_by_name[friendly_name] = user_data
-                    ensure_play_keys(users_by_name[friendly_name])
+            for user_key, user_data in users.items():
+                if user_key not in users_by_username:
+                    users_by_username[user_key] = user_data
+                    ensure_play_keys(users_by_username[user_key])
+                    users_by_username[user_key]['library_count'] = library_counts.get(user_key, 0)
                 else:
-                    users_by_name[friendly_name]['library_count'] += library_counts.get(friendly_name, 0)
+                    merged = users_by_username[user_key]
+                    ensure_play_keys(merged)
+                    merged['library_count'] += library_counts.get(user_key, 0)
 
-            for friendly_name, plays in play_counts.items():
-                if friendly_name in users_by_name:
-                    ensure_play_keys(users_by_name[friendly_name])
-                    users_by_name[friendly_name]['total_plays'] += plays
-                    users_by_name[friendly_name][plays_key] += plays
+                    if merged.get('user_id') is None and user_data.get('user_id') is not None:
+                        merged['user_id'] = user_data.get('user_id')
+                    if not merged.get('username') and user_data.get('username'):
+                        merged['username'] = user_data.get('username')
+                    if not merged.get('email') and user_data.get('email'):
+                        merged['email'] = user_data.get('email')
+                    if not merged.get('user_thumb') and user_data.get('user_thumb'):
+                        merged['user_thumb'] = user_data.get('user_thumb')
+                    if user_data.get('is_active') == 1:
+                        merged['is_active'] = 1
 
-            # Apply library counts for first occurrence
-            for friendly_name, count in library_counts.items():
-                if friendly_name in users_by_name:
-                    # Only set (not add) if this is the first server that created the user
-                    if users_by_name[friendly_name]['library_count'] == 0:
-                        users_by_name[friendly_name]['library_count'] = count
+                    merged_names = merged.setdefault('_friendly_names_by_server', {})
+                    merged_names.update(user_data.get('_friendly_names_by_server', {}))
+                    if not merged.get('friendly_name') and user_data.get('friendly_name'):
+                        merged['friendly_name'] = user_data.get('friendly_name')
+
+            for user_key, plays in play_counts.items():
+                if user_key not in users_by_username:
+                    users_by_username[user_key] = {
+                        'user_id': None,
+                        'friendly_name': '',
+                        'username': '',
+                        'email': '',
+                        'total_plays': 0,
+                        'last_play': None,
+                        'user_thumb': '',
+                        'is_active': 1,
+                        'library_count': 0,
+                        '_friendly_names_by_server': {},
+                    }
+                    ensure_play_keys(users_by_username[user_key])
+
+                ensure_play_keys(users_by_username[user_key])
+                users_by_username[user_key]['total_plays'] += plays
+                users_by_username[user_key][plays_key] += plays
 
         # Get last play dates from ViewingHistory database
         # Query for max(started) grouped by user (username field in ViewingHistory)
@@ -1658,8 +1766,41 @@ class AnalyticsService:
             func.max(ViewingHistory.started).label('last_play')
         ).group_by(ViewingHistory.user).all()
 
-        # Create a lookup dictionary keyed by username
-        last_play_by_user = {row.user: row.last_play for row in last_plays if row.user}
+        # Create a lookup dictionary keyed by normalized username
+        last_play_by_user = {}
+        for row in last_plays:
+            user_key = normalize_user_key(username=row.user)
+            if user_key:
+                last_play_by_user[user_key] = row.last_play
+
+        # Resolve the latest-play server for each username so we can use that
+        # server's current friendly_name in the users table.
+        latest_started_subquery = (
+            db.session.query(
+                ViewingHistory.user.label('username'),
+                func.max(ViewingHistory.started).label('last_play')
+            )
+            .filter(ViewingHistory.user.isnot(None))
+            .group_by(ViewingHistory.user)
+            .subquery()
+        )
+        latest_server_rows = (
+            db.session.query(ViewingHistory.user, ViewingHistory.server_name)
+            .join(
+                latest_started_subquery,
+                and_(
+                    ViewingHistory.user == latest_started_subquery.c.username,
+                    ViewingHistory.started == latest_started_subquery.c.last_play,
+                )
+            )
+            .order_by(ViewingHistory.id.desc())
+            .all()
+        )
+        latest_server_by_user: Dict[str, str] = {}
+        for row in latest_server_rows:
+            user_key = normalize_user_key(username=row.user)
+            if user_key and user_key not in latest_server_by_user:
+                latest_server_by_user[user_key] = row.server_name
 
         # Get the oldest date in ViewingHistory to use as "before" date for users with no plays
         oldest_history = ViewingHistory.query.with_entities(
@@ -1667,20 +1808,34 @@ class AnalyticsService:
         ).scalar()
 
         # Update users with last play dates
-        # Match by username (ViewingHistory.user) OR friendly_name as fallback
-        for friendly_name, user_data in users_by_name.items():
-            username = user_data.get('username', '')
-            # Try username first, then friendly_name as fallback
-            if username and username in last_play_by_user:
-                user_data['last_play'] = last_play_by_user[username]
-            elif friendly_name in last_play_by_user:
-                user_data['last_play'] = last_play_by_user[friendly_name]
+        for user_key, user_data in users_by_username.items():
+            username = str(user_data.get('username') or '').strip()
+
+            friendly_names_by_server = user_data.get('_friendly_names_by_server', {})
+            latest_server = latest_server_by_user.get(user_key)
+            if latest_server and friendly_names_by_server.get(latest_server):
+                user_data['friendly_name'] = friendly_names_by_server.get(latest_server)
+            elif not user_data.get('friendly_name'):
+                fallback_friendly = next(
+                    (name for name in friendly_names_by_server.values() if name),
+                    ''
+                )
+                user_data['friendly_name'] = fallback_friendly or username
+
+            if not username and not user_key.startswith('user_id:'):
+                username = user_key
+                user_data['username'] = username
+
+            if user_key in last_play_by_user:
+                user_data['last_play'] = last_play_by_user[user_key]
             elif oldest_history:
                 # User has no plays in history - mark with "before" prefix
                 user_data['last_play_before'] = oldest_history
 
+            user_data.pop('_friendly_names_by_server', None)
+
         # Convert to list and sort by total plays descending
-        all_users = list(users_by_name.values())
+        all_users = list(users_by_username.values())
         all_users.sort(key=lambda x: x.get('total_plays', 0), reverse=True)
 
         return all_users

@@ -1,4 +1,6 @@
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from flask import Flask
 
@@ -200,3 +202,84 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
 
         self.assertEqual(resolved, newer.id)
         self.assertNotEqual(resolved, older.id)
+
+    @patch('flask_app.services.analytics_service.ConfigService.get_server_configs')
+    @patch('multiplex_stats.TautulliClient')
+    def test_get_all_users_groups_by_username_and_uses_latest_friendly_name(
+        self,
+        mock_client_cls,
+        mock_get_server_configs,
+    ):
+        server_a = SimpleNamespace(name='Apollo', ip_address='192.168.1.228:8181')
+        server_b = SimpleNamespace(name='ApolloSS', ip_address='192.168.1.214:8181')
+        mock_get_server_configs.return_value = (server_a, server_b)
+
+        self._add_history(
+            row_id=101,
+            server_name='Apollo',
+            server_order=0,
+            user='pdti7',
+            started=100,
+        )
+        self._add_history(
+            row_id=1_000_000_101,
+            server_name='ApolloSS',
+            server_order=1,
+            user='pdti7',
+            started=200,
+        )
+
+        def build_response(items):
+            return {'response': {'data': items}}
+
+        class FakeClient:
+            def __init__(self, config):
+                self.name = config.name
+
+            def get_users(self):
+                if self.name == 'Apollo':
+                    return build_response([{
+                        'user_id': 42,
+                        'username': 'pdti7',
+                        'friendly_name': 'PDTI Old',
+                        'email': 'pdti7@example.com',
+                        'shared_libraries': ['Movies'],
+                        'is_active': 1,
+                    }])
+                return build_response([{
+                    'user_id': 42,
+                    'username': 'pdti7',
+                    'friendly_name': 'PDTI New',
+                    'email': 'pdti7@example.com',
+                    'shared_libraries': ['Movies', 'TV Shows'],
+                    'is_active': 1,
+                }])
+
+            def get_library_user_stats(self, section_id):
+                if section_id != 1:
+                    return build_response([])
+
+                if self.name == 'Apollo':
+                    return build_response([{
+                        'user_id': 42,
+                        'friendly_name': 'PDTI Old',
+                        'total_plays': 5,
+                    }])
+                return build_response([{
+                    'user_id': 42,
+                    'friendly_name': 'PDTI New',
+                    'total_plays': 7,
+                }])
+
+        mock_client_cls.side_effect = lambda config: FakeClient(config)
+
+        users = AnalyticsService().get_all_users()
+        self.assertEqual(len(users), 1)
+
+        user = users[0]
+        self.assertEqual(user['username'], 'pdti7')
+        self.assertEqual(user['friendly_name'], 'PDTI New')
+        self.assertEqual(user['total_plays'], 12)
+        self.assertEqual(user['server_a_plays'], 5)
+        self.assertEqual(user['server_b_plays'], 7)
+        self.assertEqual(user['last_play'], 200)
