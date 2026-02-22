@@ -282,4 +282,5 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
         self.assertEqual(user['total_plays'], 12)
         self.assertEqual(user['server_a_plays'], 5)
         self.assertEqual(user['server_b_plays'], 7)
+        self.assertEqual(user['first_play'], 100)
         self.assertEqual(user['last_play'], 200)

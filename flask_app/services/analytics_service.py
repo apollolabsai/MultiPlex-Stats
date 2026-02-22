@@ -1595,6 +1595,7 @@ class AnalyticsService:
                         'username': username,
                         'email': email,
                         'total_plays': 0,
+                        'first_play': None,
                         'last_play': None,
                         'user_thumb': thumb_url,
                         'is_active': is_active,
@@ -1747,6 +1748,7 @@ class AnalyticsService:
                         'username': '',
                         'email': '',
                         'total_plays': 0,
+                        'first_play': None,
                         'last_play': None,
                         'user_thumb': '',
                         'is_active': 1,
@@ -1759,14 +1761,24 @@ class AnalyticsService:
                 users_by_username[user_key]['total_plays'] += plays
                 users_by_username[user_key][plays_key] += plays
 
-        # Get last play dates from ViewingHistory database
-        # Query for max(started) grouped by user (username field in ViewingHistory)
+        # Get first/last play dates from ViewingHistory database
+        # Query by username field in ViewingHistory.
+        first_plays = ViewingHistory.query.with_entities(
+            ViewingHistory.user,
+            func.min(ViewingHistory.started).label('first_play')
+        ).group_by(ViewingHistory.user).all()
         last_plays = ViewingHistory.query.with_entities(
             ViewingHistory.user,
             func.max(ViewingHistory.started).label('last_play')
         ).group_by(ViewingHistory.user).all()
 
-        # Create a lookup dictionary keyed by normalized username
+        # Create lookup dictionaries keyed by normalized username.
+        first_play_by_user = {}
+        for row in first_plays:
+            user_key = normalize_user_key(username=row.user)
+            if user_key:
+                first_play_by_user[user_key] = row.first_play
+
         last_play_by_user = {}
         for row in last_plays:
             user_key = normalize_user_key(username=row.user)
@@ -1826,6 +1838,8 @@ class AnalyticsService:
                 username = user_key
                 user_data['username'] = username
 
+            if user_key in first_play_by_user:
+                user_data['first_play'] = first_play_by_user[user_key]
             if user_key in last_play_by_user:
                 user_data['last_play'] = last_play_by_user[user_key]
             elif oldest_history:

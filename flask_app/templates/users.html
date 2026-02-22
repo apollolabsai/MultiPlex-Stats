@@ -44,6 +44,7 @@
                     <th style="color:#f18a3d; text-align:left;">Username</th>
                     <th style="color:#f18a3d; text-align:left;">Email</th>
                     <th style="color:#f18a3d; text-align:center; width: 170px;">Total Plays</th>
+                    <th style="color:#f18a3d; text-align:left; width: 145px;">First Played</th>
                     <th style="color:#f18a3d; text-align:left; width: 145px;">Last Played</th>
                     <th style="color:#f18a3d; text-align:center;">Libraries</th>
                     <th style="color:#f18a3d; text-align:center;">Status</th>
@@ -92,7 +93,16 @@
                         </span>
                         {% endif %}
                     </td>
-                    <td class="last-play-col">
+                    <td class="first-play-col" data-order="{{ user.first_play if user.first_play else -1 }}">
+                        {% if user.first_play %}
+                        <span class="first-play-date" data-timestamp="{{ user.first_play }}">
+                            {{ user.first_play | timestamp_to_date }}
+                        </span>
+                        {% else %}
+                        <span style="color: #666;">Never</span>
+                        {% endif %}
+                    </td>
+                    <td class="last-play-col" data-order="{% if user.last_play %}{{ user.last_play }}{% elif user.last_play_before %}{{ user.last_play_before - 1 }}{% else %}-1{% endif %}">
                         {% if user.last_play %}
                         <span class="last-play-date" data-timestamp="{{ user.last_play }}">
                             {{ user.last_play | timestamp_to_date }}
@@ -202,6 +212,7 @@
 }
 
 .plays-col,
+.first-play-col,
 .last-play-col {
     white-space: nowrap;
 }
@@ -212,6 +223,7 @@
     color: #888;
 }
 
+.first-play-date,
 .last-play-date {
     color: #aaa;
 }
@@ -260,10 +272,10 @@ $(document).ready(function() {
         lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
         columnDefs: [
             { orderable: false, targets: [1] }, // Disable sorting on Avatar column
-            { type: 'date', targets: [6] }, // Date sorting for Last Played column
             { targets: 5, width: '170px' }, // Total Plays
-            { targets: 6, width: '145px' } // Last Played
-            // Libraries column is at index 7, Status at index 8
+            { targets: 6, width: '145px' }, // First Played
+            { targets: 7, width: '145px' } // Last Played
+            // Libraries column is at index 8, Status at index 9
         ],
         language: {
             search: "Search users:",
