@@ -27,6 +27,7 @@
         this.fetchUrl = options.fetchUrl || '';
         this.posters = [];
         this._resizeTimer = null;
+        this._preloadCache = {};
     }
 
     HeroQuilt.prototype.calculateLayout = function() {
@@ -48,6 +49,44 @@
             columns: columns,
             tileCount: columns * this.rows
         };
+    };
+
+    /**
+     * Preload an array of unique poster URLs using Image objects.
+     * Returns a Promise that resolves when all images are loaded or
+     * a timeout (4 seconds) is reached, whichever comes first.
+     */
+    HeroQuilt.prototype._preloadImages = function(posters) {
+        var cache = this._preloadCache;
+        var urls = [];
+        var i, url;
+
+        for (i = 0; i < posters.length; i++) {
+            url = posters[i].poster_url;
+            if (url && !cache[url]) {
+                urls.push(url);
+            }
+        }
+
+        if (urls.length === 0) {
+            return Promise.resolve();
+        }
+
+        var imagePromises = urls.map(function(src) {
+            return new Promise(function(resolve) {
+                var img = new Image();
+                img.onload = function() { cache[src] = true; resolve(); };
+                img.onerror = function() { resolve(); };
+                img.src = src;
+            });
+        });
+
+        var allLoaded = Promise.all(imagePromises);
+        var timeout = new Promise(function(resolve) {
+            setTimeout(resolve, 4000);
+        });
+
+        return Promise.race([allLoaded, timeout]);
     };
 
     HeroQuilt.prototype.render = function(posters) {
@@ -105,10 +144,12 @@
             })
             .then(function(payload) {
                 self.posters = Array.isArray(payload.posters) ? payload.posters : [];
-                self.render(self.posters);
-                if (callback) {
-                    callback(self.posters);
-                }
+                return self._preloadImages(self.posters).then(function() {
+                    self.render(self.posters);
+                    if (callback) {
+                        callback(self.posters);
+                    }
+                });
             })
             .catch(function(error) {
                 console.error('Error loading hero posters:', error);
