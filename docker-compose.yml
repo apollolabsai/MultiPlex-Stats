@@ -26,7 +26,8 @@ services:
       # - TAUTULLI_SERVER_B_VERIFY_SSL=false
       # Timezone (optional, defaults to America/Los_Angeles)
       # - TZ=America/New_York
-      # Stadia Maps API key for the dashboard stream map (optional if using domain auth)
+      # Optional Stadia Maps API key for the dashboard stream map
+      # If omitted, the dashboard map falls back to CARTO dark tiles
       # - STADIA_MAPS_API_KEY=your_stadia_maps_api_key
     restart: unless-stopped
     healthcheck:

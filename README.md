@@ -142,8 +142,8 @@ After the initial load, new records are automatically appended when you refresh 
 - API keys are stored in a local SQLite database
 - No telemetry or tracking
 
-The live stream map uses Stadia Maps' `Alidade Smooth Dark` tiles. If your Stadia setup uses API-key authentication, set `STADIA_MAPS_API_KEY` in the container environment. Domain-authenticated setups can leave it unset.
-If `STADIA_MAPS_API_KEY` is not set, MultiPlex Stats falls back to a bundled dark locator map so current stream locations can still be plotted without external tiles.
+The live stream map uses Stadia Maps' `Alidade Smooth Dark` tiles when a Stadia API key is configured. If your Stadia setup uses API-key authentication, set `STADIA_MAPS_API_KEY` in the container environment.
+If `STADIA_MAPS_API_KEY` is not set, MultiPlex Stats falls back to CARTO's `dark_all` basemap for the live stream map.
 
 ---
 

@@ -102,6 +102,7 @@
   - TAUTULLI_SERVER_A_KEY=your_api_key_here
   # - TAUTULLI_SERVER_A_SSL=false
   # - TAUTULLI_SERVER_A_VERIFY_SSL=false
+  # Optional:
   # - STADIA_MAPS_API_KEY=your_stadia_maps_api_key
   # Optional second server:
   # - TAUTULLI_SERVER_B_NAME=Server2
@@ -126,8 +127,8 @@
 
             <div class="form-card">
                 <p class="info-text">
-                    Save a Stadia Maps API key here to enable the full dark basemap for the live stream map.
-                    If blank, MultiPlex Stats will fall back to the bundled no-key locator map unless <code>STADIA_MAPS_API_KEY</code> is set in the environment.
+                    Optionally save a Stadia Maps API key here to enable the full dark basemap for the live stream map.
+                    If blank, MultiPlex Stats will fall back to CARTO's dark basemap unless <code>STADIA_MAPS_API_KEY</code> is set in the environment.
                 </p>
                 <div class="settings-note-card">
                     <div><strong>Stored key in database:</strong> {{ 'Yes' if stored_stadia_key_present else 'No' }}</div>
@@ -136,7 +137,7 @@
                 </div>
                 <form method="POST" action="{{ url_for('settings.update_map_settings') }}">
                     <div class="form-group">
-                        <label for="stadia_maps_api_key">Stadia Maps API Key</label>
+                        <label for="stadia_maps_api_key">Optional Stadia Maps API Key</label>
                         <input
                             type="password"
                             id="stadia_maps_api_key"
@@ -146,7 +147,7 @@
                             autocomplete="off"
                             spellcheck="false"
                         >
-                        <small>Leave blank to remove the saved key and fall back to the environment variable or built-in locator map.</small>
+                        <small>Leave blank to remove the saved key and fall back to the environment variable or CARTO's dark basemap.</small>
                     </div>
                     <button type="submit" class="btn btn-primary">Save Map Settings</button>
                 </form>

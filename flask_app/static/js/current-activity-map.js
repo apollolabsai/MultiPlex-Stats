@@ -29,46 +29,14 @@
         this.baseLayer = null;
         this.defaultCenter = [20, 0];
         this.defaultZoom = 2;
+        this.cartoTileUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+        this.cartoAttribution =
+            '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> ' +
+            '&copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
     }
 
     ActivityMap.prototype.shouldUseHostedTiles = function() {
         return this.hasStadiaKey && Boolean(this.tileUrl);
-    };
-
-    ActivityMap.prototype.buildFallbackLayer = function() {
-        var fallbackWorld = window.CurrentActivityMapFallbackWorld;
-        if (!fallbackWorld) {
-            return null;
-        }
-
-        return window.L.geoJSON(fallbackWorld, {
-            style: function() {
-                return {
-                    color: '#49545b',
-                    weight: 1,
-                    fillColor: '#1d262d',
-                    fillOpacity: 0.88
-                };
-            }
-        });
-    };
-
-    ActivityMap.prototype.addFallbackGraticule = function() {
-        var layer = window.L.layerGroup();
-        var gridStyle = {
-            color: 'rgba(147, 162, 176, 0.22)',
-            weight: 1,
-            interactive: false
-        };
-
-        for (var lat = -60; lat <= 60; lat += 30) {
-            window.L.polyline([[lat, -180], [lat, 180]], gridStyle).addTo(layer);
-        }
-        for (var lon = -120; lon <= 120; lon += 60) {
-            window.L.polyline([[-85, lon], [85, lon]], gridStyle).addTo(layer);
-        }
-
-        return layer;
     };
 
     ActivityMap.prototype.init = function() {
@@ -92,14 +60,12 @@
                 tileSize: 256
             }).addTo(this.map);
         } else {
-            this.baseLayer = this.buildFallbackLayer();
-            if (this.baseLayer) {
-                this.baseLayer.addTo(this.map);
-            }
-            this.addFallbackGraticule().addTo(this.map);
-            if (this.map.attributionControl) {
-                this.map.attributionControl.addAttribution('Fallback world outline');
-            }
+            this.baseLayer = window.L.tileLayer(this.cartoTileUrl, {
+                attribution: this.cartoAttribution,
+                maxZoom: 20,
+                subdomains: 'abcd',
+                tileSize: 256
+            }).addTo(this.map);
         }
 
         this.markerLayer = window.L.layerGroup().addTo(this.map);
@@ -176,7 +142,7 @@
 
         var modeLabel = this.shouldUseHostedTiles()
             ? 'Stadia dark basemap'
-            : 'Fallback locator map';
+            : 'CARTO dark fallback';
 
         if (!totalCount) {
             this.summaryElement.textContent = modeLabel + ' • No active streams right now.';
@@ -221,9 +187,6 @@
             var emptyMessage = allStreams.length
                 ? 'Active streams are local/private or have no geolocation yet.'
                 : 'No active streams to map right now.';
-            if (!this.shouldUseHostedTiles()) {
-                emptyMessage += ' Add STADIA_MAPS_API_KEY for detailed dark tiles.';
-            }
             this.updateEmptyState(emptyMessage, true);
             this.map.setView(this.defaultCenter, this.defaultZoom);
             return;
@@ -249,13 +212,13 @@
         }, this);
 
         if (bounds.length === 1) {
-            this.map.setView(bounds[0], this.shouldUseHostedTiles() ? 5 : 4);
+            this.map.setView(bounds[0], 5);
             return;
         }
 
         this.map.fitBounds(bounds, {
             padding: [24, 24],
-            maxZoom: this.shouldUseHostedTiles() ? 5 : 4
+            maxZoom: 5
         });
     };
 
