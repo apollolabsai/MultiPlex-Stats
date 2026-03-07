@@ -177,7 +177,8 @@
                 strokeColor: this.serverColors.mixedStroke,
                 fillColor: this.serverColors.mixedFill,
                 fillOpacity: 0.92,
-                dashArray: '3 3'
+                dashArray: '3 3',
+                weight: 1.6
             };
         }
 
@@ -187,7 +188,8 @@
                 strokeColor: '#fff1b8',
                 fillColor: this.serverColors.serverA,
                 fillOpacity: 0.88,
-                dashArray: null
+                dashArray: null,
+                weight: 1.35
             };
         }
 
@@ -196,46 +198,24 @@
             strokeColor: '#ffd8a8',
             fillColor: this.serverColors.serverB,
             fillOpacity: 0.84,
-            dashArray: null
+            dashArray: null,
+            weight: 1.35
         };
     };
 
-    ActivityMap.prototype.getMarkerShellSize = function(group) {
-        return Math.min(30 + ((group.streams || []).length - 1) * 4, 42);
-    };
-
-    ActivityMap.prototype.buildMarkerHtml = function(group, serverStyle) {
-        var streamCount = (group.streams || []).length;
-        var shellSize = this.getMarkerShellSize(group);
-        var markerClass = 'current-activity-map-marker ' + (serverStyle.variant || 'server-b');
-        var html = '<div class="' + markerClass + '" style="--marker-shell-size:' + shellSize + 'px;">';
-
-        html += '<span class="current-activity-map-marker-pulse"></span>';
-        html += '<span class="current-activity-map-marker-pulse pulse-alt"></span>';
-        html += '<span class="current-activity-map-marker-ring"></span>';
-        html += '<span class="current-activity-map-marker-core"></span>';
-
-        if (streamCount > 1) {
-            html += '<span class="current-activity-map-marker-count">' + streamCount + '</span>';
-        }
-
-        html += '</div>';
-        return html;
+    ActivityMap.prototype.getMarkerRadius = function(group) {
+        return Math.min(8 + ((group.streams || []).length - 1) * 2.5, 16);
     };
 
     ActivityMap.prototype.createMarker = function(group) {
         var serverStyle = this.getGroupServerStyle(group);
-        var shellSize = this.getMarkerShellSize(group);
-        var icon = window.L.divIcon({
-            className: 'current-activity-map-div-icon',
-            html: this.buildMarkerHtml(group, serverStyle),
-            iconSize: [shellSize, shellSize],
-            iconAnchor: [Math.round(shellSize / 2), Math.round(shellSize / 2)],
-            popupAnchor: [0, -Math.round(shellSize / 2)]
-        });
-
-        var marker = window.L.marker([group.latitude, group.longitude], {
-            icon: icon
+        var marker = window.L.circleMarker([group.latitude, group.longitude], {
+            radius: this.getMarkerRadius(group),
+            color: serverStyle.strokeColor,
+            weight: serverStyle.weight,
+            fillColor: serverStyle.fillColor,
+            fillOpacity: serverStyle.fillOpacity,
+            dashArray: serverStyle.dashArray
         });
 
         marker.bindPopup(this.buildPopupHtml(group), {
