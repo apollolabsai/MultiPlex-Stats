@@ -36,6 +36,12 @@
             '&copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
         this.hasUserViewport = false;
         this.lastAutoFit = null;
+        this.serverColors = {
+            serverA: '#E6B413',
+            serverB: '#f18a3d',
+            mixedStroke: '#ffd8a8',
+            mixedFill: '#f7c84a'
+        };
     }
 
     ActivityMap.prototype.shouldUseHostedTiles = function() {
@@ -153,6 +159,44 @@
         return html;
     };
 
+    ActivityMap.prototype.getGroupServerStyle = function(group) {
+        var hasServerA = false;
+        var hasServerB = false;
+
+        (group.streams || []).forEach(function(stream) {
+            if (stream.server_order === 'server-a') {
+                hasServerA = true;
+            } else if (stream.server_order === 'server-b') {
+                hasServerB = true;
+            }
+        });
+
+        if (hasServerA && hasServerB) {
+            return {
+                strokeColor: this.serverColors.mixedStroke,
+                fillColor: this.serverColors.mixedFill,
+                fillOpacity: 0.92,
+                dashArray: '3 3'
+            };
+        }
+
+        if (hasServerA) {
+            return {
+                strokeColor: '#fff1b8',
+                fillColor: this.serverColors.serverA,
+                fillOpacity: 0.88,
+                dashArray: null
+            };
+        }
+
+        return {
+            strokeColor: '#ffd8a8',
+            fillColor: this.serverColors.serverB,
+            fillOpacity: 0.84,
+            dashArray: null
+        };
+    };
+
     ActivityMap.prototype.updateSummary = function(totalCount, mappedCount, localCount, unresolvedCount) {
         if (!this.summaryElement) {
             return;
@@ -233,12 +277,14 @@
 
         var bounds = [];
         points.forEach(function(group) {
+            var serverStyle = this.getGroupServerStyle(group);
             var marker = window.L.circleMarker([group.latitude, group.longitude], {
                 radius: Math.min(11 + (group.streams.length - 1) * 2, 18),
-                color: '#ffd8a8',
+                color: serverStyle.strokeColor,
                 weight: 1.5,
-                fillColor: '#f18a3d',
-                fillOpacity: 0.8
+                fillColor: serverStyle.fillColor,
+                fillOpacity: serverStyle.fillOpacity,
+                dashArray: serverStyle.dashArray
             });
             marker.bindPopup(this.buildPopupHtml(group), {
                 maxWidth: 280,

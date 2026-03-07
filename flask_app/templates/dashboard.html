@@ -143,6 +143,20 @@
             <div class="current-activity-map-heading">
                 <div class="current-activity-map-title">Live Stream Map</div>
                 <div class="current-activity-map-summary" id="current-activity-map-summary">Preparing map...</div>
+                <div class="current-activity-map-legend" aria-label="Map legend">
+                    <span class="current-activity-map-legend-item">
+                        <span class="current-activity-map-legend-dot server-a"></span>
+                        Server A
+                    </span>
+                    <span class="current-activity-map-legend-item">
+                        <span class="current-activity-map-legend-dot server-b"></span>
+                        Server B
+                    </span>
+                    <span class="current-activity-map-legend-item">
+                        <span class="current-activity-map-legend-dot mixed"></span>
+                        Mixed
+                    </span>
+                </div>
             </div>
             <button type="button" class="current-activity-map-reset" id="current-activity-map-reset">
                 Reset View
@@ -560,6 +574,48 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+}
+
+.current-activity-map-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    margin-top: 2px;
+    color: #bdbdbd;
+    font-size: 0.82em;
+}
+
+.current-activity-map-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.current-activity-map-legend-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+    display: inline-block;
+    border: 1.5px solid rgba(255, 255, 255, 0.45);
+    box-sizing: border-box;
+}
+
+.current-activity-map-legend-dot.server-a {
+    background: #E6B413;
+    border-color: #fff1b8;
+}
+
+.current-activity-map-legend-dot.server-b {
+    background: #f18a3d;
+    border-color: #ffd8a8;
+}
+
+.current-activity-map-legend-dot.mixed {
+    background: #f7c84a;
+    border-color: #ffd8a8;
+    outline: 1px dashed rgba(255, 216, 168, 0.65);
+    outline-offset: 2px;
 }
 
 .current-activity-map-title {
