@@ -2,6 +2,8 @@
 IP geolocation lookup service with database caching.
 Uses ip-api.com (45 requests/minute free tier, no API key required).
 """
+from datetime import UTC, datetime
+
 import requests
 from flask_app.models import db, IPGeolocation
 
@@ -42,16 +44,25 @@ class GeolocationService:
         # Check cache first
         cached = IPGeolocation.query.filter_by(ip_address=normalized_ip).first()
         if cached:
-            return {
-                'city': cached.city,
-                'region': cached.region,
-                'country': cached.country,
-                'isp': cached.isp,
-                'latitude': cached.latitude,
-                'longitude': cached.longitude,
-            }
+            cached_result = self._record_to_result(cached)
+
+            # Legacy cache rows may have location text but no coordinates.
+            if self._should_refresh_cached_coordinates(cached):
+                refreshed_result = self._lookup_remote(normalized_ip, cached)
+                if refreshed_result is not None:
+                    return refreshed_result
+
+            return cached_result
 
         # Perform API lookup
+        fresh_result = self._lookup_remote(normalized_ip)
+        if fresh_result is not None:
+            return fresh_result
+
+        return self._empty_result()
+
+    def _lookup_remote(self, normalized_ip, cached_record=None):
+        """Query the remote geolocation API and upsert the cache record."""
         try:
             response = requests.get(
                 self.api_url.format(ip=normalized_ip),
@@ -63,7 +74,7 @@ class GeolocationService:
 
                 # Check for API error response
                 if data.get('status') == 'fail':
-                    return self._empty_result()
+                    return None if cached_record else self._empty_result()
 
                 # Extract location data (ip-api.com field names)
                 city = data.get('city')
@@ -74,15 +85,14 @@ class GeolocationService:
                 longitude = data.get('lon')
 
                 # Cache the result
-                geo_record = IPGeolocation(
-                    ip_address=normalized_ip,
-                    city=city,
-                    region=region,
-                    country=country,
-                    isp=isp,
-                    latitude=latitude,
-                    longitude=longitude,
-                )
+                geo_record = cached_record or IPGeolocation(ip_address=normalized_ip)
+                geo_record.city = city
+                geo_record.region = region
+                geo_record.country = country
+                geo_record.isp = isp
+                geo_record.latitude = latitude
+                geo_record.longitude = longitude
+                geo_record.lookup_date = datetime.now(UTC)
                 db.session.add(geo_record)
                 db.session.commit()
 
@@ -95,6 +105,9 @@ class GeolocationService:
                     'longitude': longitude,
                 }
             else:
+                if cached_record:
+                    return None
+
                 # API error - cache as unknown to prevent repeated failed requests
                 geo_record = IPGeolocation(
                     ip_address=normalized_ip,
@@ -104,6 +117,7 @@ class GeolocationService:
                     isp=None,
                     latitude=None,
                     longitude=None,
+                    lookup_date=datetime.now(UTC),
                 )
                 db.session.add(geo_record)
                 db.session.commit()
@@ -111,8 +125,8 @@ class GeolocationService:
 
         except Exception as e:
             print(f"Error looking up IP {normalized_ip}: {e}")
-            # Don't cache failures - allow retry later
-            return self._empty_result()
+            # Don't overwrite cached records on refresh failure.
+            return None if cached_record else self._empty_result()
 
     @staticmethod
     def format_location_label(geo_data):
@@ -147,6 +161,26 @@ class GeolocationService:
             'latitude': None,
             'longitude': None,
         }
+
+    @staticmethod
+    def _record_to_result(record):
+        """Convert a cached ORM record into the public response shape."""
+        return {
+            'city': record.city,
+            'region': record.region,
+            'country': record.country,
+            'isp': record.isp,
+            'latitude': record.latitude,
+            'longitude': record.longitude,
+        }
+
+    @staticmethod
+    def _should_refresh_cached_coordinates(record):
+        """Refresh legacy/stale cache rows that lack coordinates."""
+        if record.latitude is not None and record.longitude is not None:
+            return False
+
+        return any((record.city, record.region, record.country, record.isp))
 
     def _normalize_ip(self, ip_address):
         """Normalize IP string for caching and lookup."""

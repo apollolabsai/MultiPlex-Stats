@@ -69,3 +69,41 @@ class GeolocationServiceTests(unittest.TestCase):
         self.assertEqual(result['isp'], 'Local Network')
         self.assertIsNone(result['latitude'])
         self.assertIsNone(result['longitude'])
+
+    @patch('flask_app.services.geolocation_service.requests.get')
+    def test_lookup_ip_refreshes_cached_rows_missing_coordinates(self, mock_get):
+        stale_record = IPGeolocation(
+            ip_address='8.8.4.4',
+            city='Van Nuys',
+            region='California',
+            country='United States',
+            isp='Charter Communications',
+            latitude=None,
+            longitude=None,
+        )
+        db.session.add(stale_record)
+        db.session.commit()
+
+        response = Mock()
+        response.status_code = 200
+        response.json.return_value = {
+            'status': 'success',
+            'city': 'Van Nuys',
+            'regionName': 'California',
+            'country': 'United States',
+            'isp': 'Charter Communications',
+            'lat': 34.1867,
+            'lon': -118.448,
+        }
+        mock_get.return_value = response
+
+        result = GeolocationService().lookup_ip('8.8.4.4')
+
+        self.assertEqual(result['city'], 'Van Nuys')
+        self.assertEqual(result['latitude'], 34.1867)
+        self.assertEqual(result['longitude'], -118.448)
+        self.assertEqual(mock_get.call_count, 1)
+
+        record = IPGeolocation.query.filter_by(ip_address='8.8.4.4').first()
+        self.assertEqual(record.latitude, 34.1867)
+        self.assertEqual(record.longitude, -118.448)
