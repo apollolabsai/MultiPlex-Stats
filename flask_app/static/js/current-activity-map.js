@@ -19,6 +19,7 @@
         this.element = document.getElementById(options.elementId);
         this.emptyElement = document.getElementById(options.emptyId);
         this.summaryElement = document.getElementById(options.summaryId);
+        this.resetButton = document.getElementById(options.resetId);
         this.tileUrl = options.tileUrl || '';
         this.attribution = options.attribution || '';
         this.maxZoom = Number(options.maxZoom) || 20;
@@ -33,6 +34,8 @@
         this.cartoAttribution =
             '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> ' +
             '&copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
+        this.hasUserViewport = false;
+        this.lastAutoFit = null;
     }
 
     ActivityMap.prototype.shouldUseHostedTiles = function() {
@@ -46,11 +49,26 @@
 
         this.map = window.L.map(this.element, {
             worldCopyJump: true,
+            dragging: true,
+            touchZoom: true,
+            doubleClickZoom: true,
+            boxZoom: false,
+            keyboard: true,
+            tap: true,
             zoomControl: true,
             attributionControl: true
         }).setView(this.defaultCenter, this.defaultZoom);
         if (this.map.attributionControl) {
             this.map.attributionControl.setPrefix(false);
+        }
+        if (this.map.dragging) {
+            this.map.dragging.enable();
+        }
+        this.map.on('dragstart zoomstart', function() {
+            this.hasUserViewport = true;
+        }, this);
+        if (this.resetButton) {
+            this.resetButton.addEventListener('click', this.resetView.bind(this));
         }
 
         if (this.shouldUseHostedTiles()) {
@@ -162,6 +180,13 @@
         this.summaryElement.textContent = parts.join(' • ');
     };
 
+    ActivityMap.prototype.updateResetButtonState = function() {
+        if (!this.resetButton) {
+            return;
+        }
+        this.resetButton.disabled = !this.lastAutoFit;
+    };
+
     ActivityMap.prototype.updateEmptyState = function(message, shouldShow) {
         if (!this.emptyElement) {
             return;
@@ -188,11 +213,23 @@
                 ? 'Active streams are local/private or have no geolocation yet.'
                 : 'No active streams to map right now.';
             this.updateEmptyState(emptyMessage, true);
-            this.map.setView(this.defaultCenter, this.defaultZoom);
+            this.lastAutoFit = {
+                type: 'view',
+                center: this.defaultCenter.slice(),
+                zoom: this.defaultZoom
+            };
+            this.updateResetButtonState();
+            if (!this.hasUserViewport) {
+                this.map.setView(this.defaultCenter, this.defaultZoom);
+            }
             return;
         }
 
         this.updateEmptyState('', false);
+
+        if (this.hasUserViewport) {
+            return;
+        }
 
         var bounds = [];
         points.forEach(function(group) {
@@ -212,10 +249,25 @@
         }, this);
 
         if (bounds.length === 1) {
+            this.lastAutoFit = {
+                type: 'view',
+                center: bounds[0].slice(),
+                zoom: 5
+            };
+            this.updateResetButtonState();
             this.map.setView(bounds[0], 5);
             return;
         }
 
+        this.lastAutoFit = {
+            type: 'bounds',
+            bounds: bounds.map(function(point) { return point.slice(); }),
+            options: {
+                padding: [24, 24],
+                maxZoom: 5
+            }
+        };
+        this.updateResetButtonState();
         this.map.fitBounds(bounds, {
             padding: [24, 24],
             maxZoom: 5
@@ -224,6 +276,22 @@
 
     ActivityMap.prototype.setStreams = function(streams) {
         this.render(streams);
+    };
+
+    ActivityMap.prototype.resetView = function() {
+        if (!this.map || !this.lastAutoFit) {
+            return;
+        }
+
+        this.hasUserViewport = false;
+        if (this.lastAutoFit.type === 'bounds' && this.lastAutoFit.bounds) {
+            this.map.fitBounds(this.lastAutoFit.bounds, this.lastAutoFit.options || {});
+            return;
+        }
+
+        if (this.lastAutoFit.center) {
+            this.map.setView(this.lastAutoFit.center, this.lastAutoFit.zoom || this.defaultZoom);
+        }
     };
 
     window.CurrentActivityMap = {

@@ -140,8 +140,13 @@
     </div>
     <div class="current-activity-map-card">
         <div class="current-activity-map-header">
-            <div class="current-activity-map-title">Live Stream Map</div>
-            <div class="current-activity-map-summary" id="current-activity-map-summary">Preparing map...</div>
+            <div class="current-activity-map-heading">
+                <div class="current-activity-map-title">Live Stream Map</div>
+                <div class="current-activity-map-summary" id="current-activity-map-summary">Preparing map...</div>
+            </div>
+            <button type="button" class="current-activity-map-reset" id="current-activity-map-reset">
+                Reset View
+            </button>
         </div>
         <div class="current-activity-map-shell">
             <div id="current-activity-map" class="current-activity-map" aria-label="Map of current stream geolocations"></div>
@@ -551,6 +556,12 @@
     padding: 14px 16px 10px;
 }
 
+.current-activity-map-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
 .current-activity-map-title {
     color: #f3c28d;
     font-size: 0.88em;
@@ -564,6 +575,24 @@
     font-size: 0.9em;
 }
 
+.current-activity-map-reset {
+    border: 1px solid rgba(241, 138, 61, 0.34);
+    background: rgba(255, 255, 255, 0.05);
+    color: #f7f1eb;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.current-activity-map-reset:hover {
+    background: rgba(241, 138, 61, 0.14);
+    border-color: rgba(241, 138, 61, 0.6);
+    transform: translateY(-1px);
+}
+
 .current-activity-map-shell {
     position: relative;
     padding: 0 16px 16px;
@@ -574,9 +603,14 @@
     border-radius: 12px;
     overflow: hidden;
     border: 1px solid rgba(241, 138, 61, 0.18);
+    cursor: grab;
     background:
         radial-gradient(circle at top, rgba(241, 138, 61, 0.12), transparent 30%),
         linear-gradient(180deg, rgba(8, 8, 8, 0.95) 0%, rgba(14, 14, 14, 0.98) 100%);
+}
+
+.current-activity-map:active {
+    cursor: grabbing;
 }
 
 .current-activity-map-empty {
@@ -983,6 +1017,7 @@ $(document).ready(function() {
             elementId: 'current-activity-map',
             emptyId: 'current-activity-map-empty',
             summaryId: 'current-activity-map-summary',
+            resetId: 'current-activity-map-reset',
             tileUrl: {{ stadia_map_tile_url | tojson | safe }},
             attribution: {{ stadia_map_attribution | tojson | safe }},
             maxZoom: {{ stadia_map_max_zoom | tojson | safe }},
