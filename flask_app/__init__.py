@@ -3,6 +3,7 @@ Flask application factory.
 """
 import os
 from datetime import datetime, timezone
+from urllib.parse import quote
 from flask import Flask
 from multiplex_stats.timezone_utils import get_local_timezone
 
@@ -72,11 +73,39 @@ def create_app(config_name='development'):
             'git_branch': app.config.get('GIT_BRANCH', 'unknown')
         }
 
+    def _build_stadia_tile_url() -> str:
+        tile_url = app.config.get('STADIA_MAP_TILE_URL', '')
+        from flask_app.services.config_service import ConfigService
+
+        api_key = ConfigService.get_effective_stadia_maps_api_key(
+            app.config.get('STADIA_MAPS_API_KEY', '')
+        )
+        if api_key:
+            separator = '&' if '?' in tile_url else '?'
+            return f"{tile_url}{separator}api_key={quote(api_key)}"
+        return tile_url
+
     # Load configuration
     if config_name == 'production':
         app.config.from_object('flask_app.config.ProductionConfig')
     else:
         app.config.from_object('flask_app.config.DevelopmentConfig')
+
+    @app.context_processor
+    def inject_map_config():
+        """Expose map tile configuration to templates."""
+        from flask_app.services.config_service import ConfigService
+
+        effective_key = ConfigService.get_effective_stadia_maps_api_key(
+            app.config.get('STADIA_MAPS_API_KEY', '')
+        )
+        tile_url = _build_stadia_tile_url()
+        return {
+            'stadia_map_tile_url': tile_url,
+            'stadia_map_attribution': app.config.get('STADIA_MAP_ATTRIBUTION', ''),
+            'stadia_map_max_zoom': app.config.get('STADIA_MAP_MAX_ZOOM', 20),
+            'stadia_map_has_key': bool(effective_key),
+        }
 
     # Ensure instance folder exists
     try:
@@ -109,6 +138,7 @@ def create_app(config_name='development'):
     # Create database tables and initialize default settings
     with app.app_context():
         db.create_all()
+        _ensure_additive_schema_updates()
         _initialize_default_settings()
 
     return app
@@ -132,3 +162,32 @@ def _initialize_default_settings():
         default_lifetime_status = LifetimeStatsSyncStatus()
         db.session.add(default_lifetime_status)
         db.session.commit()
+
+
+def _ensure_additive_schema_updates():
+    """Apply additive schema updates for existing installs without a migration framework."""
+    from sqlalchemy import inspect, text
+    from flask_app.models import db
+
+    inspector = inspect(db.engine)
+    if 'ip_geolocation' not in inspector.get_table_names():
+        return
+
+    existing_columns = {column['name'] for column in inspector.get_columns('ip_geolocation')}
+    statements = []
+    if 'latitude' not in existing_columns:
+        statements.append("ALTER TABLE ip_geolocation ADD COLUMN latitude FLOAT")
+    if 'longitude' not in existing_columns:
+        statements.append("ALTER TABLE ip_geolocation ADD COLUMN longitude FLOAT")
+
+    if 'analytics_settings' in inspector.get_table_names():
+        analytics_columns = {column['name'] for column in inspector.get_columns('analytics_settings')}
+        if 'stadia_maps_api_key' not in analytics_columns:
+            statements.append("ALTER TABLE analytics_settings ADD COLUMN stadia_maps_api_key VARCHAR(255)")
+
+    if not statements:
+        return
+
+    with db.engine.begin() as connection:
+        for statement in statements:
+            connection.execute(text(statement))

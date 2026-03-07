@@ -203,6 +203,48 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
         self.assertEqual(resolved, newer.id)
         self.assertNotEqual(resolved, older.id)
 
+    def test_parse_session_includes_geo_coordinates_and_location_label(self):
+        session = {
+            'ip_address': '8.8.8.8',
+            'media_type': 'movie',
+            'title': 'Heat',
+            'full_title': 'Heat',
+            'year': '1995',
+            'friendly_name': 'Alice',
+            'state': 'playing',
+            'progress_percent': 42,
+            'platform': 'Web',
+            'product': 'Chrome',
+            'transcode_decision': 'direct play',
+            'stream_video_full_resolution': '1080p',
+            'bandwidth': '8000',
+        }
+        geo_service = SimpleNamespace(
+            lookup_ip=lambda ip: {
+                'city': 'Los Angeles',
+                'region': 'California',
+                'country': 'United States',
+                'isp': 'Example ISP',
+                'latitude': 34.0522,
+                'longitude': -118.2437,
+            }
+        )
+
+        parsed = AnalyticsService()._parse_session(
+            session,
+            SimpleNamespace(name='Apollo', ip_address='192.168.1.228:8181'),
+            'server-a',
+            geo_service=geo_service,
+        )
+
+        self.assertEqual(parsed['location'], 'Los Angeles, California')
+        self.assertEqual(parsed['geo_city'], 'Los Angeles')
+        self.assertEqual(parsed['geo_region'], 'California')
+        self.assertEqual(parsed['geo_country'], 'United States')
+        self.assertEqual(parsed['geo_lat'], 34.0522)
+        self.assertEqual(parsed['geo_lon'], -118.2437)
+        self.assertTrue(parsed['is_mappable'])
+
     @patch('flask_app.services.analytics_service.ConfigService.get_server_configs')
     @patch('multiplex_stats.TautulliClient')
     def test_get_all_users_groups_by_username_and_uses_latest_friendly_name(

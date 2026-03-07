@@ -1,7 +1,7 @@
 """
 Settings routes for managing server configuration and analytics settings.
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_app.models import db, ServerConfig, AnalyticsSettings
 from flask_app.services.config_service import ConfigService
 from flask_app.services.history_sync_service import HistorySyncService
@@ -24,6 +24,8 @@ def index():
     history_stats = sync_service.get_history_stats()
     media_sync_status = MediaService().get_sync_status()
     lifetime_sync_status = MediaLifetimeStatsService().get_sync_status()
+    env_stadia_key_present = bool((current_app.config.get('STADIA_MAPS_API_KEY', '') or '').strip())
+    stored_stadia_key_present = bool((getattr(settings, 'stadia_maps_api_key', '') or '').strip()) if settings else False
 
     return render_template('settings.html',
                           servers=servers,
@@ -31,7 +33,9 @@ def index():
                           sync_status=sync_status,
                           history_stats=history_stats,
                           media_sync_status=media_sync_status,
-                          lifetime_sync_status=lifetime_sync_status)
+                          lifetime_sync_status=lifetime_sync_status,
+                          env_stadia_key_present=env_stadia_key_present,
+                          stored_stadia_key_present=stored_stadia_key_present)
 
 
 @settings_bp.route('/server/add', methods=['POST'])
@@ -111,6 +115,28 @@ def update_analytics_settings():
         flash('Please enter valid numbers for all settings.', 'error')
     except Exception as e:
         flash(f'Error updating settings: {str(e)}', 'error')
+
+    return redirect(url_for('settings.index'))
+
+
+@settings_bp.route('/map', methods=['POST'])
+def update_map_settings():
+    """Update map-related settings."""
+    settings = AnalyticsSettings.query.first()
+    if not settings:
+        settings = AnalyticsSettings()
+        db.session.add(settings)
+
+    try:
+        settings.stadia_maps_api_key = (request.form.get('stadia_maps_api_key', '') or '').strip() or None
+        db.session.commit()
+        if settings.stadia_maps_api_key:
+            flash('Stadia Maps API key saved. Dashboard map will use the stored key.', 'success')
+        else:
+            flash('Stored Stadia Maps API key cleared. The app will fall back to the environment variable if one is set.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating map settings: {str(e)}', 'error')
 
     return redirect(url_for('settings.index'))
 

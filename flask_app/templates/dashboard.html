@@ -1,6 +1,14 @@
 {% extends "base.html" %}
 
 {% block title %}Dashboard - MultiPlex Stats{% endblock %}
+{% block head_extras %}
+<link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+>
+{% endblock %}
 
 {% block content %}
 {% if not has_data %}
@@ -128,6 +136,16 @@
     <div class="table-container" style="overflow: visible;">
         <div id="current-activity-container">
             {% include 'partials/current_activity.html' %}
+        </div>
+    </div>
+    <div class="current-activity-map-card">
+        <div class="current-activity-map-header">
+            <div class="current-activity-map-title">Live Stream Map</div>
+            <div class="current-activity-map-summary" id="current-activity-map-summary">Preparing map...</div>
+        </div>
+        <div class="current-activity-map-shell">
+            <div id="current-activity-map" class="current-activity-map" aria-label="Map of current stream geolocations"></div>
+            <div id="current-activity-map-empty" class="current-activity-map-empty" hidden></div>
         </div>
     </div>
 </div>
@@ -366,11 +384,18 @@
 {% if has_data %}
 <!-- jQuery for DOM manipulation -->
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+></script>
 <!-- Highcharts rendering functions -->
 <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
 <!-- Shared utilities -->
 <script src="{{ url_for('static', filename='js/hero-quilt.js') }}"></script>
 <script src="{{ url_for('static', filename='js/nav-loading.js') }}"></script>
+<script src="{{ url_for('static', filename='js/current-activity-map-fallback-world.js') }}"></script>
+<script src="{{ url_for('static', filename='js/current-activity-map.js') }}"></script>
 
 <style>
 /* Poster preview on hover */
@@ -507,6 +532,122 @@
 .current-activity-last-updated {
     color: #888;
     font-size: 0.9em;
+}
+
+.current-activity-map-card {
+    margin-top: 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(19, 19, 19, 0.96) 0%, rgba(12, 12, 12, 0.98) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    overflow: hidden;
+}
+
+.current-activity-map-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 16px 10px;
+}
+
+.current-activity-map-title {
+    color: #f3c28d;
+    font-size: 0.88em;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.current-activity-map-summary {
+    color: #9f9f9f;
+    font-size: 0.9em;
+}
+
+.current-activity-map-shell {
+    position: relative;
+    padding: 0 16px 16px;
+}
+
+.current-activity-map {
+    height: 380px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(241, 138, 61, 0.18);
+    background:
+        radial-gradient(circle at top, rgba(241, 138, 61, 0.12), transparent 30%),
+        linear-gradient(180deg, rgba(8, 8, 8, 0.95) 0%, rgba(14, 14, 14, 0.98) 100%);
+}
+
+.current-activity-map-empty {
+    position: absolute;
+    inset: 0 16px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    text-align: center;
+    color: #d3d3d3;
+    font-size: 0.98em;
+    background: rgba(10, 10, 10, 0.5);
+    backdrop-filter: blur(2px);
+    border-radius: 12px;
+}
+
+.current-activity-map-shell .leaflet-control-zoom a {
+    background: rgba(16, 16, 16, 0.92);
+    color: #f3f3f3;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.current-activity-map-shell .leaflet-control-attribution {
+    background: rgba(10, 10, 10, 0.82);
+    color: #b3b3b3;
+}
+
+.current-activity-map-shell .leaflet-control-attribution a {
+    color: #f5b06d;
+}
+
+.current-activity-map-shell .leaflet-popup-content-wrapper,
+.current-activity-map-shell .leaflet-popup-tip {
+    background: #111;
+    color: #f3f3f3;
+}
+
+.current-activity-map-shell .leaflet-popup-content {
+    margin: 12px 14px;
+}
+
+.map-popup-group-title {
+    color: #f3c28d;
+    font-size: 0.9em;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.map-popup-stream {
+    padding-top: 8px;
+    margin-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.map-popup-stream:first-of-type {
+    border-top: 0;
+    padding-top: 0;
+    margin-top: 0;
+}
+
+.map-popup-stream-title {
+    color: #fff;
+    font-weight: 600;
+}
+
+.map-popup-stream-meta {
+    color: #b7b7b7;
+    font-size: 0.86em;
+    margin-top: 2px;
 }
 
 .nav-loading-overlay {
@@ -807,6 +948,12 @@
         width: auto;
     }
 }
+
+@media (max-width: 680px) {
+    .current-activity-map {
+        height: 320px;
+    }
+}
 </style>
 
 <script>
@@ -821,6 +968,8 @@ $(document).ready(function() {
     var refreshHelpHoverTimer = null;
     var refreshHelpTargetEl = null;
     var mediaContentDetailBase = '{{ url_for("main.media_content_details", media_id=0) }}';
+    var currentActivityMap = null;
+    var initialCurrentActivityStreams = {{ current_activity | tojson | safe }};
     var dashboardHero = new HeroQuilt({
         backdropId: 'dashboard-hero-backdrop',
         heroId: 'dashboard-hero',
@@ -829,6 +978,19 @@ $(document).ready(function() {
         minHeight: 186,
         fetchUrl: '{{ url_for("main.api_dashboard_top_posters") }}'
     });
+
+    if (window.CurrentActivityMap) {
+        currentActivityMap = window.CurrentActivityMap.create({
+            elementId: 'current-activity-map',
+            emptyId: 'current-activity-map-empty',
+            summaryId: 'current-activity-map-summary',
+            tileUrl: {{ stadia_map_tile_url | tojson | safe }},
+            attribution: {{ stadia_map_attribution | tojson | safe }},
+            maxZoom: {{ stadia_map_max_zoom | tojson | safe }},
+            hasStadiaKey: {{ stadia_map_has_key | tojson | safe }},
+            initialStreams: initialCurrentActivityStreams
+        });
+    }
 
     function buildMoviePosterLink(card) {
         if (!card) {
@@ -1196,16 +1358,19 @@ $(document).ready(function() {
             return;
         }
 
-        fetch('{{ url_for("main.api_current_activity") }}', { cache: 'no-store' })
+        fetch('{{ url_for("main.api_current_activity_data") }}', { cache: 'no-store' })
             .then(function(response) {
                 if (!response.ok) {
                     throw new Error('Failed to refresh current activity');
                 }
-                return response.text();
+                return response.json();
             })
-            .then(function(html) {
-                container.innerHTML = html;
+            .then(function(payload) {
+                container.innerHTML = payload.html || '';
                 preloadPosterPreviews(container);
+                if (currentActivityMap) {
+                    currentActivityMap.setStreams(Array.isArray(payload.streams) ? payload.streams : []);
+                }
                 lastActivityUpdateAt = Date.now();
                 updateLastUpdatedLabel();
             })

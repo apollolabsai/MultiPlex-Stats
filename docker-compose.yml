@@ -26,6 +26,8 @@ services:
       # - TAUTULLI_SERVER_B_VERIFY_SSL=false
       # Timezone (optional, defaults to America/Los_Angeles)
       # - TZ=America/New_York
+      # Stadia Maps API key for the dashboard stream map (optional if using domain auth)
+      # - STADIA_MAPS_API_KEY=your_stadia_maps_api_key
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8487')"]

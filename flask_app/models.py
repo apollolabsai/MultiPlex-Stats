@@ -46,6 +46,7 @@ class AnalyticsSettings(db.Model):
     top_movies = db.Column(db.Integer, default=30)
     top_tv_shows = db.Column(db.Integer, default=30)
     top_users = db.Column(db.Integer, default=20)
+    stadia_maps_api_key = db.Column(db.String(255), nullable=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def to_multiplex_settings(self):
@@ -140,6 +141,8 @@ class IPGeolocation(db.Model):
     region = db.Column(db.String(100), nullable=True)
     country = db.Column(db.String(100), nullable=True)
     isp = db.Column(db.String(200), nullable=True)
+    latitude = db.Column(db.Float, nullable=True)
+    longitude = db.Column(db.Float, nullable=True)
     lookup_date = db.Column(db.DateTime, default=datetime.utcnow)
 
 

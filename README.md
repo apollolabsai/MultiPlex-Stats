@@ -17,6 +17,7 @@ A web application for combining and visualizing statistics from multiple Tautull
 - **Content Insights** - Discover your most popular movies and TV shows
 - **Viewing History** - Searchable table of all viewing activity
 - **Trend Analysis** - Daily and monthly viewing trends over time
+- **Live Stream Map** - Plot currently streaming geo-locations on a dark Stadia Maps basemap
 - **Remove Useless Content** - View and export data with zero lifetime views to free up space
 - **True Lifetime Playcounts** - Build lifetime play counts from full history so titles with multiple Plex keys are merged correctly. Some Plex servers assign multiple keys to the same title over time. We build a full-history cache so media page play counts are merged across those keys without slowing page load.
 
@@ -78,6 +79,8 @@ services:
       # - TAUTULLI_SERVER_B_VERIFY_SSL=false
       # Timezone (optional, defaults to America/Los_Angeles)
       # - TZ=America/New_York
+      # Stadia Maps API key for the dashboard stream map (optional if using domain auth)
+      # - STADIA_MAPS_API_KEY=your_stadia_maps_api_key
     restart: unless-stopped
 ```
 
@@ -138,6 +141,9 @@ After the initial load, new records are automatically appended when you refresh 
 - All data stays on your machine (no external services other than IP GEO lookup of viewing sessions)
 - API keys are stored in a local SQLite database
 - No telemetry or tracking
+
+The live stream map uses Stadia Maps' `Alidade Smooth Dark` tiles. If your Stadia setup uses API-key authentication, set `STADIA_MAPS_API_KEY` in the container environment. Domain-authenticated setups can leave it unset.
+If `STADIA_MAPS_API_KEY` is not set, MultiPlex Stats falls back to a bundled dark locator map so current stream locations can still be plotted without external tiles.
 
 ---
 

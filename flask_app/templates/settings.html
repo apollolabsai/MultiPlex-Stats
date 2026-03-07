@@ -102,6 +102,7 @@
   - TAUTULLI_SERVER_A_KEY=your_api_key_here
   # - TAUTULLI_SERVER_A_SSL=false
   # - TAUTULLI_SERVER_A_VERIFY_SSL=false
+  # - STADIA_MAPS_API_KEY=your_stadia_maps_api_key
   # Optional second server:
   # - TAUTULLI_SERVER_B_NAME=Server2
   # - TAUTULLI_SERVER_B_IP=192.168.1.101:8181
@@ -113,6 +114,45 @@
     </div>
 
     <div class="settings-right-column">
+        <div class="settings-section">
+            <h2 class="section-title">
+                <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 11l9-8 9 8"></path>
+                    <path d="M5 10v10h14V10"></path>
+                    <path d="M12 14a3 3 0 1 0 0-.01"></path>
+                </svg>
+                Map Settings
+            </h2>
+
+            <div class="form-card">
+                <p class="info-text">
+                    Save a Stadia Maps API key here to enable the full dark basemap for the live stream map.
+                    If blank, MultiPlex Stats will fall back to the bundled no-key locator map unless <code>STADIA_MAPS_API_KEY</code> is set in the environment.
+                </p>
+                <div class="settings-note-card">
+                    <div><strong>Stored key in database:</strong> {{ 'Yes' if stored_stadia_key_present else 'No' }}</div>
+                    <div><strong>Environment key available:</strong> {{ 'Yes' if env_stadia_key_present else 'No' }}</div>
+                    <div><strong>Effective priority:</strong> saved key in Settings overrides the environment variable.</div>
+                </div>
+                <form method="POST" action="{{ url_for('settings.update_map_settings') }}">
+                    <div class="form-group">
+                        <label for="stadia_maps_api_key">Stadia Maps API Key</label>
+                        <input
+                            type="password"
+                            id="stadia_maps_api_key"
+                            name="stadia_maps_api_key"
+                            value="{{ settings.stadia_maps_api_key if settings else '' }}"
+                            placeholder="Paste your Stadia Maps API key"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                        <small>Leave blank to remove the saved key and fall back to the environment variable or built-in locator map.</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Map Settings</button>
+                </form>
+            </div>
+        </div>
+
         <div class="settings-section" id="data-sync-section">
             <h2 class="section-title">
                 <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -691,6 +731,20 @@
     background: rgba(241, 138, 61, 0.1);
     border: 1px solid rgba(241, 138, 61, 0.3);
     border-radius: 8px;
+}
+
+.settings-note-card {
+    margin-bottom: 16px;
+    padding: 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    color: #c7c7c7;
+    line-height: 1.45;
+}
+
+.settings-note-card strong {
+    color: #f3f3f3;
 }
 
 .load-process-copy {

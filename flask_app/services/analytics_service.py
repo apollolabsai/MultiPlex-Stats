@@ -24,6 +24,7 @@ from multiplex_stats.visualization import (
     get_concurrent_streams_chart_data
 )
 from flask_app.services.config_service import ConfigService
+from flask_app.services.geolocation_service import GeolocationService
 from flask_app.services.history_sync_service import HistorySyncService
 from flask_app.services.utils import normalize_title, to_int
 from flask_app.models import CachedMedia, LifetimeMediaPlayCount, ServerConfig, ViewingHistory, db
@@ -1099,37 +1100,16 @@ class AnalyticsService:
 
     def _get_location_from_ip(self, ip_address: str) -> str:
         """
-        Get location (city, state) from IP address using ip-api.com.
+        Get location label from IP address using the shared geolocation cache/service.
 
         Args:
             ip_address: IP address to lookup
 
         Returns:
-            Location string in format "City, State" or "Unknown" if lookup fails
+            Compact location label or "Unknown" if lookup fails
         """
-        import requests
-
-        # Skip local/private IPs
-        if ip_address in ['Unknown', '127.0.0.1', 'localhost'] or ip_address.startswith('192.168.') or ip_address.startswith('10.'):
-            return 'Local Network'
-
-        try:
-            response = requests.get(f'http://ip-api.com/json/{ip_address}', timeout=2)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('status') == 'success':
-                    city = data.get('city', '')
-                    region = data.get('regionName', '')
-                    if city and region:
-                        return f"{city}, {region}"
-                    elif city:
-                        return city
-                    elif region:
-                        return region
-        except Exception as e:
-            print(f"Error looking up location for {ip_address}: {e}")
-
-        return 'Unknown'
+        geo_data = GeolocationService().lookup_ip(ip_address)
+        return GeolocationService.format_location_label(geo_data)
 
     @staticmethod
     def _split_movie_title_year(full_title: str) -> tuple[str, Optional[int]]:
@@ -1355,10 +1335,20 @@ class AnalyticsService:
         best = max(matches, key=lambda item: (item.added_at or -1, item.id))
         return best.id
 
-    def _parse_session(self, session: dict, server_config, server_order: str) -> Dict[str, Any]:
+    def _parse_session(
+        self,
+        session: dict,
+        server_config,
+        server_order: str,
+        geo_service: Optional[GeolocationService] = None,
+    ) -> Dict[str, Any]:
         """Parse a single Tautulli session into a stream dictionary."""
         ip_address = session.get('ip_address', 'Unknown')
-        location = self._get_location_from_ip(ip_address)
+        geo_service = geo_service or GeolocationService()
+        geo_data = geo_service.lookup_ip(ip_address)
+        location = GeolocationService.format_location_label(geo_data)
+        latitude = geo_data.get('latitude')
+        longitude = geo_data.get('longitude')
 
         media_type = session.get('media_type', '')
         if media_type == 'episode':
@@ -1435,6 +1425,12 @@ class AnalyticsService:
             'bandwidth_mbps': bandwidth_mbps,
             'ip_address': ip_address,
             'location': location,
+            'geo_city': geo_data.get('city') or '',
+            'geo_region': geo_data.get('region') or '',
+            'geo_country': geo_data.get('country') or '',
+            'geo_lat': latitude,
+            'geo_lon': longitude,
+            'is_mappable': latitude is not None and longitude is not None,
             'poster_url': poster_url,
             'media_id': self._resolve_media_id_for_stream(
                 media_type=media_type,
@@ -1462,6 +1458,7 @@ class AnalyticsService:
         server_configs = [(server_a_config, 'server-a')]
         if server_b_config:
             server_configs.append((server_b_config, 'server-b'))
+        geo_service = GeolocationService()
 
         for server_config, server_order in server_configs:
             try:
@@ -1472,7 +1469,7 @@ class AnalyticsService:
                     sessions = activity['response']['data'].get('sessions', [])
                     for session in sessions:
                         current_streams.append(
-                            self._parse_session(session, server_config, server_order)
+                            self._parse_session(session, server_config, server_order, geo_service=geo_service)
                         )
             except Exception as e:
                 print(f"Error fetching activity from {server_config.name}: {e}")

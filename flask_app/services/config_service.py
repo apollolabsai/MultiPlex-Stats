@@ -10,6 +10,13 @@ class ConfigService:
     """Service for managing configuration from database."""
 
     @staticmethod
+    def get_effective_stadia_maps_api_key(default_key: str = '') -> str:
+        """Return the DB-stored Stadia key if set, otherwise fall back to config/env."""
+        settings = AnalyticsSettings.query.first()
+        stored_key = (getattr(settings, 'stadia_maps_api_key', '') or '').strip() if settings else ''
+        return stored_key or (default_key or '').strip()
+
+    @staticmethod
     def get_server_configs() -> Tuple[Optional[object], Optional[object]]:
         """
         Get server configurations in multiplex_stats format.

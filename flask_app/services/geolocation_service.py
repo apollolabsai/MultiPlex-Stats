@@ -11,7 +11,7 @@ class GeolocationService:
 
     def __init__(self):
         # ip-api.com - free tier: 45 requests/minute, HTTP only
-        self.api_url = "http://ip-api.com/json/{ip}?fields=status,message,country,regionName,city,isp"
+        self.api_url = "http://ip-api.com/json/{ip}?fields=status,message,country,regionName,city,isp,lat,lon"
 
     def lookup_ip(self, ip_address):
         """
@@ -22,15 +22,22 @@ class GeolocationService:
             ip_address: IP address to lookup
 
         Returns:
-            dict with keys: city, region, country, isp (all may be None)
+            dict with keys: city, region, country, isp, latitude, longitude (all may be None)
         """
         normalized_ip = self._normalize_ip(ip_address)
         if not normalized_ip:
-            return {'city': None, 'region': None, 'country': None, 'isp': None}
+            return self._empty_result()
 
         # Check if it's a private IP (don't lookup)
         if self._is_private_ip(normalized_ip):
-            return {'city': 'Local', 'region': None, 'country': None, 'isp': 'Local Network'}
+            return {
+                'city': 'Local',
+                'region': None,
+                'country': None,
+                'isp': 'Local Network',
+                'latitude': None,
+                'longitude': None,
+            }
 
         # Check cache first
         cached = IPGeolocation.query.filter_by(ip_address=normalized_ip).first()
@@ -39,7 +46,9 @@ class GeolocationService:
                 'city': cached.city,
                 'region': cached.region,
                 'country': cached.country,
-                'isp': cached.isp
+                'isp': cached.isp,
+                'latitude': cached.latitude,
+                'longitude': cached.longitude,
             }
 
         # Perform API lookup
@@ -54,13 +63,15 @@ class GeolocationService:
 
                 # Check for API error response
                 if data.get('status') == 'fail':
-                    return {'city': None, 'region': None, 'country': None, 'isp': None}
+                    return self._empty_result()
 
                 # Extract location data (ip-api.com field names)
                 city = data.get('city')
                 region = data.get('regionName')
                 country = data.get('country')
                 isp = data.get('isp')
+                latitude = data.get('lat')
+                longitude = data.get('lon')
 
                 # Cache the result
                 geo_record = IPGeolocation(
@@ -68,12 +79,21 @@ class GeolocationService:
                     city=city,
                     region=region,
                     country=country,
-                    isp=isp
+                    isp=isp,
+                    latitude=latitude,
+                    longitude=longitude,
                 )
                 db.session.add(geo_record)
                 db.session.commit()
 
-                return {'city': city, 'region': region, 'country': country, 'isp': isp}
+                return {
+                    'city': city,
+                    'region': region,
+                    'country': country,
+                    'isp': isp,
+                    'latitude': latitude,
+                    'longitude': longitude,
+                }
             else:
                 # API error - cache as unknown to prevent repeated failed requests
                 geo_record = IPGeolocation(
@@ -81,16 +101,52 @@ class GeolocationService:
                     city=None,
                     region=None,
                     country=None,
-                    isp=None
+                    isp=None,
+                    latitude=None,
+                    longitude=None,
                 )
                 db.session.add(geo_record)
                 db.session.commit()
-                return {'city': None, 'region': None, 'country': None, 'isp': None}
+                return self._empty_result()
 
         except Exception as e:
             print(f"Error looking up IP {normalized_ip}: {e}")
             # Don't cache failures - allow retry later
-            return {'city': None, 'region': None, 'country': None, 'isp': None}
+            return self._empty_result()
+
+    @staticmethod
+    def format_location_label(geo_data):
+        """Format a compact location label for dashboard display."""
+        if not geo_data:
+            return 'Unknown'
+
+        city = geo_data.get('city')
+        region = geo_data.get('region')
+        country = geo_data.get('country')
+        isp = geo_data.get('isp')
+
+        if city == 'Local' and isp == 'Local Network':
+            return 'Local Network'
+        if city and region:
+            return f"{city}, {region}"
+        if city:
+            return city
+        if region:
+            return region
+        if country:
+            return country
+        return 'Unknown'
+
+    @staticmethod
+    def _empty_result():
+        return {
+            'city': None,
+            'region': None,
+            'country': None,
+            'isp': None,
+            'latitude': None,
+            'longitude': None,
+        }
 
     def _normalize_ip(self, ip_address):
         """Normalize IP string for caching and lookup."""

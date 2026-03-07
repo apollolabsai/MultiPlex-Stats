@@ -135,6 +135,18 @@ def api_current_activity():
                           current_activity=current_activity)
 
 
+@main_bp.route('/api/current-activity-data')
+def api_current_activity_data():
+    """Return current streaming activity HTML plus JSON payload for the dashboard."""
+    service = AnalyticsService()
+    current_activity = service.get_current_activity()
+    html = render_template('partials/current_activity.html', current_activity=current_activity)
+    return jsonify({
+        'html': html,
+        'streams': current_activity,
+    })
+
+
 @main_bp.route('/api/viewing-history')
 def api_viewing_history():
     """
@@ -301,7 +313,9 @@ def api_ip_lookup():
             'city': geo_data.get('city') or '',
             'region': geo_data.get('region') or '',
             'country': geo_data.get('country') or '',
-            'isp': geo_data.get('isp') or ''
+            'isp': geo_data.get('isp') or '',
+            'latitude': geo_data.get('latitude'),
+            'longitude': geo_data.get('longitude'),
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
