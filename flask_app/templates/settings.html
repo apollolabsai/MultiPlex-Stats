@@ -115,46 +115,6 @@
     </div>
 
     <div class="settings-right-column">
-        <div class="settings-section">
-            <h2 class="section-title">
-                <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3 11l9-8 9 8"></path>
-                    <path d="M5 10v10h14V10"></path>
-                    <path d="M12 14a3 3 0 1 0 0-.01"></path>
-                </svg>
-                Map Settings
-            </h2>
-
-            <div class="form-card">
-                <p class="info-text">
-                    Optionally save a Stadia Maps API key here to enable the full dark basemap for the live stream map.
-                    If blank, MultiPlex Stats will fall back to CARTO's dark basemap unless <code>STADIA_MAPS_API_KEY</code> is set in the environment.
-                    You can obtain a free API key by signing up at <a href="https://stadiamaps.com" target="_blank" rel="noopener">stadiamaps.com</a>.
-                </p>
-                <div class="settings-note-card">
-                    <div><strong>Stored key in database:</strong> {{ 'Yes' if stored_stadia_key_present else 'No' }}</div>
-                    <div><strong>Environment key available:</strong> {{ 'Yes' if env_stadia_key_present else 'No' }}</div>
-                    <div><strong>Effective priority:</strong> saved key in Settings overrides the environment variable.</div>
-                </div>
-                <form method="POST" action="{{ url_for('settings.update_map_settings') }}">
-                    <div class="form-group">
-                        <label for="stadia_maps_api_key">Optional Stadia Maps API Key</label>
-                        <input
-                            type="password"
-                            id="stadia_maps_api_key"
-                            name="stadia_maps_api_key"
-                            value="{{ settings.stadia_maps_api_key if settings else '' }}"
-                            placeholder="Paste your Stadia Maps API key"
-                            autocomplete="off"
-                            spellcheck="false"
-                        >
-                        <small>Leave blank to remove the saved key and fall back to the environment variable or CARTO's dark basemap.</small>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Save Map Settings</button>
-                </form>
-            </div>
-        </div>
-
         <div class="settings-section" id="data-sync-section">
             <h2 class="section-title">
                 <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -266,6 +226,46 @@
                     Add at least one server configuration before starting a full data sync
                     {% endif %}
                 </small>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2 class="section-title">
+                <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 11l9-8 9 8"></path>
+                    <path d="M5 10v10h14V10"></path>
+                    <path d="M12 14a3 3 0 1 0 0-.01"></path>
+                </svg>
+                Map Settings
+            </h2>
+
+            <div class="form-card">
+                <p class="info-text">
+                    Optionally save a Stadia Maps API key here to enable the full dark basemap for the live stream map.
+                    If blank, MultiPlex Stats will fall back to CARTO's dark basemap unless <code>STADIA_MAPS_API_KEY</code> is set in the environment.
+                    You can obtain a free API key by signing up at <a href="https://stadiamaps.com" target="_blank" rel="noopener">stadiamaps.com</a>.
+                </p>
+                <div class="settings-note-card">
+                    <div><strong>Stored key in database:</strong> {{ 'Yes' if stored_stadia_key_present else 'No' }}</div>
+                    <div><strong>Environment key available:</strong> {{ 'Yes' if env_stadia_key_present else 'No' }}</div>
+                    <div><strong>Effective priority:</strong> saved key in Settings overrides the environment variable.</div>
+                </div>
+                <form method="POST" action="{{ url_for('settings.update_map_settings') }}">
+                    <div class="form-group">
+                        <label for="stadia_maps_api_key">Optional Stadia Maps API Key</label>
+                        <input
+                            type="password"
+                            id="stadia_maps_api_key"
+                            name="stadia_maps_api_key"
+                            value="{{ settings.stadia_maps_api_key if settings else '' }}"
+                            placeholder="Paste your Stadia Maps API key"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                        <small>Leave blank to remove the saved key and fall back to the environment variable or CARTO's dark basemap.</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Map Settings</button>
+                </form>
             </div>
         </div>
 
