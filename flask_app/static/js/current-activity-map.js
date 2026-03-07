@@ -174,32 +174,29 @@
         if (hasServerA && hasServerB) {
             return {
                 variant: 'mixed',
-                strokeColor: this.serverColors.mixedStroke,
                 fillColor: this.serverColors.mixedFill,
                 fillOpacity: 0.92,
                 dashArray: '3 3',
-                weight: 1.6
+                weight: 0
             };
         }
 
         if (hasServerA) {
             return {
                 variant: 'server-a',
-                strokeColor: '#fff1b8',
                 fillColor: this.serverColors.serverA,
                 fillOpacity: 0.88,
                 dashArray: null,
-                weight: 1.35
+                weight: 0
             };
         }
 
         return {
             variant: 'server-b',
-            strokeColor: '#ffd8a8',
             fillColor: this.serverColors.serverB,
             fillOpacity: 0.84,
             dashArray: null,
-            weight: 1.35
+            weight: 0
         };
     };
 
@@ -211,7 +208,6 @@
         var serverStyle = this.getGroupServerStyle(group);
         var marker = window.L.circleMarker([group.latitude, group.longitude], {
             radius: this.getMarkerRadius(group),
-            color: serverStyle.strokeColor,
             weight: serverStyle.weight,
             fillColor: serverStyle.fillColor,
             fillOpacity: serverStyle.fillOpacity,
