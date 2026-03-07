@@ -173,6 +173,7 @@
 
         if (hasServerA && hasServerB) {
             return {
+                variant: 'mixed',
                 strokeColor: this.serverColors.mixedStroke,
                 fillColor: this.serverColors.mixedFill,
                 fillOpacity: 0.92,
@@ -182,6 +183,7 @@
 
         if (hasServerA) {
             return {
+                variant: 'server-a',
                 strokeColor: '#fff1b8',
                 fillColor: this.serverColors.serverA,
                 fillOpacity: 0.88,
@@ -190,11 +192,58 @@
         }
 
         return {
+            variant: 'server-b',
             strokeColor: '#ffd8a8',
             fillColor: this.serverColors.serverB,
             fillOpacity: 0.84,
             dashArray: null
         };
+    };
+
+    ActivityMap.prototype.getMarkerShellSize = function(group) {
+        return Math.min(30 + ((group.streams || []).length - 1) * 4, 42);
+    };
+
+    ActivityMap.prototype.buildMarkerHtml = function(group, serverStyle) {
+        var streamCount = (group.streams || []).length;
+        var shellSize = this.getMarkerShellSize(group);
+        var markerClass = 'current-activity-map-marker ' + (serverStyle.variant || 'server-b');
+        var html = '<div class="' + markerClass + '" style="--marker-shell-size:' + shellSize + 'px;">';
+
+        html += '<span class="current-activity-map-marker-pulse"></span>';
+        html += '<span class="current-activity-map-marker-pulse pulse-alt"></span>';
+        html += '<span class="current-activity-map-marker-ring"></span>';
+        html += '<span class="current-activity-map-marker-core"></span>';
+
+        if (streamCount > 1) {
+            html += '<span class="current-activity-map-marker-count">' + streamCount + '</span>';
+        }
+
+        html += '</div>';
+        return html;
+    };
+
+    ActivityMap.prototype.createMarker = function(group) {
+        var serverStyle = this.getGroupServerStyle(group);
+        var shellSize = this.getMarkerShellSize(group);
+        var icon = window.L.divIcon({
+            className: 'current-activity-map-div-icon',
+            html: this.buildMarkerHtml(group, serverStyle),
+            iconSize: [shellSize, shellSize],
+            iconAnchor: [Math.round(shellSize / 2), Math.round(shellSize / 2)],
+            popupAnchor: [0, -Math.round(shellSize / 2)]
+        });
+
+        var marker = window.L.marker([group.latitude, group.longitude], {
+            icon: icon
+        });
+
+        marker.bindPopup(this.buildPopupHtml(group), {
+            maxWidth: 280,
+            className: 'current-activity-map-popup'
+        });
+
+        return marker;
     };
 
     ActivityMap.prototype.updateSummary = function(totalCount, mappedCount, localCount, unresolvedCount) {
@@ -271,25 +320,9 @@
 
         this.updateEmptyState('', false);
 
-        if (this.hasUserViewport) {
-            return;
-        }
-
         var bounds = [];
         points.forEach(function(group) {
-            var serverStyle = this.getGroupServerStyle(group);
-            var marker = window.L.circleMarker([group.latitude, group.longitude], {
-                radius: Math.min(11 + (group.streams.length - 1) * 2, 18),
-                color: serverStyle.strokeColor,
-                weight: 1.5,
-                fillColor: serverStyle.fillColor,
-                fillOpacity: serverStyle.fillOpacity,
-                dashArray: serverStyle.dashArray
-            });
-            marker.bindPopup(this.buildPopupHtml(group), {
-                maxWidth: 280,
-                className: 'current-activity-map-popup'
-            });
+            var marker = this.createMarker(group);
             marker.addTo(this.markerLayer);
             bounds.push([group.latitude, group.longitude]);
         }, this);
@@ -301,7 +334,9 @@
                 zoom: 5
             };
             this.updateResetButtonState();
-            this.map.setView(bounds[0], 5);
+            if (!this.hasUserViewport) {
+                this.map.setView(bounds[0], 5);
+            }
             return;
         }
 
@@ -314,10 +349,12 @@
             }
         };
         this.updateResetButtonState();
-        this.map.fitBounds(bounds, {
-            padding: [24, 24],
-            maxZoom: 5
-        });
+        if (!this.hasUserViewport) {
+            this.map.fitBounds(bounds, {
+                padding: [24, 24],
+                maxZoom: 5
+            });
+        }
     };
 
     ActivityMap.prototype.setStreams = function(streams) {
