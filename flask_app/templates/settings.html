@@ -585,7 +585,7 @@
             })
             .then(function() {
                 if (!mediaPollInterval) {
-                    mediaPollInterval = setInterval(pollMediaStatus, 1000);
+                    mediaPollInterval = setInterval(pollMediaStatus, 2000);
                 }
                 pollMediaStatus();
             })
@@ -607,7 +607,7 @@
             })
             .then(function() {
                 if (!historyPollInterval) {
-                    historyPollInterval = setInterval(pollHistoryStatus, 1000);
+                    historyPollInterval = setInterval(pollHistoryStatus, 2000);
                 }
                 pollHistoryStatus();
             })
@@ -629,7 +629,7 @@
             })
             .then(function() {
                 if (!lifetimePollInterval) {
-                    lifetimePollInterval = setInterval(pollLifetimeStatus, 1000);
+                    lifetimePollInterval = setInterval(pollLifetimeStatus, 2000);
                 }
                 pollLifetimeStatus();
             })
@@ -668,7 +668,7 @@
             })
             .then(function() {
                 if (!mediaPollInterval) {
-                    mediaPollInterval = setInterval(pollMediaStatus, 1000);
+                    mediaPollInterval = setInterval(pollMediaStatus, 2000);
                 }
                 pollMediaStatus();
             })
@@ -698,7 +698,7 @@
         pipelineInProgress = true;
         setMediaRefreshState(true);
         if (!mediaPollInterval) {
-            mediaPollInterval = setInterval(pollMediaStatus, 1000);
+            mediaPollInterval = setInterval(pollMediaStatus, 2000);
         }
         pollMediaStatus();
         return;
@@ -708,7 +708,7 @@
         pipelineInProgress = true;
         setMediaRefreshState(true);
         if (!historyPollInterval) {
-            historyPollInterval = setInterval(pollHistoryStatus, 1000);
+            historyPollInterval = setInterval(pollHistoryStatus, 2000);
         }
         pollHistoryStatus();
         return;
@@ -718,7 +718,7 @@
         pipelineInProgress = true;
         setMediaRefreshState(true);
         if (!lifetimePollInterval) {
-            lifetimePollInterval = setInterval(pollLifetimeStatus, 1000);
+            lifetimePollInterval = setInterval(pollLifetimeStatus, 2000);
         }
         pollLifetimeStatus();
         return;

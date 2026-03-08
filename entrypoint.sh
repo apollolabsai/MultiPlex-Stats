@@ -26,5 +26,13 @@ fi
 mkdir -p /app/instance/cache
 chown -R $PUID:$PGID /app/instance
 
-# Execute the application as the specified user
-exec gosu $PUID:$PGID python3 run_multiplex_stats.py
+# Execute the application as the specified user via Gunicorn.
+# Single worker + threads preserves the background sync thread model.
+exec gosu $PUID:$PGID gunicorn \
+    --bind "0.0.0.0:${PORT:-8487}" \
+    --workers 1 \
+    --threads 4 \
+    --timeout 120 \
+    --access-logfile - \
+    --log-level warning \
+    "run_multiplex_stats:app"
