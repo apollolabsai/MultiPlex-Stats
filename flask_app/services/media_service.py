@@ -765,7 +765,7 @@ class MediaService:
         guids = record.get('guids') or []
         if isinstance(guids, list):
             for g in guids:
-                gid = g.get('id', '') if isinstance(g, dict) else str(g)
+                gid = (g.get('id') or '') if isinstance(g, dict) else str(g or '')
                 if gid.startswith('imdb://'):
                     imdb_id = gid[7:].split('?')[0]
                 elif gid.startswith('tmdb://'):
