@@ -2,7 +2,7 @@
 IP geolocation lookup service with database caching.
 Uses ip-api.com (45 requests/minute free tier, no API key required).
 """
-from datetime import UTC, datetime
+from datetime import datetime
 
 import requests
 from flask_app.models import db, IPGeolocation
@@ -92,7 +92,7 @@ class GeolocationService:
                 geo_record.isp = isp
                 geo_record.latitude = latitude
                 geo_record.longitude = longitude
-                geo_record.lookup_date = datetime.now(UTC)
+                geo_record.lookup_date = datetime.utcnow()
                 db.session.add(geo_record)
                 db.session.commit()
 
@@ -117,7 +117,7 @@ class GeolocationService:
                     isp=None,
                     latitude=None,
                     longitude=None,
-                    lookup_date=datetime.now(UTC),
+                    lookup_date=datetime.utcnow(),
                 )
                 db.session.add(geo_record)
                 db.session.commit()
@@ -176,11 +176,25 @@ class GeolocationService:
 
     @staticmethod
     def _should_refresh_cached_coordinates(record):
-        """Refresh legacy/stale cache rows that lack coordinates."""
+        """Refresh cached rows that lack coordinates.
+
+        - Legacy rows with location text but no coords: refresh immediately.
+        - All-None rows (failed lookups): retry after 24 hours so transient
+          API outages don't permanently blackhole an IP address.
+        """
         if record.latitude is not None and record.longitude is not None:
             return False
 
-        return any((record.city, record.region, record.country, record.isp))
+        if any((record.city, record.region, record.country, record.isp)):
+            return True
+
+        # All-None record — only retry if the cached failure is old enough.
+        if record.lookup_date is None:
+            return True
+        lookup_date = record.lookup_date
+        if hasattr(lookup_date, 'tzinfo') and lookup_date.tzinfo is not None:
+            lookup_date = lookup_date.replace(tzinfo=None)
+        return (datetime.utcnow() - lookup_date).total_seconds() > 86400
 
     def _normalize_ip(self, ip_address):
         """Normalize IP string for caching and lookup."""
@@ -214,8 +228,9 @@ class GeolocationService:
             '172.24.', '172.25.', '172.26.', '172.27.',
             '172.28.', '172.29.', '172.30.', '172.31.',
             'localhost',
-            '::1',  # IPv6 localhost
-            'fe80::',  # IPv6 link-local
+            '::1',    # IPv6 localhost
+            'fe80:',  # IPv6 link-local (fe80::/10)
+            'fc00:',  # IPv6 ULA (fc00::/7, covers fc and fd prefixes)
         ]
 
         for pattern in private_patterns:

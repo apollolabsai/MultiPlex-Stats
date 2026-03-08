@@ -126,24 +126,22 @@ def dashboard():
                           servers=servers)
 
 
-@main_bp.route('/api/current-activity')
-def api_current_activity():
-    """Return current streaming activity table markup."""
-    service = AnalyticsService()
-    current_activity = service.get_current_activity()
-    return render_template('partials/current_activity.html',
-                          current_activity=current_activity)
+_MAP_STREAM_KEYS = {
+    'geo_lat', 'geo_lon', 'location', 'server_order',
+    'title', 'subtitle', 'user', 'server', 'platform', 'quality',
+}
 
 
 @main_bp.route('/api/current-activity-data')
 def api_current_activity_data():
-    """Return current streaming activity HTML plus JSON payload for the dashboard."""
+    """Return current streaming activity HTML plus map-relevant stream data."""
     service = AnalyticsService()
     current_activity = service.get_current_activity()
     html = render_template('partials/current_activity.html', current_activity=current_activity)
+    map_streams = [{k: s[k] for k in _MAP_STREAM_KEYS if k in s} for s in current_activity]
     return jsonify({
         'html': html,
-        'streams': current_activity,
+        'streams': map_streams,
     })
 
 

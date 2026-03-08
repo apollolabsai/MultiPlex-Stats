@@ -73,13 +73,8 @@ def create_app(config_name='development'):
             'git_branch': app.config.get('GIT_BRANCH', 'unknown')
         }
 
-    def _build_stadia_tile_url() -> str:
+    def _build_stadia_tile_url(api_key: str) -> str:
         tile_url = app.config.get('STADIA_MAP_TILE_URL', '')
-        from flask_app.services.config_service import ConfigService
-
-        api_key = ConfigService.get_effective_stadia_maps_api_key(
-            app.config.get('STADIA_MAPS_API_KEY', '')
-        )
         if api_key:
             separator = '&' if '?' in tile_url else '?'
             return f"{tile_url}{separator}api_key={quote(api_key)}"
@@ -93,19 +88,24 @@ def create_app(config_name='development'):
 
     @app.context_processor
     def inject_map_config():
-        """Expose map tile configuration to templates."""
-        from flask_app.services.config_service import ConfigService
+        """Expose map tile configuration to templates. Result is cached on g for the request."""
+        from flask import g
+        cached = getattr(g, '_map_config', None)
+        if cached is not None:
+            return cached
 
+        from flask_app.services.config_service import ConfigService
         effective_key = ConfigService.get_effective_stadia_maps_api_key(
             app.config.get('STADIA_MAPS_API_KEY', '')
         )
-        tile_url = _build_stadia_tile_url()
-        return {
-            'stadia_map_tile_url': tile_url,
+        result = {
+            'stadia_map_tile_url': _build_stadia_tile_url(effective_key),
             'stadia_map_attribution': app.config.get('STADIA_MAP_ATTRIBUTION', ''),
             'stadia_map_max_zoom': app.config.get('STADIA_MAP_MAX_ZOOM', 20),
             'stadia_map_has_key': bool(effective_key),
         }
+        g._map_config = result
+        return result
 
     # Ensure instance folder exists
     try:
