@@ -861,8 +861,9 @@ footer {
 /* MDBList rating badges in media table */
 .mdb-rating-cell {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 4px;
+    white-space: nowrap;
 }
 
 .mdb-badge {
