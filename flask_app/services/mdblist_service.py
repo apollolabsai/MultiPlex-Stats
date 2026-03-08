@@ -43,7 +43,7 @@ class MDBListService:
     # Public API
     # ------------------------------------------------------------------
 
-    def enrich_media_ratings(self, progress_callback=None):
+    def enrich_media_ratings(self, progress_callback=None) -> dict:
         """
         Fetch MDBList ratings for all CachedMedia items that have an imdb_id.
 
@@ -53,9 +53,14 @@ class MDBListService:
 
         Args:
             progress_callback: optional callable(fetched, total) for progress
+
+        Returns:
+            dict with keys: total, fetched, failed_batches, ratings_stored
         """
+        result = {'total': 0, 'fetched': 0, 'failed_batches': 0, 'ratings_stored': 0}
+
         if not self.api_key:
-            return
+            return result
 
         cutoff = datetime.now(UTC) - timedelta(days=_REFRESH_DAYS)
 
@@ -86,8 +91,9 @@ class MDBListService:
         )
 
         total = len(items_needing_refresh)
+        result['total'] = total
         if total == 0:
-            return
+            return result
 
         fetched = 0
         for batch_start in range(0, total, _BATCH_SIZE):
@@ -100,29 +106,40 @@ class MDBListService:
 
             for media_type, items in by_type.items():
                 id_to_item = {item.imdb_id: item for item in items}
-                api_results = self._fetch_batch(media_type, list(id_to_item.keys()))
+                api_results, failed = self._fetch_batch(media_type, list(id_to_item.keys()))
 
-                for result in api_results:
-                    imdb_id = (result.get('ids') or {}).get('imdb')
+                if failed:
+                    result['failed_batches'] += 1
+
+                for api_result in api_results:
+                    imdb_id = (api_result.get('ids') or {}).get('imdb')
                     if not imdb_id or imdb_id not in id_to_item:
                         continue
-                    self._upsert_ratings(id_to_item[imdb_id].id, result.get('ratings', []))
+                    stored = self._upsert_ratings(id_to_item[imdb_id].id, api_result.get('ratings', []))
+                    result['ratings_stored'] += stored
 
             db.session.commit()
             fetched += len(batch)
+            result['fetched'] = fetched
 
             if progress_callback:
                 progress_callback(fetched, total)
+
+        return result
 
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _fetch_batch(self, media_type: str, imdb_ids: list) -> list:
-        """POST a batch of IMDb IDs to the appropriate MDBList endpoint."""
+    def _fetch_batch(self, media_type: str, imdb_ids: list) -> tuple[list, bool]:
+        """POST a batch of IMDb IDs to the appropriate MDBList endpoint.
+
+        Returns:
+            (results, failed) where failed is True if the request did not succeed.
+        """
         endpoint = _TYPE_ENDPOINT.get(media_type)
         if not endpoint:
-            return []
+            return [], False
         try:
             response = requests.post(
                 endpoint,
@@ -133,17 +150,29 @@ class MDBListService:
             if response.status_code == 200:
                 data = response.json()
                 if isinstance(data, list):
-                    return data
+                    return data, False
                 if isinstance(data, dict) and 'ids' in data:
-                    return [data]
-            return []
+                    return [data], False
+                return [], False
+            # Non-200 response — log it
+            snippet = response.text[:500] if response.text else '(empty body)'
+            print(
+                f"MDBList API error ({media_type}): HTTP {response.status_code} "
+                f"for {len(imdb_ids)} IDs — {snippet}"
+            )
+            return [], True
         except Exception as e:
             print(f"MDBList batch fetch error ({media_type}): {e}")
-            return []
+            return [], True
 
-    def _upsert_ratings(self, cached_media_id: int, ratings: list):
-        """Insert or update MediaRating rows for a single media item."""
+    def _upsert_ratings(self, cached_media_id: int, ratings: list) -> int:
+        """Insert or update MediaRating rows for a single media item.
+
+        Returns:
+            Number of rating rows written (inserted or updated).
+        """
         now = datetime.now(UTC)
+        written = 0
 
         for rating_data in ratings:
             source = rating_data.get('source', '').lower()
@@ -183,3 +212,6 @@ class MDBListService:
                     popular=popular,
                     updated_at=now,
                 ))
+            written += 1
+
+        return written

@@ -259,6 +259,7 @@ def _ensure_additive_schema_updates():
             ('server_b_fetched', "ALTER TABLE media_sync_status ADD COLUMN server_b_fetched INTEGER DEFAULT 0"),
             ('server_b_total',   "ALTER TABLE media_sync_status ADD COLUMN server_b_total INTEGER"),
             ('server_b_error',   "ALTER TABLE media_sync_status ADD COLUMN server_b_error TEXT"),
+            ('mdblist_warning',  "ALTER TABLE media_sync_status ADD COLUMN mdblist_warning TEXT"),
         ]:
             if col not in mss_columns:
                 statements.append(ddl)

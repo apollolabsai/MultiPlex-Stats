@@ -99,6 +99,12 @@ body {
     color: #f44336;
 }
 
+.alert-warning {
+    background: rgba(255, 152, 0, 0.15);
+    border: 1px solid rgba(255, 152, 0, 0.5);
+    color: #ff9800;
+}
+
 .alert-info {
     background: rgba(33, 150, 243, 0.2);
     border: 1px solid rgba(33, 150, 243, 0.5);

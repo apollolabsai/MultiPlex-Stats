@@ -175,6 +175,13 @@
                             <span class="status-value" id="last-lifetime-sync-value">{{ lifetime_sync_status.last_sync_date or 'Never' }}</span>
                         </div>
                     </div>
+                    {% if media_sync_status.mdblist_warning %}
+                    <div class="alert alert-warning" id="mdblist-warning-banner" style="margin-top:0.75rem;">
+                        <strong>MDBList Warning:</strong> {{ media_sync_status.mdblist_warning }}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning" id="mdblist-warning-banner" style="display:none;margin-top:0.75rem;"></div>
+                    {% endif %}
                     {% else %}
                     <p class="info-message">No viewing history loaded. Run full data sync to load all media and complete history.</p>
                     {% endif %}
@@ -418,6 +425,17 @@
         progressDiv.style.display = 'none';
         if (lastSyncLabel) {
             lastSyncLabel.textContent = formatLastUpdatedValue(status.last_sync_date);
+        }
+
+        // Show or clear the MDBList warning banner
+        var mdblistBanner = document.getElementById('mdblist-warning-banner');
+        if (mdblistBanner) {
+            if (status.mdblist_warning) {
+                mdblistBanner.innerHTML = '<strong>MDBList Warning:</strong> ' + status.mdblist_warning;
+                mdblistBanner.style.display = '';
+            } else {
+                mdblistBanner.style.display = 'none';
+            }
         }
 
         mediaPollInterval = stopPoll(mediaPollInterval);

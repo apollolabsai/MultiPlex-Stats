@@ -81,6 +81,7 @@ class MediaService:
             'movies_count': status.movies_count,
             'tv_shows_count': status.tv_shows_count,
             'error_message': status.error_message,
+            'mdblist_warning': status.mdblist_warning,
             'last_sync_date': last_sync_date,
             'has_data': self.has_media_data(),
             'servers': servers,
@@ -118,6 +119,7 @@ class MediaService:
         status.movies_count = 0
         status.tv_shows_count = 0
         status.error_message = None
+        status.mdblist_warning = None
 
         # Reset per-server status
         status.server_a_name = server_a_config.name if server_a_config else None
@@ -194,7 +196,18 @@ class MediaService:
             s.current_step = f'Fetching MDBList ratings ({fetched}/{total})...'
             db.session.commit()
 
-        MDBListService(api_key).enrich_media_ratings(progress_callback=_progress)
+        enrichment = MDBListService(api_key).enrich_media_ratings(progress_callback=_progress)
+
+        if enrichment['failed_batches'] > 0:
+            warning = (
+                f"MDBList: {enrichment['failed_batches']} API batch(es) failed out of "
+                f"{enrichment['total']} items. Check server logs for details. "
+                f"{enrichment['ratings_stored']} rating(s) stored."
+            )
+            s = self.get_or_create_status()
+            s.mdblist_warning = warning
+            db.session.commit()
+            print(f"[MDBList] Warning: {warning}")
 
     def _run_media_sync_parallel(self, app):
         """Run the actual media sync operation with parallel server fetching."""

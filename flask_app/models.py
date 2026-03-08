@@ -206,6 +206,7 @@ class MediaSyncStatus(db.Model):
     movies_count = db.Column(db.Integer, default=0)
     tv_shows_count = db.Column(db.Integer, default=0)
     error_message = db.Column(db.Text, nullable=True)
+    mdblist_warning = db.Column(db.Text, nullable=True)
 
     # Last successful sync
     last_sync_date = db.Column(db.DateTime, nullable=True)
