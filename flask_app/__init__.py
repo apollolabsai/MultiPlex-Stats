@@ -194,6 +194,25 @@ def _ensure_additive_schema_updates():
         if 'tmdb_id' not in media_columns:
             statements.append("ALTER TABLE cached_media ADD COLUMN tmdb_id VARCHAR(20)")
 
+    if 'media_sync_status' in inspector.get_table_names():
+        mss_columns = {column['name'] for column in inspector.get_columns('media_sync_status')}
+        for col, ddl in [
+            ('server_a_name',    "ALTER TABLE media_sync_status ADD COLUMN server_a_name VARCHAR(100)"),
+            ('server_a_status',  "ALTER TABLE media_sync_status ADD COLUMN server_a_status VARCHAR(20) DEFAULT 'idle'"),
+            ('server_a_step',    "ALTER TABLE media_sync_status ADD COLUMN server_a_step VARCHAR(100)"),
+            ('server_a_fetched', "ALTER TABLE media_sync_status ADD COLUMN server_a_fetched INTEGER DEFAULT 0"),
+            ('server_a_total',   "ALTER TABLE media_sync_status ADD COLUMN server_a_total INTEGER"),
+            ('server_a_error',   "ALTER TABLE media_sync_status ADD COLUMN server_a_error TEXT"),
+            ('server_b_name',    "ALTER TABLE media_sync_status ADD COLUMN server_b_name VARCHAR(100)"),
+            ('server_b_status',  "ALTER TABLE media_sync_status ADD COLUMN server_b_status VARCHAR(20) DEFAULT 'idle'"),
+            ('server_b_step',    "ALTER TABLE media_sync_status ADD COLUMN server_b_step VARCHAR(100)"),
+            ('server_b_fetched', "ALTER TABLE media_sync_status ADD COLUMN server_b_fetched INTEGER DEFAULT 0"),
+            ('server_b_total',   "ALTER TABLE media_sync_status ADD COLUMN server_b_total INTEGER"),
+            ('server_b_error',   "ALTER TABLE media_sync_status ADD COLUMN server_b_error TEXT"),
+        ]:
+            if col not in mss_columns:
+                statements.append(ddl)
+
     if not statements:
         return
 
