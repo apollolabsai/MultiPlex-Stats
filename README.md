@@ -17,7 +17,7 @@ A web application for combining and visualizing statistics from multiple Tautull
 - **Content Insights** - Discover your most popular movies and TV shows
 - **Viewing History** - Searchable table of all viewing activity
 - **Trend Analysis** - Daily and monthly viewing trends over time
-- **Live Stream Map** - Plot currently streaming geo-locations on a dark Stadia Maps basemap
+- **Live Stream Map** - Plot active stream geo-locations in real time with grouped markers, per-stream popups
 - **Remove Useless Content** - View and export data with zero lifetime views to free up space
 - **True Lifetime Playcounts** - Build lifetime play counts from full history so titles with multiple Plex keys are merged correctly. Some Plex servers assign multiple keys to the same title over time. We build a full-history cache so media page play counts are merged across those keys without slowing page load.
 
@@ -142,8 +142,14 @@ After the initial load, new records are automatically appended when you refresh 
 - API keys are stored in a local SQLite database
 - No telemetry or tracking
 
-The live stream map uses Stadia Maps' `Alidade Smooth Dark` tiles when a Stadia API key is configured. If your Stadia setup uses API-key authentication, set `STADIA_MAPS_API_KEY` in the container environment.
-If `STADIA_MAPS_API_KEY` is not set, MultiPlex Stats falls back to CARTO's `dark_all` basemap for the live stream map.
+### Live Stream Map
+
+The dashboard includes a live stream map for current activity. Active WAN sessions are grouped by location and rendered on the map with server-aware marker styling, while popups show the stream title, user, server, platform, and playback quality for each active session.
+
+Private or unresolved IP addresses are not plotted as fake coordinates. Local/private sessions are counted separately in the map summary, and unresolved lookups stay off-map instead of falling back to `0,0`.
+
+The live stream map uses Stadia Maps' `Alidade Smooth Dark` tiles when a free Stadia API key is configured. Set `STADIA_MAPS_API_KEY` in the container environment or save the key in Settings.
+If no Stadia key is available, MultiPlex Stats automatically falls back to CARTO's `dark_all` basemap.
 
 ---
 
