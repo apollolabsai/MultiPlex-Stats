@@ -1,11 +1,12 @@
 """
 MDBList API client for fetching ratings metadata.
 
-Free tier: 1,000 requests/day (each POST /imdb/movie call counts as 1 request
-regardless of batch size). Ratings are refreshed at most every 3 months and
-only during a user-triggered media sync.
+Free tier: 1,000 requests/day. Each POST to /imdb/movie or /imdb/show counts
+as 1 request regardless of batch size (up to 200 IDs per request).
+Ratings are refreshed at most every 3 months and only during a
+user-triggered media sync.
 
-API docs: https://linaspurinis.github.io/api.mdblist.com/
+API docs: https://mdblist.docs.apiary.io/
 """
 from datetime import UTC, datetime, timedelta
 
@@ -14,15 +15,22 @@ import requests
 from flask_app.models import db, CachedMedia, MediaRating
 
 # Sources returned by MDBList that we want to store.
+# Note: Rotten Tomatoes audience is now called 'popcorn' in the API.
 RATING_SOURCES = {
     'imdb', 'tmdb', 'metacritic', 'metacriticuser',
-    'trakt', 'tomatoes', 'tomatoesaudience',
+    'trakt', 'tomatoes', 'popcorn',
     'letterboxd', 'rogerebert', 'myanimelist',
 }
 
-_BATCH_SIZE = 100           # MDBList supports up to 100 IMDb IDs per POST
+_BATCH_SIZE = 200           # MDBList supports up to 200 IDs per POST
 _REFRESH_DAYS = 90          # Refresh ratings older than 3 months
-_API_URL = 'https://mdblist.com/api/'
+_API_BASE = 'https://api.mdblist.com'
+
+# Endpoint per CachedMedia.media_type value
+_TYPE_ENDPOINT = {
+    'movie': f'{_API_BASE}/imdb/movie',
+    'show':  f'{_API_BASE}/imdb/show',
+}
 
 
 class MDBListService:
@@ -40,7 +48,8 @@ class MDBListService:
         Fetch MDBList ratings for all CachedMedia items that have an imdb_id.
 
         Items are skipped if their ratings were updated within the last
-        _REFRESH_DAYS days.
+        _REFRESH_DAYS days. Movies and TV shows are batched separately
+        because the API uses different endpoints for each type.
 
         Args:
             progress_callback: optional callable(fetched, total) for progress
@@ -50,12 +59,7 @@ class MDBListService:
 
         cutoff = datetime.now(UTC) - timedelta(days=_REFRESH_DAYS)
 
-        # Collect items that need enrichment.
-        # A media item needs enrichment if it has an imdb_id AND either:
-        #   - it has no ratings at all, or
-        #   - its newest rating is older than the cutoff.
-        from sqlalchemy import func, not_, exists
-        from sqlalchemy.orm import aliased
+        from sqlalchemy import func
 
         # Subquery: newest rating date per cached_media_id
         newest_rating = (
@@ -72,6 +76,7 @@ class MDBListService:
             .outerjoin(newest_rating, CachedMedia.id == newest_rating.c.cached_media_id)
             .filter(
                 CachedMedia.imdb_id.isnot(None),
+                CachedMedia.media_type.in_(_TYPE_ENDPOINT.keys()),
                 db.or_(
                     newest_rating.c.newest.is_(None),
                     newest_rating.c.newest < cutoff,
@@ -84,21 +89,24 @@ class MDBListService:
         if total == 0:
             return
 
-        # Group into batches of _BATCH_SIZE
         fetched = 0
         for batch_start in range(0, total, _BATCH_SIZE):
             batch = items_needing_refresh[batch_start:batch_start + _BATCH_SIZE]
-            imdb_ids = [item.imdb_id for item in batch]
-            id_to_item = {item.imdb_id: item for item in batch}
 
-            api_results = self._fetch_batch(imdb_ids)
+            # Split batch by media type — each type uses a different endpoint
+            by_type: dict[str, list] = {}
+            for item in batch:
+                by_type.setdefault(item.media_type, []).append(item)
 
-            for result in api_results:
-                imdb_id = result.get('imdbid')
-                if not imdb_id or imdb_id not in id_to_item:
-                    continue
-                media_item = id_to_item[imdb_id]
-                self._upsert_ratings(media_item.id, result.get('ratings', []))
+            for media_type, items in by_type.items():
+                id_to_item = {item.imdb_id: item for item in items}
+                api_results = self._fetch_batch(media_type, list(id_to_item.keys()))
+
+                for result in api_results:
+                    imdb_id = (result.get('ids') or {}).get('imdb')
+                    if not imdb_id or imdb_id not in id_to_item:
+                        continue
+                    self._upsert_ratings(id_to_item[imdb_id].id, result.get('ratings', []))
 
             db.session.commit()
             fetched += len(batch)
@@ -110,29 +118,27 @@ class MDBListService:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _fetch_batch(self, imdb_ids: list) -> list:
-        """POST a batch of IMDb IDs to MDBList and return the result list."""
+    def _fetch_batch(self, media_type: str, imdb_ids: list) -> list:
+        """POST a batch of IMDb IDs to the appropriate MDBList endpoint."""
+        endpoint = _TYPE_ENDPOINT.get(media_type)
+        if not endpoint:
+            return []
         try:
             response = requests.post(
-                _API_URL,
-                params={
-                    'apikey': self.api_key,
-                    'append_to_response': 'ratings',
-                },
-                json={'imdbids': imdb_ids},
+                endpoint,
+                params={'apikey': self.api_key},
+                json={'ids': imdb_ids, 'append_to_response': ['ratings']},
                 timeout=30,
             )
             if response.status_code == 200:
                 data = response.json()
-                # Batch endpoint returns a list directly.
                 if isinstance(data, list):
                     return data
-                # Single-item fallback (non-batch response).
-                if isinstance(data, dict) and 'imdbid' in data:
+                if isinstance(data, dict) and 'ids' in data:
                     return [data]
             return []
         except Exception as e:
-            print(f"MDBList batch fetch error: {e}")
+            print(f"MDBList batch fetch error ({media_type}): {e}")
             return []
 
     def _upsert_ratings(self, cached_media_id: int, ratings: list):
@@ -150,7 +156,7 @@ class MDBListService:
             url = rating_data.get('url')
             popular = rating_data.get('popular')
 
-            # Skip sources where every field is None/null — no useful data.
+            # Skip sources where every numeric field is None — no useful data.
             if value is None and score is None and votes is None:
                 continue
 

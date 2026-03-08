@@ -19,7 +19,7 @@
     {%- elif source == 'metacriticuser' %}Metacritic User
     {%- elif source == 'trakt' %}Trakt
     {%- elif source == 'tomatoes' %}Rotten Tomatoes
-    {%- elif source == 'tomatoesaudience' %}RT Audience
+    {%- elif source in ('tomatoesaudience', 'popcorn') %}RT Audience
     {%- elif source == 'letterboxd' %}Letterboxd
     {%- elif source == 'rogerebert' %}Roger Ebert
     {%- elif source == 'myanimelist' %}MyAnimeList
@@ -125,7 +125,7 @@
                 {% elif r.source == 'letterboxd' and r.value is not none %}
                     {{ r.value }}/5
                 {% elif r.value is not none %}
-                    {{ r.value }}{% if r.source in ('imdb', 'tmdb', 'trakt') %}/10{% elif r.source in ('metacritic', 'metacriticuser', 'tomatoes', 'tomatoesaudience') %}%{% endif %}
+                    {{ r.value }}{% if r.source in ('imdb', 'tmdb', 'trakt') %}/10{% elif r.source in ('metacritic', 'metacriticuser', 'tomatoes', 'tomatoesaudience', 'popcorn') %}%{% endif %}
                 {% elif r.score is not none %}
                     {{ r.score }}/100
                 {% else %}

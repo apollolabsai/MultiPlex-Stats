@@ -884,7 +884,7 @@ class MediaService:
             'tmdb': _val('tmdb'),
             'trakt': _val('trakt'),
             'tomatoes': _score('tomatoes'),
-            'tomatoesaudience': _score('tomatoesaudience'),
+            'tomatoesaudience': _score('tomatoesaudience') or _score('popcorn'),
             'metacritic': _score('metacritic'),
             'letterboxd': _val('letterboxd'),
         }

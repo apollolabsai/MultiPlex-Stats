@@ -163,6 +163,56 @@ def _initialize_default_settings():
         db.session.add(default_lifetime_status)
         db.session.commit()
 
+    _bootstrap_server_configs_from_env()
+
+
+def _bootstrap_server_configs_from_env():
+    """
+    Seed server configs from environment variables on first run (clean install).
+    Only runs when no server configs exist in the database.
+    """
+    from flask_app.models import db, ServerConfig
+
+    if ServerConfig.query.count() > 0:
+        return  # Already have configs — don't overwrite
+
+    a_name = os.environ.get('TAUTULLI_SERVER_A_NAME', '').strip()
+    a_ip   = os.environ.get('TAUTULLI_SERVER_A_IP', '').strip()
+    a_key  = os.environ.get('TAUTULLI_SERVER_A_KEY', '').strip()
+
+    if not (a_name and a_ip and a_key):
+        return  # No usable env config
+
+    def _bool(val, default=False):
+        if val is None:
+            return default
+        return val.strip().lower() in ('1', 'true', 'yes')
+
+    db.session.add(ServerConfig(
+        name=a_name,
+        ip_address=a_ip,
+        api_key=a_key,
+        use_ssl=_bool(os.environ.get('TAUTULLI_SERVER_A_SSL')),
+        verify_ssl=_bool(os.environ.get('TAUTULLI_SERVER_A_VERIFY_SSL')),
+        server_order=0,
+    ))
+
+    b_name = os.environ.get('TAUTULLI_SERVER_B_NAME', '').strip()
+    b_ip   = os.environ.get('TAUTULLI_SERVER_B_IP', '').strip()
+    b_key  = os.environ.get('TAUTULLI_SERVER_B_KEY', '').strip()
+
+    if b_name and b_ip and b_key:
+        db.session.add(ServerConfig(
+            name=b_name,
+            ip_address=b_ip,
+            api_key=b_key,
+            use_ssl=_bool(os.environ.get('TAUTULLI_SERVER_B_SSL')),
+            verify_ssl=_bool(os.environ.get('TAUTULLI_SERVER_B_VERIFY_SSL')),
+            server_order=1,
+        ))
+
+    db.session.commit()
+
 
 def _ensure_additive_schema_updates():
     """Apply additive schema updates for existing installs without a migration framework."""
