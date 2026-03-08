@@ -2,7 +2,8 @@
 IP geolocation lookup service with database caching.
 Uses ip-api.com (45 requests/minute free tier, no API key required).
 """
-from datetime import datetime
+import ipaddress
+from datetime import UTC, datetime
 
 import requests
 from flask_app.models import db, IPGeolocation
@@ -92,7 +93,7 @@ class GeolocationService:
                 geo_record.isp = isp
                 geo_record.latitude = latitude
                 geo_record.longitude = longitude
-                geo_record.lookup_date = datetime.utcnow()
+                geo_record.lookup_date = datetime.now(UTC)
                 db.session.add(geo_record)
                 db.session.commit()
 
@@ -117,7 +118,7 @@ class GeolocationService:
                     isp=None,
                     latitude=None,
                     longitude=None,
-                    lookup_date=datetime.utcnow(),
+                    lookup_date=datetime.now(UTC),
                 )
                 db.session.add(geo_record)
                 db.session.commit()
@@ -191,10 +192,13 @@ class GeolocationService:
         # All-None record — only retry if the cached failure is old enough.
         if record.lookup_date is None:
             return True
+        # Normalize to naive UTC for comparison — SQLite may return either
+        # naive or aware datetimes depending on how the record was stored.
         lookup_date = record.lookup_date
-        if hasattr(lookup_date, 'tzinfo') and lookup_date.tzinfo is not None:
+        if lookup_date.tzinfo is not None:
             lookup_date = lookup_date.replace(tzinfo=None)
-        return (datetime.utcnow() - lookup_date).total_seconds() > 86400
+        now = datetime.now(UTC).replace(tzinfo=None)
+        return (now - lookup_date).total_seconds() > 86400
 
     def _normalize_ip(self, ip_address):
         """Normalize IP string for caching and lookup."""
@@ -214,27 +218,10 @@ class GeolocationService:
         return ip
 
     def _is_private_ip(self, ip_address):
-        """Check if IP is private/local."""
-        if not ip_address:
+        """Check if IP is private/local using proper CIDR evaluation."""
+        if not ip_address or ip_address == 'localhost':
             return True
-
-        # Common private IP ranges
-        private_patterns = [
-            '127.',
-            '10.',
-            '192.168.',
-            '172.16.', '172.17.', '172.18.', '172.19.',
-            '172.20.', '172.21.', '172.22.', '172.23.',
-            '172.24.', '172.25.', '172.26.', '172.27.',
-            '172.28.', '172.29.', '172.30.', '172.31.',
-            'localhost',
-            '::1',    # IPv6 localhost
-            'fe80:',  # IPv6 link-local (fe80::/10)
-            'fc00:',  # IPv6 ULA (fc00::/7, covers fc and fd prefixes)
-        ]
-
-        for pattern in private_patterns:
-            if ip_address.startswith(pattern):
-                return True
-
-        return False
+        try:
+            return ipaddress.ip_address(ip_address).is_private
+        except ValueError:
+            return False

@@ -2,7 +2,7 @@
 Database models for Flask application.
 """
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import UTC, datetime
 
 db = SQLAlchemy()
 
@@ -143,7 +143,7 @@ class IPGeolocation(db.Model):
     isp = db.Column(db.String(200), nullable=True)
     latitude = db.Column(db.Float, nullable=True)
     longitude = db.Column(db.Float, nullable=True)
-    lookup_date = db.Column(db.DateTime, default=datetime.utcnow)
+    lookup_date = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
 
 
 class HistorySyncStatus(db.Model):
