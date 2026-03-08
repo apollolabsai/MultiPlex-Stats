@@ -104,6 +104,7 @@
   # - TAUTULLI_SERVER_A_VERIFY_SSL=false
   # Optional:
   # - STADIA_MAPS_API_KEY=your_stadia_maps_api_key
+  # - MDBLIST_API_KEY=your_mdblist_api_key
   # Optional second server:
   # - TAUTULLI_SERVER_B_NAME=Server2
   # - TAUTULLI_SERVER_B_IP=192.168.1.101:8181
@@ -265,6 +266,46 @@
                         <small>Leave blank to remove the saved key and fall back to the environment variable or CARTO's dark basemap.</small>
                     </div>
                     <button type="submit" class="btn btn-primary">Save Map Settings</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2 class="section-title">
+                <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                </svg>
+                Ratings Settings
+            </h2>
+
+            <div class="form-card">
+                <p class="info-text">
+                    Optionally save an MDBList API key to enrich your media library with aggregated ratings from IMDb, TMDb,
+                    Metacritic, Rotten Tomatoes, Trakt, Letterboxd, and more.
+                    Ratings are fetched during media sync and refreshed every 3 months.
+                    A free account provides 1,000 API calls/day. Get your key at
+                    <a href="https://mdblist.com" target="_blank" rel="noopener">mdblist.com</a>.
+                </p>
+                <div class="settings-note-card">
+                    <div><strong>Stored key in database:</strong> {{ 'Yes' if stored_mdblist_key_present else 'No' }}</div>
+                    <div><strong>Environment key available:</strong> {{ 'Yes' if env_mdblist_key_present else 'No' }}</div>
+                    <div><strong>Effective priority:</strong> saved key in Settings overrides the environment variable.</div>
+                </div>
+                <form method="POST" action="{{ url_for('settings.update_mdblist_settings') }}">
+                    <div class="form-group">
+                        <label for="mdblist_api_key">Optional MDBList API Key</label>
+                        <input
+                            type="password"
+                            id="mdblist_api_key"
+                            name="mdblist_api_key"
+                            value="{{ settings.mdblist_api_key if settings else '' }}"
+                            placeholder="Paste your MDBList API key"
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                        <small>Leave blank to remove the saved key and fall back to the environment variable.</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Ratings Settings</button>
                 </form>
             </div>
         </div>

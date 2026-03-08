@@ -184,6 +184,15 @@ def _ensure_additive_schema_updates():
         analytics_columns = {column['name'] for column in inspector.get_columns('analytics_settings')}
         if 'stadia_maps_api_key' not in analytics_columns:
             statements.append("ALTER TABLE analytics_settings ADD COLUMN stadia_maps_api_key VARCHAR(255)")
+        if 'mdblist_api_key' not in analytics_columns:
+            statements.append("ALTER TABLE analytics_settings ADD COLUMN mdblist_api_key VARCHAR(255)")
+
+    if 'cached_media' in inspector.get_table_names():
+        media_columns = {column['name'] for column in inspector.get_columns('cached_media')}
+        if 'imdb_id' not in media_columns:
+            statements.append("ALTER TABLE cached_media ADD COLUMN imdb_id VARCHAR(20)")
+        if 'tmdb_id' not in media_columns:
+            statements.append("ALTER TABLE cached_media ADD COLUMN tmdb_id VARCHAR(20)")
 
     if not statements:
         return

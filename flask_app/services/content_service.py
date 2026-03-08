@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 from sqlalchemy import func, or_
 
-from flask_app.models import CachedMedia, LifetimeMediaPlayCount, ServerConfig, ViewingHistory
+from flask_app.models import CachedMedia, LifetimeMediaPlayCount, MediaRating, ServerConfig, ViewingHistory
 from flask_app.services.utils import normalize_title, to_int
 from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
@@ -81,6 +81,11 @@ class ContentService:
             else:
                 plays_by_user_chart = self._build_plays_by_user_chart(plays, details_title)
 
+        cached_media = self._find_cached_media(
+            content_title, record.year if is_movie else None, content_kind
+        )
+        mdb_ratings = self._get_mdb_ratings(cached_media.id) if cached_media else []
+
         return {
             'content_kind': content_kind,
             'content_title': details_title,
@@ -92,6 +97,7 @@ class ContentService:
             'total_plays': lifetime_stats['total_plays'],
             'unique_users': lifetime_stats['unique_users'],
             'source_record_id': record.id,
+            'mdb_ratings': mdb_ratings,
         }
 
     def get_content_details_for_media(self, media_id: int) -> dict[str, Any] | None:
@@ -177,6 +183,7 @@ class ContentService:
             'total_plays': lifetime_stats['total_plays'],
             'unique_users': lifetime_stats['unique_users'],
             'source_record_id': source_record.id if source_record else None,
+            'mdb_ratings': self._get_mdb_ratings(media.id),
         }
 
     def _build_movie_query(self, record: ViewingHistory, content_title: str):
@@ -214,6 +221,53 @@ class ContentService:
             query = query.filter(or_(*title_filters))
 
         return query
+
+    @staticmethod
+    def _find_cached_media(title: str, year, media_type: str):
+        """Find the CachedMedia row matching a title/year/type."""
+        q = CachedMedia.query.filter(
+            func.lower(CachedMedia.title) == title.lower(),
+            CachedMedia.media_type == media_type,
+        )
+        if year and media_type == 'movie':
+            q = q.filter(CachedMedia.year == year)
+        return q.first()
+
+    @staticmethod
+    def _get_mdb_ratings(cached_media_id: int) -> list[dict]:
+        """Return MDBList ratings for a CachedMedia row, ordered by source name."""
+        # Source display order (rough quality/popularity order)
+        _ORDER = [
+            'imdb', 'tmdb', 'trakt', 'tomatoes', 'tomatoesaudience',
+            'metacritic', 'metacriticuser', 'letterboxd', 'rogerebert', 'myanimelist',
+        ]
+        rows = MediaRating.query.filter_by(cached_media_id=cached_media_id).all()
+        rows_by_source = {r.source: r for r in rows}
+        result = []
+        for source in _ORDER:
+            if source not in rows_by_source:
+                continue
+            r = rows_by_source[source]
+            result.append({
+                'source': r.source,
+                'value': r.value,
+                'score': r.score,
+                'votes': r.votes,
+                'url': r.url,
+                'popular': r.popular,
+            })
+        # Append any sources not in the order list
+        for source, r in rows_by_source.items():
+            if source not in _ORDER:
+                result.append({
+                    'source': r.source,
+                    'value': r.value,
+                    'score': r.score,
+                    'votes': r.votes,
+                    'url': r.url,
+                    'popular': r.popular,
+                })
+        return result
 
     def _get_metadata_for_record(self, record: ViewingHistory, is_movie: bool) -> dict[str, Any]:
         metadata = {

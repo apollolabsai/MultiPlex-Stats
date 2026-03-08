@@ -14,6 +14,7 @@ class Config:
         'connect_args': {'timeout': 30},
     }
     STADIA_MAPS_API_KEY = (os.environ.get('STADIA_MAPS_API_KEY') or '').strip()
+    MDBLIST_API_KEY = (os.environ.get('MDBLIST_API_KEY') or '').strip()
     STADIA_MAP_STYLE = 'alidade_smooth_dark'
     STADIA_MAP_TILE_URL = (
         os.environ.get('STADIA_MAP_TILE_URL')

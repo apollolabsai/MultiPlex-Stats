@@ -26,6 +26,8 @@ def index():
     lifetime_sync_status = MediaLifetimeStatsService().get_sync_status()
     env_stadia_key_present = bool((current_app.config.get('STADIA_MAPS_API_KEY', '') or '').strip())
     stored_stadia_key_present = bool((getattr(settings, 'stadia_maps_api_key', '') or '').strip()) if settings else False
+    env_mdblist_key_present = bool((current_app.config.get('MDBLIST_API_KEY', '') or '').strip())
+    stored_mdblist_key_present = bool((getattr(settings, 'mdblist_api_key', '') or '').strip()) if settings else False
 
     return render_template('settings.html',
                           servers=servers,
@@ -35,7 +37,9 @@ def index():
                           media_sync_status=media_sync_status,
                           lifetime_sync_status=lifetime_sync_status,
                           env_stadia_key_present=env_stadia_key_present,
-                          stored_stadia_key_present=stored_stadia_key_present)
+                          stored_stadia_key_present=stored_stadia_key_present,
+                          env_mdblist_key_present=env_mdblist_key_present,
+                          stored_mdblist_key_present=stored_mdblist_key_present)
 
 
 @settings_bp.route('/server/add', methods=['POST'])
@@ -137,6 +141,28 @@ def update_map_settings():
     except Exception as e:
         db.session.rollback()
         flash(f'Error updating map settings: {str(e)}', 'error')
+
+    return redirect(url_for('settings.index'))
+
+
+@settings_bp.route('/mdblist', methods=['POST'])
+def update_mdblist_settings():
+    """Update MDBList API key setting."""
+    settings = AnalyticsSettings.query.first()
+    if not settings:
+        settings = AnalyticsSettings()
+        db.session.add(settings)
+
+    try:
+        settings.mdblist_api_key = (request.form.get('mdblist_api_key', '') or '').strip() or None
+        db.session.commit()
+        if settings.mdblist_api_key:
+            flash('MDBList API key saved. Ratings will be fetched on the next media sync.', 'success')
+        else:
+            flash('Stored MDBList API key cleared. The app will fall back to the environment variable if one is set.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating MDBList settings: {str(e)}', 'error')
 
     return redirect(url_for('settings.index'))
 

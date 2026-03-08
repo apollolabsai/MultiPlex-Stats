@@ -11,7 +11,9 @@ from typing import Optional
 
 from flask import current_app
 
-from flask_app.models import db, MediaSyncStatus, CachedMedia
+import re
+
+from flask_app.models import db, MediaSyncStatus, CachedMedia, MediaRating
 from flask_app.services.config_service import ConfigService
 from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
@@ -153,6 +155,10 @@ class MediaService:
         with app.app_context():
             try:
                 self._run_media_sync_parallel(app)
+
+                # Enrich with MDBList ratings if API key is configured.
+                self._run_mdblist_enrichment(app)
+
                 status = self.get_or_create_status()
                 status.status = 'success'
                 status.completed_at = datetime.utcnow()
@@ -167,6 +173,28 @@ class MediaService:
                 status.error_message = str(e)
 
             db.session.commit()
+
+    def _run_mdblist_enrichment(self, app):
+        """Fetch MDBList ratings for all media items that have an IMDb ID."""
+        from flask import current_app
+        from flask_app.services.mdblist_service import MDBListService
+
+        api_key = ConfigService.get_effective_mdblist_api_key(
+            current_app.config.get('MDBLIST_API_KEY', '')
+        )
+        if not api_key:
+            return
+
+        status = self.get_or_create_status()
+        status.current_step = 'Fetching MDBList ratings...'
+        db.session.commit()
+
+        def _progress(fetched, total):
+            s = self.get_or_create_status()
+            s.current_step = f'Fetching MDBList ratings ({fetched}/{total})...'
+            db.session.commit()
+
+        MDBListService(api_key).enrich_media_ratings(progress_callback=_progress)
 
     def _run_media_sync_parallel(self, app):
         """Run the actual media sync operation with parallel server fetching."""
@@ -396,6 +424,8 @@ class MediaService:
                 'ratingImage',
                 'audienceRating',
                 'audienceRatingImage',
+                'guid',
+                'guids',
             ]
             metadata_level = 1  # Basic metadata for movies
         else:
@@ -408,6 +438,8 @@ class MediaService:
                 'ratingImage',
                 'audienceRating',
                 'audienceRatingImage',
+                'guid',
+                'guids',
             ]
             metadata_level = 0  # Custom only - avoids seasons/episodes
 
@@ -570,6 +602,8 @@ class MediaService:
             audience_rating = record.get('audienceRating')
             audience_rating_image = record.get('audienceRatingImage')
 
+            imdb_id, tmdb_id = self._parse_guids(record)
+
             # Thread-safe update to shared dict
             with data_lock:
                 if key in data_dict:
@@ -604,6 +638,10 @@ class MediaService:
                             existing['audience_rating'] = audience_rating
                         if audience_rating_image:
                             existing['audience_rating_image'] = audience_rating_image
+                        if imdb_id:
+                            existing['imdb_id'] = imdb_id
+                        if tmdb_id:
+                            existing['tmdb_id'] = tmdb_id
                     else:
                         if not existing.get('rating') and rating:
                             existing['rating'] = rating
@@ -613,6 +651,10 @@ class MediaService:
                             existing['audience_rating'] = audience_rating
                         if not existing.get('audience_rating_image') and audience_rating_image:
                             existing['audience_rating_image'] = audience_rating_image
+                        if not existing.get('imdb_id') and imdb_id:
+                            existing['imdb_id'] = imdb_id
+                        if not existing.get('tmdb_id') and tmdb_id:
+                            existing['tmdb_id'] = tmdb_id
                 else:
                     data_dict[key] = {
                         'title': title,
@@ -628,6 +670,8 @@ class MediaService:
                         'rating_image': rating_image,
                         'audience_rating': audience_rating,
                         'audience_rating_image': audience_rating_image,
+                        'imdb_id': imdb_id,
+                        'tmdb_id': tmdb_id,
                     }
 
             records_processed += 1
@@ -705,6 +749,40 @@ class MediaService:
                 if file_size:
                     existing['file_sizes'].add(file_size)
 
+    @staticmethod
+    def _parse_guids(record: dict):
+        """
+        Extract imdb_id and tmdb_id from a Tautulli export record.
+
+        Supports both:
+        - New Plex agent: guids = [{"id": "imdb://tt..."}, {"id": "tmdb://..."}]
+        - Old Plex agent: guid = "com.plexapp.agents.imdb://tt...?lang=en"
+        """
+        imdb_id = None
+        tmdb_id = None
+
+        # New Plex agent — guids array
+        guids = record.get('guids') or []
+        if isinstance(guids, list):
+            for g in guids:
+                gid = g.get('id', '') if isinstance(g, dict) else str(g)
+                if gid.startswith('imdb://'):
+                    imdb_id = gid[7:].split('?')[0]
+                elif gid.startswith('tmdb://'):
+                    tmdb_id = gid[7:].split('?')[0]
+
+        # Old Plex agent fallback — single guid string
+        if not imdb_id and not tmdb_id:
+            guid = record.get('guid', '') or ''
+            m = re.search(r'agents\.imdb://([^?]+)', guid)
+            if m:
+                imdb_id = m.group(1)
+            m = re.search(r'agents\.themoviedb://([^?]+)', guid)
+            if m:
+                tmdb_id = m.group(1)
+
+        return imdb_id or None, tmdb_id or None
+
     def _save_aggregated_media(self, movies_data: dict, tv_data: dict):
         """Save aggregated media data to the database."""
         resolution_order = {
@@ -746,6 +824,8 @@ class MediaService:
                 rating_image=data.get('rating_image'),
                 audience_rating=str(data['audience_rating']) if data.get('audience_rating') else None,
                 audience_rating_image=data.get('audience_rating_image'),
+                imdb_id=data.get('imdb_id'),
+                tmdb_id=data.get('tmdb_id'),
             )
             db.session.add(media)
 
@@ -763,16 +843,59 @@ class MediaService:
                 rating_image=data.get('rating_image'),
                 audience_rating=str(data['audience_rating']) if data.get('audience_rating') else None,
                 audience_rating_image=data.get('audience_rating_image'),
+                imdb_id=data.get('imdb_id'),
+                tmdb_id=data.get('tmdb_id'),
             )
             db.session.add(media)
 
         db.session.commit()
+
+    @staticmethod
+    def _ratings_by_media_id(media_ids: list) -> dict:
+        """Bulk-load MediaRating rows and return a dict of {media_id: {source: row}}."""
+        if not media_ids:
+            return {}
+        rows = MediaRating.query.filter(MediaRating.cached_media_id.in_(media_ids)).all()
+        result = {}
+        for r in rows:
+            result.setdefault(r.cached_media_id, {})[r.source] = r
+        return result
+
+    @staticmethod
+    def _extract_mdb_summary(ratings_for_item: dict) -> dict:
+        """Extract a compact MDB ratings summary dict for table display."""
+        def _val(source):
+            r = ratings_for_item.get(source)
+            return r.value if r else None
+
+        def _score(source):
+            r = ratings_for_item.get(source)
+            return r.score if r else None
+
+        def _votes(source):
+            r = ratings_for_item.get(source)
+            return r.votes if r else None
+
+        imdb_r = ratings_for_item.get('imdb')
+        return {
+            'imdb': _val('imdb'),
+            'imdb_votes': _votes('imdb'),
+            'imdb_popular': imdb_r.popular if imdb_r else None,
+            'tmdb': _val('tmdb'),
+            'trakt': _val('trakt'),
+            'tomatoes': _score('tomatoes'),
+            'tomatoesaudience': _score('tomatoesaudience'),
+            'metacritic': _score('metacritic'),
+            'letterboxd': _val('letterboxd'),
+        }
 
     def get_movies(self) -> list[dict]:
         """Get all movies formatted for display."""
         movies = CachedMedia.query.filter_by(media_type='movie').order_by(
             CachedMedia.added_at.desc()
         ).all()
+
+        all_ratings = self._ratings_by_media_id([m.id for m in movies])
 
         result = []
         for movie in movies:
@@ -792,6 +915,7 @@ class MediaService:
 
             file_size_gb = movie.file_size / (1024 ** 3) if movie.file_size else 0
 
+            mdb = self._extract_mdb_summary(all_ratings.get(movie.id, {}))
             result.append({
                 'media_id': movie.id,
                 'title': title_with_year,
@@ -808,6 +932,9 @@ class MediaService:
                 'rating_image': movie.rating_image or '',
                 'audience_rating': movie.audience_rating or '',
                 'audience_rating_image': movie.audience_rating_image or '',
+                'imdb_id': movie.imdb_id or '',
+                'tmdb_id': movie.tmdb_id or '',
+                'mdb': mdb,
             })
 
         return result
@@ -817,6 +944,8 @@ class MediaService:
         shows = CachedMedia.query.filter_by(media_type='show').order_by(
             CachedMedia.added_at.desc()
         ).all()
+
+        all_ratings = self._ratings_by_media_id([s.id for s in shows])
 
         result = []
         for show in shows:
@@ -832,6 +961,7 @@ class MediaService:
 
             file_size_gb = show.file_size / (1024 ** 3) if show.file_size else 0
 
+            mdb = self._extract_mdb_summary(all_ratings.get(show.id, {}))
             result.append({
                 'media_id': show.id,
                 'title': show.title,
@@ -845,6 +975,9 @@ class MediaService:
                 'rating_image': show.rating_image or '',
                 'audience_rating': show.audience_rating or '',
                 'audience_rating_image': show.audience_rating_image or '',
+                'imdb_id': show.imdb_id or '',
+                'tmdb_id': show.tmdb_id or '',
+                'mdb': mdb,
             })
 
         return result

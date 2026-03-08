@@ -47,6 +47,7 @@ class AnalyticsSettings(db.Model):
     top_tv_shows = db.Column(db.Integer, default=30)
     top_users = db.Column(db.Integer, default=20)
     stadia_maps_api_key = db.Column(db.String(255), nullable=True)
+    mdblist_api_key = db.Column(db.String(255), nullable=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def to_multiplex_settings(self):
@@ -236,6 +237,10 @@ class CachedMedia(db.Model):
     audience_rating = db.Column(db.String(20), nullable=True)  # e.g., "85"
     audience_rating_image = db.Column(db.String(100), nullable=True)
 
+    # External IDs (from Tautulli guids field, used for MDBList lookup)
+    imdb_id = db.Column(db.String(20), nullable=True, index=True)   # e.g., "tt0114746"
+    tmdb_id = db.Column(db.String(20), nullable=True, index=True)   # e.g., "63"
+
     # Unique constraint on title + year + media_type
     __table_args__ = (
         db.UniqueConstraint('title', 'year', 'media_type', name='uq_media_title_year_type'),
@@ -290,3 +295,22 @@ class LifetimeStatsSyncStatus(db.Model):
 
     # Last successful sync
     last_sync_date = db.Column(db.DateTime, nullable=True)
+
+
+class MediaRating(db.Model):
+    """MDBList ratings for a cached media item. One row per source."""
+    __tablename__ = 'media_ratings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    cached_media_id = db.Column(db.Integer, db.ForeignKey('cached_media.id', ondelete='CASCADE'), nullable=False, index=True)
+    source = db.Column(db.String(30), nullable=False)        # imdb, tmdb, trakt, etc.
+    value = db.Column(db.Float, nullable=True)               # Raw source value (e.g. 8.0 or 76)
+    score = db.Column(db.Integer, nullable=True)             # Normalised 0-100
+    votes = db.Column(db.Integer, nullable=True)             # Sample size
+    url = db.Column(db.String(255), nullable=True)           # Source-specific URL slug
+    popular = db.Column(db.Integer, nullable=True)           # IMDB popularity rank (imdb source only)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
+
+    __table_args__ = (
+        db.UniqueConstraint('cached_media_id', 'source', name='uq_media_rating_id_source'),
+    )

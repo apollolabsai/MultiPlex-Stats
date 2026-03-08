@@ -12,6 +12,29 @@
     {%- endif %}
 {%- endmacro %}
 
+{% macro mdb_source_label(source) -%}
+    {%- if source == 'imdb' %}IMDb
+    {%- elif source == 'tmdb' %}TMDb
+    {%- elif source == 'metacritic' %}Metacritic
+    {%- elif source == 'metacriticuser' %}Metacritic User
+    {%- elif source == 'trakt' %}Trakt
+    {%- elif source == 'tomatoes' %}Rotten Tomatoes
+    {%- elif source == 'tomatoesaudience' %}RT Audience
+    {%- elif source == 'letterboxd' %}Letterboxd
+    {%- elif source == 'rogerebert' %}Roger Ebert
+    {%- elif source == 'myanimelist' %}MyAnimeList
+    {%- else %}{{ source }}
+    {%- endif %}
+{%- endmacro %}
+
+{% macro fmt_votes(votes) -%}
+    {%- if votes is none or votes == 0 %}—
+    {%- elif votes >= 1000000 %}{{ "%.1f"|format(votes / 1000000) }}M
+    {%- elif votes >= 1000 %}{{ "%.0f"|format(votes / 1000) }}K
+    {%- else %}{{ votes }}
+    {%- endif %}
+{%- endmacro %}
+
 {% block content %}
 <section class="content-hero{% if metadata.banner_url %} has-banner{% endif %}"{% if metadata.banner_url %} style="background-image: url('{{ metadata.banner_url }}');"{% endif %}>
     <div class="content-hero-overlay"></div>
@@ -88,6 +111,36 @@
         </div>
     </div>
 </section>
+
+{% if mdb_ratings %}
+<div class="section">
+    <h2 class="section-title">Ratings</h2>
+    <div class="mdb-ratings-grid">
+        {% for r in mdb_ratings %}
+        <div class="mdb-rating-card">
+            <div class="mdb-rating-source">{{ mdb_source_label(r.source) }}</div>
+            <div class="mdb-rating-value">
+                {% if r.source == 'rogerebert' and r.value is not none %}
+                    {{ r.value }}/4
+                {% elif r.source == 'letterboxd' and r.value is not none %}
+                    {{ r.value }}/5
+                {% elif r.value is not none %}
+                    {{ r.value }}{% if r.source in ('imdb', 'tmdb', 'trakt') %}/10{% elif r.source in ('metacritic', 'metacriticuser', 'tomatoes', 'tomatoesaudience') %}%{% endif %}
+                {% elif r.score is not none %}
+                    {{ r.score }}/100
+                {% else %}
+                    —
+                {% endif %}
+            </div>
+            <div class="mdb-rating-meta">
+                {% if r.votes %}{{ fmt_votes(r.votes) }} votes{% else %}&nbsp;{% endif %}
+                {% if r.source == 'imdb' and r.popular %}· #{{ r.popular }} popular{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 
 <div class="section">
     <h2 class="section-title">Plays by Year (All Servers)</h2>
@@ -306,6 +359,42 @@
     .hero-stats {
         flex-direction: column;
     }
+}
+
+/* MDBList ratings grid */
+.mdb-ratings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.mdb-rating-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+}
+
+.mdb-rating-source {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+}
+
+.mdb-rating-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 4px;
+}
+
+.mdb-rating-meta {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
 }
 </style>
 

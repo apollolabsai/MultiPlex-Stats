@@ -120,6 +120,7 @@
                     <th>Codec</th>
                     <th>Resolution</th>
                     <th>Rating</th>
+                    <th>MDB Ratings</th>
                     <th>Size (GB)</th>
                     <th>Last Played</th>
                     <th>Plays</th>
@@ -146,6 +147,7 @@
                     <th>Title</th>
                     <th>Added</th>
                     <th>Rating</th>
+                    <th>MDB Ratings</th>
                     <th>Size (GB)</th>
                     <th>Last Played</th>
                     <th>Plays</th>
@@ -1054,6 +1056,31 @@ $(document).ready(function() {
         return hasRating ? html : '-';
     }
 
+    function formatMdbRatingCell(mdb) {
+        if (!mdb) return '-';
+        var parts = [];
+        if (mdb.imdb != null) {
+            parts.push('<span class="mdb-badge mdb-imdb" title="IMDb">' + mdb.imdb.toFixed(1) + '</span>');
+        }
+        if (mdb.tomatoes != null) {
+            parts.push('<span class="mdb-badge mdb-rt" title="Rotten Tomatoes">' + mdb.tomatoes + '%</span>');
+        }
+        if (mdb.metacritic != null) {
+            parts.push('<span class="mdb-badge mdb-mc" title="Metacritic">' + mdb.metacritic + '</span>');
+        }
+        if (mdb.letterboxd != null) {
+            parts.push('<span class="mdb-badge mdb-lb" title="Letterboxd">' + mdb.letterboxd.toFixed(1) + '</span>');
+        }
+        if (!parts.length) return '-';
+        return '<div class="mdb-rating-cell">' + parts.join('') + '</div>';
+    }
+
+    function mdbSortValue(mdb) {
+        // Sort by IMDb score by default
+        if (!mdb) return 0;
+        return mdb.imdb != null ? mdb.imdb : 0;
+    }
+
     function setMediaTableView(view) {
         var moviesSection = document.getElementById('movies-section');
         var tvSection = document.getElementById('tv-section');
@@ -1091,7 +1118,7 @@ $(document).ready(function() {
         data: moviesData,
         pageLength: 50,
         lengthMenu: [[50, 100, 200, 500], [50, 100, 200, 500]],
-        order: [[7, 'desc']],
+        order: [[8, 'desc']],
         columns: [
             {
                 data: 'title',
@@ -1132,6 +1159,15 @@ $(document).ready(function() {
                 }
             },
             {
+                data: 'mdb',
+                render: function(data, type) {
+                    if (type === 'display') {
+                        return formatMdbRatingCell(data);
+                    }
+                    return mdbSortValue(data);
+                }
+            },
+            {
                 data: 'file_size',
                 render: function(data, type, row) {
                     if (type === 'display') {
@@ -1164,7 +1200,7 @@ $(document).ready(function() {
         data: tvShowsData,
         pageLength: 50,
         lengthMenu: [[50, 100, 200, 500], [50, 100, 200, 500]],
-        order: [[5, 'desc']],
+        order: [[6, 'desc']],
         columns: [
             {
                 data: 'title',
@@ -1192,6 +1228,15 @@ $(document).ready(function() {
                         return formatRatingCell(row);
                     }
                     return parseFloat(data) || 0;
+                }
+            },
+            {
+                data: 'mdb',
+                render: function(data, type) {
+                    if (type === 'display') {
+                        return formatMdbRatingCell(data);
+                    }
+                    return mdbSortValue(data);
                 }
             },
             {
