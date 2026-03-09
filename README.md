@@ -82,6 +82,8 @@ services:
       # - TZ=America/New_York
       # Stadia Maps API key for the dashboard stream map (optional if using domain auth)
       # - STADIA_MAPS_API_KEY=your_stadia_maps_api_key
+      # MDBList API key for enriched media ratings (IMDb, RT, Metacritic, Letterboxd, TMDb, etc.)
+      # - MDBLIST_API_KEY=your_mdblist_api_key
     restart: unless-stopped
 ```
 
