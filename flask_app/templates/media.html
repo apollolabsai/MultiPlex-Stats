@@ -633,7 +633,7 @@ $(document).ready(function() {
     function getRatingIcon(ratingImage) {
         if (!ratingImage) return '';
         if (ratingImage.startsWith('imdb://')) {
-            return '<img src="{{ url_for("static", filename="img/imdb.svg") }}" class="rating-icon" alt="IMDb">';
+            return '<img src="{{ url_for("static", filename="img/imdb.png") }}" class="rating-icon" alt="IMDb">';
         }
         if (ratingImage.startsWith('rottentomatoes://')) {
             return '<img src="{{ url_for("static", filename="img/rottentomatoes.svg") }}" class="rating-icon-lg" alt="Rotten Tomatoes">';
@@ -898,7 +898,7 @@ $(document).ready(function() {
     }
 
     var RATING_ICONS = {
-        imdb:       '{{ url_for("static", filename="img/imdb.svg") }}',
+        imdb:       '{{ url_for("static", filename="img/imdb.png") }}',
         rtTomato:   '{{ url_for("static", filename="img/rottentomatoes.svg") }}',
         popcorn:    '{{ url_for("static", filename="img/popcorn.svg") }}',
         metacritic: '{{ url_for("static", filename="img/metacritic.png") }}',

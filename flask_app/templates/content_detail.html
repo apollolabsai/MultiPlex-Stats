@@ -4,7 +4,7 @@
 
 {% macro rating_icon(image) -%}
     {% if image and image.startswith('imdb://') -%}
-        <img src="{{ url_for('static', filename='img/imdb.svg') }}" class="hero-rating-icon" alt="IMDb">
+        <img src="{{ url_for('static', filename='img/imdb.png') }}" class="hero-rating-icon" alt="IMDb">
     {%- elif image and image.startswith('rottentomatoes://') -%}
         <img src="{{ url_for('static', filename='img/rottentomatoes.svg') }}" class="hero-rating-icon" alt="Rotten Tomatoes">
     {%- elif image and image.startswith('themoviedb://') -%}
@@ -13,7 +13,7 @@
 {%- endmacro %}
 
 {% macro mdb_rating_icon(source) -%}
-    {%- if source == 'imdb' -%}<img src="{{ url_for('static', filename='img/imdb.svg') }}" class="hero-rating-icon" alt="IMDb">
+    {%- if source == 'imdb' -%}<img src="{{ url_for('static', filename='img/imdb.png') }}" class="hero-rating-icon" alt="IMDb">
     {%- elif source == 'tomatoes' -%}<img src="{{ url_for('static', filename='img/rottentomatoes.svg') }}" class="hero-rating-icon-lg" alt="RT">
     {%- elif source in ('tomatoesaudience', 'popcorn') -%}<img src="{{ url_for('static', filename='img/popcorn.svg') }}" class="hero-rating-icon-lg" alt="RT Audience">
     {%- elif source in ('metacritic', 'metacriticuser') -%}<img src="{{ url_for('static', filename='img/metacritic.png') }}" class="hero-rating-icon-lg" alt="Metacritic">
