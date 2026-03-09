@@ -1143,7 +1143,7 @@ $(document).ready(function() {
                     mdbCsv(row.mdb, 'tomatoesaudience', '%'),
                     mdbCsv(row.mdb, 'metacritic'),
                     mdbCsv(row.mdb, 'letterboxd', '', 1),
-                    mdbCsv(row.mdb, 'tmdb', '', 1),
+                    mdbCsv(row.mdb, 'tmdb', '%'),
                     row.added_at || '',
                     row.last_played || ''
                 ]);
@@ -1167,7 +1167,7 @@ $(document).ready(function() {
                 mdbCsv(row.mdb, 'tomatoesaudience', '%'),
                 mdbCsv(row.mdb, 'metacritic'),
                 mdbCsv(row.mdb, 'letterboxd', '', 1),
-                mdbCsv(row.mdb, 'tmdb', '', 1),
+                mdbCsv(row.mdb, 'tmdb', '%'),
                 row.added_at || '',
                 row.last_played || ''
             ]);
@@ -1262,7 +1262,7 @@ $(document).ready(function() {
     function formatTmdbCell(mdb) {
         if (!mdb || mdb.tmdb == null) return '-';
         var n = mdb.tmdb;
-        return ratingItemHtml('tmdb', 'TMDb', n.toFixed(1), mdbRatingClass(n, false), mdb.tmdb_votes);
+        return ratingItemHtml('tmdb', 'TMDb', Math.round(n) + '%', mdbRatingClass(n, true), mdb.tmdb_votes);
     }
 
     function mdbCsv(mdb, field, suffix, decimals) {
