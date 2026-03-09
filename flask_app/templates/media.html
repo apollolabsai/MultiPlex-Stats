@@ -1464,7 +1464,7 @@ $(document).ready(function() {
         { idx: 1,  label: 'Added' },
         { idx: 2,  label: 'Codec' },
         { idx: 3,  label: 'Resolution' },
-        { idx: 4,  label: 'Tautulli' },
+        { idx: 4,  label: 'Tautulli',     defaultHidden: true },
         { idx: 5,  label: 'IMDb' },
         { idx: 6,  label: 'RT Critic' },
         { idx: 7,  label: 'RT Audience' },
@@ -1479,7 +1479,7 @@ $(document).ready(function() {
     var TV_COL_DEFS = [
         { idx: 0,  label: 'Title',       required: true },
         { idx: 1,  label: 'Added' },
-        { idx: 2,  label: 'Tautulli' },
+        { idx: 2,  label: 'Tautulli',    defaultHidden: true },
         { idx: 3,  label: 'IMDb' },
         { idx: 4,  label: 'RT Critic' },
         { idx: 5,  label: 'RT Audience' },
@@ -1495,13 +1495,20 @@ $(document).ready(function() {
         var bar = document.getElementById(barId);
         if (!bar) return;
 
-        // Restore saved visibility
+        // Restore saved visibility, or apply defaults
         var saved = null;
         try { saved = JSON.parse(localStorage.getItem(storageKey)); } catch(e) {}
         if (saved && Array.isArray(saved)) {
             colDefs.forEach(function(col) {
                 if (!col.required) {
                     table.column(col.idx).visible(saved.indexOf(col.idx) !== -1, false);
+                }
+            });
+            table.columns.adjust().draw(false);
+        } else {
+            colDefs.forEach(function(col) {
+                if (!col.required && col.defaultHidden) {
+                    table.column(col.idx).visible(false, false);
                 }
             });
             table.columns.adjust().draw(false);
