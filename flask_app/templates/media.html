@@ -1255,7 +1255,7 @@ $(document).ready(function() {
     function formatLetterboxdCell(mdb) {
         if (!mdb || mdb.letterboxd == null) return '-';
         var n = mdb.letterboxd;
-        var cls = n > 3.5 ? 'rating-good' : n >= 3.0 ? 'rating-warn' : 'rating-bad';
+        var cls = mdbRatingClass(n * 2, false);
         return ratingItemHtml('letterboxd', 'Letterboxd', n.toFixed(1), cls, mdb.letterboxd_votes);
     }
 
