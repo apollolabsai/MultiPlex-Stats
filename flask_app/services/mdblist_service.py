@@ -3,12 +3,11 @@ MDBList API client for fetching ratings metadata.
 
 Free tier: 1,000 requests/day. Each POST to /imdb/movie or /imdb/show counts
 as 1 request regardless of batch size (up to 200 IDs per request).
-Ratings are refreshed at most every 3 months and only during a
-user-triggered media sync.
+Ratings are fetched for all items with an IMDb ID on every user-triggered sync.
 
 API docs: https://mdblist.docs.apiary.io/
 """
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import requests
 
@@ -23,7 +22,6 @@ RATING_SOURCES = {
 }
 
 _BATCH_SIZE = 200           # MDBList supports up to 200 IDs per POST
-_REFRESH_DAYS = 90          # Refresh ratings older than 3 months
 _API_BASE = 'https://api.mdblist.com'
 
 # Endpoint per CachedMedia.media_type value
@@ -47,9 +45,8 @@ class MDBListService:
         """
         Fetch MDBList ratings for all CachedMedia items that have an imdb_id.
 
-        Items are skipped if their ratings were updated within the last
-        _REFRESH_DAYS days. Movies and TV shows are batched separately
-        because the API uses different endpoints for each type.
+        Movies and TV shows are batched separately because the API uses
+        different endpoints for each type.
 
         Args:
             progress_callback: optional callable(fetched, total) for progress
@@ -62,30 +59,11 @@ class MDBListService:
         if not self.api_key:
             return result
 
-        cutoff = datetime.now(UTC) - timedelta(days=_REFRESH_DAYS)
-
-        from sqlalchemy import func
-
-        # Subquery: newest rating date per cached_media_id
-        newest_rating = (
-            db.session.query(
-                MediaRating.cached_media_id,
-                func.max(MediaRating.updated_at).label('newest')
-            )
-            .group_by(MediaRating.cached_media_id)
-            .subquery()
-        )
-
         items_needing_refresh = (
             db.session.query(CachedMedia)
-            .outerjoin(newest_rating, CachedMedia.id == newest_rating.c.cached_media_id)
             .filter(
                 CachedMedia.imdb_id.isnot(None),
                 CachedMedia.media_type.in_(_TYPE_ENDPOINT.keys()),
-                db.or_(
-                    newest_rating.c.newest.is_(None),
-                    newest_rating.c.newest < cutoff,
-                )
             )
             .all()
         )
