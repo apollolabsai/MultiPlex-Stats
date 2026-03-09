@@ -490,6 +490,31 @@
     white-space: nowrap;
 }
 
+/* Fast custom tooltips for MDB badges */
+.mdb-badge {
+    position: relative;
+}
+.mdb-badge[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 5px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s ease 0.25s;
+    z-index: 1000;
+}
+.mdb-badge[data-tooltip]:hover::after {
+    opacity: 1;
+}
+
 .section-header {
     display: flex;
     align-items: center;
@@ -1064,16 +1089,29 @@ $(document).ready(function() {
         if (!mdb) return '-';
         var parts = [];
         if (mdb.imdb != null) {
-            parts.push('<span class="mdb-badge mdb-imdb" title="IMDb">' + mdb.imdb.toFixed(1) + '</span>');
+            parts.push('<span class="mdb-badge mdb-imdb" data-tooltip="IMDb">' + mdb.imdb.toFixed(1) + '</span>');
         }
-        if (mdb.tomatoes != null) {
-            parts.push('<span class="mdb-badge mdb-rt" title="Rotten Tomatoes">' + mdb.tomatoes + '%</span>');
+        var rtCritic = mdb.tomatoes;
+        var rtAudience = mdb.tomatoesaudience;
+        if (rtCritic != null || rtAudience != null) {
+            var rtDisplay, rtTooltip;
+            if (rtCritic != null && rtAudience != null) {
+                rtDisplay = rtCritic + '% | ' + rtAudience + '%';
+                rtTooltip = 'RT Critic: ' + rtCritic + '% | RT Audience: ' + rtAudience + '%';
+            } else if (rtCritic != null) {
+                rtDisplay = rtCritic + '%';
+                rtTooltip = 'RT Critic: ' + rtCritic + '%';
+            } else {
+                rtDisplay = rtAudience + '%';
+                rtTooltip = 'RT Audience: ' + rtAudience + '%';
+            }
+            parts.push('<span class="mdb-badge mdb-rt" data-tooltip="' + rtTooltip + '">' + rtDisplay + '</span>');
         }
         if (mdb.metacritic != null) {
-            parts.push('<span class="mdb-badge mdb-mc" title="Metacritic">' + mdb.metacritic + '</span>');
+            parts.push('<span class="mdb-badge mdb-mc" data-tooltip="Metacritic">' + mdb.metacritic + '</span>');
         }
         if (mdb.letterboxd != null) {
-            parts.push('<span class="mdb-badge mdb-lb" title="Letterboxd">' + mdb.letterboxd.toFixed(1) + '</span>');
+            parts.push('<span class="mdb-badge mdb-lb" data-tooltip="Letterboxd">' + mdb.letterboxd.toFixed(1) + '</span>');
         }
         if (!parts.length) return '-';
         return '<div class="mdb-rating-cell">' + parts.join('') + '</div>';
