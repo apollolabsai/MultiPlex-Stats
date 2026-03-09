@@ -49,10 +49,12 @@
     </div>
 </div>
 
-<!-- IMDb Rating Distribution Chart -->
+<!-- IMDb Rating Distribution Chart (only when MDBList is configured) -->
+{% if mdblist_configured %}
 <div id="imdb-dist-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
     <div id="imdb-dist-chart"></div>
 </div>
+{% endif %}
 
 <div class="media-controls-row" id="media-controls-row" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
     <div class="media-table-toggle" id="media-table-toggle">

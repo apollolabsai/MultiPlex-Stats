@@ -513,13 +513,19 @@ def media():
         total_movie_plays = sum(movie.get('play_count', 0) for movie in movies)
         total_tv_plays = sum(show.get('play_count', 0) for show in tv_shows)
 
+    from flask import current_app
+    mdblist_configured = bool(ConfigService.get_effective_mdblist_api_key(
+        current_app.config.get('MDBLIST_API_KEY', '')
+    ))
+
     return render_template('media.html',
                           sync_status=sync_status,
                           lifetime_sync_status=lifetime_sync_status,
                           movies=movies,
                           tv_shows=tv_shows,
                           total_movie_plays=total_movie_plays,
-                          total_tv_plays=total_tv_plays)
+                          total_tv_plays=total_tv_plays,
+                          mdblist_configured=mdblist_configured)
 
 
 @main_bp.route('/api/media-top-posters')
