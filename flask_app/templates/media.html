@@ -924,10 +924,10 @@ $(document).ready(function() {
             return '<img src="{{ url_for("static", filename="img/imdb.svg") }}" class="rating-icon" alt="IMDb">';
         }
         if (ratingImage.startsWith('rottentomatoes://')) {
-            return '<img src="{{ url_for("static", filename="img/rottentomatoes.svg") }}" class="rating-icon" alt="Rotten Tomatoes">';
+            return '<img src="{{ url_for("static", filename="img/rottentomatoes.svg") }}" class="rating-icon-lg" alt="Rotten Tomatoes">';
         }
         if (ratingImage.startsWith('themoviedb://')) {
-            return '<img src="{{ url_for("static", filename="img/themoviedb.svg") }}" class="rating-icon" alt="TMDb">';
+            return '<img src="{{ url_for("static", filename="img/themoviedb.svg") }}" class="rating-icon-lg" alt="TMDb">';
         }
         return '';
     }
@@ -1202,8 +1202,9 @@ $(document).ready(function() {
         var tooltipAttr = (votes != null && votes > 0)
             ? ' data-tooltip="' + Number(votes).toLocaleString() + ' votes"'
             : '';
+        var iconClass = iconKey === 'imdb' ? 'rating-icon' : 'rating-icon-lg';
         return '<div class="rating-cell"><div class="rating-item"' + tooltipAttr + '>' +
-            '<img src="' + RATING_ICONS[iconKey] + '" class="rating-icon" alt="' + iconAlt + '">' +
+            '<img src="' + RATING_ICONS[iconKey] + '" class="' + iconClass + '" alt="' + iconAlt + '">' +
             '<span class="rating-value ' + ratingClass + '">' + display + '</span>' +
             '</div></div>';
     }

@@ -833,6 +833,12 @@ footer {
     flex-shrink: 0;
 }
 
+.rating-icon-lg {
+    height: 1.32em;
+    width: auto;
+    flex-shrink: 0;
+}
+
 .rating-value {
     color: #fff;
     font-weight: 500;
