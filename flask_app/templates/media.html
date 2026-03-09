@@ -1493,7 +1493,7 @@ $(document).ready(function() {
     var TV_COL_DEFS = [
         { idx: 0,  label: 'Title',       required: true },
         { idx: 1,  label: 'Plays' },
-        { idx: 2,  label: 'Size (GB)' },
+        { idx: 2,  label: 'Size (GB)',    defaultHidden: true },
         { idx: 3,  label: 'Tautulli',    defaultHidden: true },
         { idx: 4,  label: 'IMDb' },
         { idx: 5,  label: 'RT Critic' },
@@ -1585,7 +1585,7 @@ $(document).ready(function() {
     });
 
     setupColVisibility(moviesTable, 'movies-col-vis-bar', MOVIES_COL_DEFS, 'mpx_movies_col_vis_v2');
-    setupColVisibility(tvShowsTable, 'tv-col-vis-bar', TV_COL_DEFS, 'mpx_tv_col_vis_v2');
+    setupColVisibility(tvShowsTable, 'tv-col-vis-bar', TV_COL_DEFS, 'mpx_tv_col_vis_v3');
 
     setMediaTableView('movies');
 
