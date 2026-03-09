@@ -486,6 +486,10 @@
     min-width: 130px;
 }
 
+.nowrap {
+    white-space: nowrap;
+}
+
 .section-header {
     display: flex;
     align-items: center;
@@ -1169,6 +1173,7 @@ $(document).ready(function() {
             },
             {
                 data: 'file_size',
+                className: 'nowrap',
                 render: function(data, type, row) {
                     if (type === 'display') {
                         if (row.file_size_versions) {
@@ -1241,6 +1246,7 @@ $(document).ready(function() {
             },
             {
                 data: 'file_size',
+                className: 'nowrap',
                 render: function(data) {
                     return data ? data.toFixed(2) : '-';
                 }
