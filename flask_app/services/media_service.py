@@ -895,6 +895,7 @@ class MediaService:
             'imdb_votes': _votes('imdb'),
             'imdb_popular': imdb_r.popular if imdb_r else None,
             'tmdb': _val('tmdb'),
+            'tmdb_votes': _votes('tmdb'),
             'trakt': _val('trakt'),
             'tomatoes': _score('tomatoes'),
             'tomatoes_votes': _votes('tomatoes'),

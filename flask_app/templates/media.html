@@ -126,6 +126,7 @@
                     <th>RT Audience</th>
                     <th>Metacritic</th>
                     <th>Letterboxd</th>
+                    <th>TMDb</th>
                     <th>Size (GB)</th>
                     <th>Last Played</th>
                     <th>Plays</th>
@@ -158,6 +159,7 @@
                     <th>RT Audience</th>
                     <th>Metacritic</th>
                     <th>Letterboxd</th>
+                    <th>TMDb</th>
                     <th>Size (GB)</th>
                     <th>Last Played</th>
                     <th>Plays</th>
@@ -1115,7 +1117,7 @@ $(document).ready(function() {
 
         if (currentMediaView === 'tv') {
             var tvRows = tvShowsTable.rows().data().toArray();
-            var tvCsvRows = [['Title', 'Added', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'Size (GB)', 'Last Played', 'Plays']];
+            var tvCsvRows = [['Title', 'Added', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Size (GB)', 'Last Played', 'Plays']];
             tvRows.forEach(function(row) {
                 tvCsvRows.push([
                     row.title || '',
@@ -1126,6 +1128,7 @@ $(document).ready(function() {
                     mdbCsv(row.mdb, 'tomatoesaudience', '%'),
                     mdbCsv(row.mdb, 'metacritic'),
                     mdbCsv(row.mdb, 'letterboxd', '', 1),
+                    mdbCsv(row.mdb, 'tmdb', '', 1),
                     formatTvSizeForCsv(row),
                     row.last_played || '',
                     row.play_count == null ? '' : row.play_count
@@ -1136,7 +1139,7 @@ $(document).ready(function() {
         }
 
         var movieRows = moviesTable.rows().data().toArray();
-        var movieCsvRows = [['Title', 'Added', 'Codec', 'Resolution', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'Size (GB)', 'Last Played', 'Plays']];
+        var movieCsvRows = [['Title', 'Added', 'Codec', 'Resolution', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Size (GB)', 'Last Played', 'Plays']];
         movieRows.forEach(function(row) {
             movieCsvRows.push([
                 row.title || '',
@@ -1149,6 +1152,7 @@ $(document).ready(function() {
                 mdbCsv(row.mdb, 'tomatoesaudience', '%'),
                 mdbCsv(row.mdb, 'metacritic'),
                 mdbCsv(row.mdb, 'letterboxd', '', 1),
+                mdbCsv(row.mdb, 'tmdb', '', 1),
                 formatMovieSizeForCsv(row),
                 row.last_played || '',
                 row.play_count == null ? '' : row.play_count
@@ -1188,7 +1192,8 @@ $(document).ready(function() {
         rtTomato:   '{{ url_for("static", filename="img/rottentomatoes.svg") }}',
         popcorn:    '{{ url_for("static", filename="img/popcorn.svg") }}',
         metacritic: '{{ url_for("static", filename="img/metacritic.svg") }}',
-        letterboxd: '{{ url_for("static", filename="img/letterboxd.svg") }}'
+        letterboxd: '{{ url_for("static", filename="img/letterboxd.svg") }}',
+        tmdb:       '{{ url_for("static", filename="img/themoviedb.svg") }}'
     };
 
     function mdbRatingClass(num, isPercent) {
@@ -1240,6 +1245,12 @@ $(document).ready(function() {
         return ratingItemHtml('letterboxd', 'Letterboxd', n.toFixed(1), cls, mdb.letterboxd_votes);
     }
 
+    function formatTmdbCell(mdb) {
+        if (!mdb || mdb.tmdb == null) return '-';
+        var n = mdb.tmdb;
+        return ratingItemHtml('tmdb', 'TMDb', n.toFixed(1), mdbRatingClass(n, false), mdb.tmdb_votes);
+    }
+
     function mdbCsv(mdb, field, suffix, decimals) {
         if (!mdb || mdb[field] == null) return '';
         var v = decimals != null ? Number(mdb[field]).toFixed(decimals) : mdb[field];
@@ -1283,7 +1294,7 @@ $(document).ready(function() {
         data: moviesData,
         pageLength: 50,
         lengthMenu: [[50, 100, 200, 500], [50, 100, 200, 500]],
-        order: [[12, 'desc']],
+        order: [[13, 'desc']],
         columns: [
             {
                 data: 'title',
@@ -1342,6 +1353,12 @@ $(document).ready(function() {
                 }
             },
             {
+                data: 'mdb',
+                render: function(data, type) {
+                    return type === 'display' ? formatTmdbCell(data) : (data && data.tmdb != null ? data.tmdb : 0);
+                }
+            },
+            {
                 data: 'file_size',
                 className: 'nowrap',
                 render: function(data, type, row) {
@@ -1368,7 +1385,7 @@ $(document).ready(function() {
         data: tvShowsData,
         pageLength: 50,
         lengthMenu: [[50, 100, 200, 500], [50, 100, 200, 500]],
-        order: [[10, 'desc']],
+        order: [[11, 'desc']],
         columns: [
             {
                 data: 'title',
@@ -1420,6 +1437,12 @@ $(document).ready(function() {
                 }
             },
             {
+                data: 'mdb',
+                render: function(data, type) {
+                    return type === 'display' ? formatTmdbCell(data) : (data && data.tmdb != null ? data.tmdb : 0);
+                }
+            },
+            {
                 data: 'file_size',
                 className: 'nowrap',
                 render: function(data) { return data ? data.toFixed(2) : '-'; }
@@ -1447,9 +1470,10 @@ $(document).ready(function() {
         { idx: 7,  label: 'RT Audience' },
         { idx: 8,  label: 'Metacritic' },
         { idx: 9,  label: 'Letterboxd' },
-        { idx: 10, label: 'Size (GB)' },
-        { idx: 11, label: 'Last Played' },
-        { idx: 12, label: 'Plays' }
+        { idx: 10, label: 'TMDb' },
+        { idx: 11, label: 'Size (GB)' },
+        { idx: 12, label: 'Last Played' },
+        { idx: 13, label: 'Plays' }
     ];
 
     var TV_COL_DEFS = [
@@ -1461,9 +1485,10 @@ $(document).ready(function() {
         { idx: 5,  label: 'RT Audience' },
         { idx: 6,  label: 'Metacritic' },
         { idx: 7,  label: 'Letterboxd' },
-        { idx: 8,  label: 'Size (GB)' },
-        { idx: 9,  label: 'Last Played' },
-        { idx: 10, label: 'Plays' }
+        { idx: 8,  label: 'TMDb' },
+        { idx: 9,  label: 'Size (GB)' },
+        { idx: 10, label: 'Last Played' },
+        { idx: 11, label: 'Plays' }
     ];
 
     function setupColVisibility(table, barId, colDefs, storageKey) {
