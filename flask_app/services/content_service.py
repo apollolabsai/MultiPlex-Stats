@@ -238,7 +238,7 @@ class ContentService:
         """Return MDBList ratings for a CachedMedia row, ordered by source name."""
         # Source display order (rough quality/popularity order)
         _ORDER = [
-            'imdb', 'tomatoes', 'tomatoesaudience', 'metacritic', 'metacriticuser',
+            'imdb', 'tomatoes', 'tomatoesaudience', 'popcorn', 'metacritic', 'metacriticuser',
             'letterboxd', 'tmdb', 'trakt', 'rogerebert', 'myanimelist',
         ]
         rows = MediaRating.query.filter_by(cached_media_id=cached_media_id).all()
