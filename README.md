@@ -18,6 +18,7 @@ A web application for combining and visualizing statistics from multiple Tautull
 - **Viewing History** - Searchable table of all viewing activity
 - **Trend Analysis** - Daily and monthly viewing trends over time
 - **Live Stream Map** - Plot active stream geo-locations in real time with grouped markers, per-stream popups
+- **Multi-Source Ratings** - Enrich your media library with ratings from IMDb, Rotten Tomatoes (Critic & Audience), Metacritic, Letterboxd, and TMDb via MDBList — all displayed in the media table with color-coded quality indicators
 - **Remove Useless Content** - View and export data with zero lifetime views to free up space
 - **True Lifetime Playcounts** - Build lifetime play counts from full history so titles with multiple Plex keys are merged correctly. Some Plex servers assign multiple keys to the same title over time. We build a full-history cache so media page play counts are merged across those keys without slowing page load.
 
@@ -138,7 +139,7 @@ After the initial load, new records are automatically appended when you refresh 
 
 ## Privacy and Security
 
-- All data stays on your machine (no external services other than IP GEO lookup of viewing sessions)
+- All data stays on your machine (external services used: IP geolocation for the stream map, and MDBList for optional media ratings enrichment)
 - API keys are stored in a local SQLite database
 - No telemetry or tracking
 
