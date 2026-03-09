@@ -897,9 +897,13 @@ class MediaService:
             'tmdb': _val('tmdb'),
             'trakt': _val('trakt'),
             'tomatoes': _score('tomatoes'),
+            'tomatoes_votes': _votes('tomatoes'),
             'tomatoesaudience': _score('tomatoesaudience') or _score('popcorn'),
+            'tomatoesaudience_votes': _votes('tomatoesaudience') or _votes('popcorn'),
             'metacritic': _score('metacritic'),
+            'metacritic_votes': _votes('metacritic'),
             'letterboxd': _val('letterboxd'),
+            'letterboxd_votes': _votes('letterboxd'),
         }
 
     def get_movies(self) -> list[dict]:

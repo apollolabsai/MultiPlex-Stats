@@ -111,6 +111,7 @@
         </svg>
         Movies
     </h2>
+    <div class="col-vis-bar" id="movies-col-vis-bar"></div>
     <div class="table-container">
         <table id="moviesTable" class="display" style="width:100%">
             <thead>
@@ -119,8 +120,12 @@
                     <th>Added</th>
                     <th>Codec</th>
                     <th>Resolution</th>
-                    <th>Rating</th>
-                    <th>MDB Ratings</th>
+                    <th>Tautulli</th>
+                    <th>IMDb</th>
+                    <th>RT Critic</th>
+                    <th>RT Audience</th>
+                    <th>Metacritic</th>
+                    <th>Letterboxd</th>
                     <th>Size (GB)</th>
                     <th>Last Played</th>
                     <th>Plays</th>
@@ -140,14 +145,19 @@
         </svg>
         TV Shows
     </h2>
+    <div class="col-vis-bar" id="tv-col-vis-bar"></div>
     <div class="table-container">
         <table id="tvShowsTable" class="display" style="width:100%">
             <thead>
                 <tr>
                     <th>Title</th>
                     <th>Added</th>
-                    <th>Rating</th>
-                    <th>MDB Ratings</th>
+                    <th>Tautulli</th>
+                    <th>IMDb</th>
+                    <th>RT Critic</th>
+                    <th>RT Audience</th>
+                    <th>Metacritic</th>
+                    <th>Letterboxd</th>
                     <th>Size (GB)</th>
                     <th>Last Played</th>
                     <th>Plays</th>
@@ -488,6 +498,84 @@
 
 .nowrap {
     white-space: nowrap;
+}
+
+/* Column visibility dropdown */
+.col-vis-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+}
+.col-vis-wrap {
+    position: relative;
+    display: inline-block;
+}
+.col-vis-btn {
+    font-size: 0.82em;
+    padding: 4px 12px;
+}
+.col-vis-drop {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    background: #1e1e1e;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    padding: 6px 4px;
+    z-index: 500;
+    min-width: 150px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+}
+.col-vis-drop.open {
+    display: block;
+}
+.col-vis-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    cursor: pointer;
+    color: #ddd;
+    font-size: 0.875em;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+.col-vis-item:hover {
+    background: rgba(255,255,255,0.07);
+}
+.col-vis-item input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: #f18a3d;
+}
+.col-vis-item input:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+
+/* Tooltip for individual rating cells */
+.rating-item {
+    position: relative;
+}
+.rating-item[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 5px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s ease 0.25s;
+    z-index: 1000;
+}
+.rating-item[data-tooltip]:hover::after {
+    opacity: 1;
 }
 
 /* Fast custom tooltips for MDB badges */
@@ -1027,12 +1115,17 @@ $(document).ready(function() {
 
         if (currentMediaView === 'tv') {
             var tvRows = tvShowsTable.rows().data().toArray();
-            var tvCsvRows = [['Title', 'Added', 'Rating', 'Size (GB)', 'Last Played', 'Plays']];
+            var tvCsvRows = [['Title', 'Added', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'Size (GB)', 'Last Played', 'Plays']];
             tvRows.forEach(function(row) {
                 tvCsvRows.push([
                     row.title || '',
                     row.added_at || '',
                     formatRatingForCsv(row),
+                    mdbCsv(row.mdb, 'imdb', '', 1),
+                    mdbCsv(row.mdb, 'tomatoes', '%'),
+                    mdbCsv(row.mdb, 'tomatoesaudience', '%'),
+                    mdbCsv(row.mdb, 'metacritic'),
+                    mdbCsv(row.mdb, 'letterboxd', '', 1),
                     formatTvSizeForCsv(row),
                     row.last_played || '',
                     row.play_count == null ? '' : row.play_count
@@ -1043,7 +1136,7 @@ $(document).ready(function() {
         }
 
         var movieRows = moviesTable.rows().data().toArray();
-        var movieCsvRows = [['Title', 'Added', 'Codec', 'Resolution', 'Rating', 'Size (GB)', 'Last Played', 'Plays']];
+        var movieCsvRows = [['Title', 'Added', 'Codec', 'Resolution', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'Size (GB)', 'Last Played', 'Plays']];
         movieRows.forEach(function(row) {
             movieCsvRows.push([
                 row.title || '',
@@ -1051,6 +1144,11 @@ $(document).ready(function() {
                 row.video_codec || '',
                 formatResolutionText(row.video_resolution),
                 formatRatingForCsv(row),
+                mdbCsv(row.mdb, 'imdb', '', 1),
+                mdbCsv(row.mdb, 'tomatoes', '%'),
+                mdbCsv(row.mdb, 'tomatoesaudience', '%'),
+                mdbCsv(row.mdb, 'metacritic'),
+                mdbCsv(row.mdb, 'letterboxd', '', 1),
                 formatMovieSizeForCsv(row),
                 row.last_played || '',
                 row.play_count == null ? '' : row.play_count
@@ -1085,42 +1183,66 @@ $(document).ready(function() {
         return hasRating ? html : '-';
     }
 
-    function formatMdbRatingCell(mdb) {
-        if (!mdb) return '-';
-        var parts = [];
-        if (mdb.imdb != null) {
-            parts.push('<span class="mdb-badge mdb-imdb" data-tooltip="IMDb">' + mdb.imdb.toFixed(1) + '</span>');
+    var RATING_ICONS = {
+        imdb:       '{{ url_for("static", filename="img/imdb.svg") }}',
+        rtTomato:   '{{ url_for("static", filename="img/rottentomatoes.svg") }}',
+        popcorn:    '{{ url_for("static", filename="img/popcorn.svg") }}',
+        metacritic: '{{ url_for("static", filename="img/metacritic.svg") }}',
+        letterboxd: '{{ url_for("static", filename="img/letterboxd.svg") }}'
+    };
+
+    function mdbRatingClass(num, isPercent) {
+        if (isPercent) {
+            return num > 69 ? 'rating-good' : num >= 60 ? 'rating-warn' : 'rating-bad';
         }
-        var rtCritic = mdb.tomatoes;
-        var rtAudience = mdb.tomatoesaudience;
-        if (rtCritic != null || rtAudience != null) {
-            var rtDisplay, rtTooltip;
-            if (rtCritic != null && rtAudience != null) {
-                rtDisplay = rtCritic + '% | ' + rtAudience + '%';
-                rtTooltip = 'RT Critic: ' + rtCritic + '% | RT Audience: ' + rtAudience + '%';
-            } else if (rtCritic != null) {
-                rtDisplay = rtCritic + '%';
-                rtTooltip = 'RT Critic: ' + rtCritic + '%';
-            } else {
-                rtDisplay = rtAudience + '%';
-                rtTooltip = 'RT Audience: ' + rtAudience + '%';
-            }
-            parts.push('<span class="mdb-badge mdb-rt" data-tooltip="' + rtTooltip + '">' + rtDisplay + '</span>');
-        }
-        if (mdb.metacritic != null) {
-            parts.push('<span class="mdb-badge mdb-mc" data-tooltip="Metacritic">' + mdb.metacritic + '</span>');
-        }
-        if (mdb.letterboxd != null) {
-            parts.push('<span class="mdb-badge mdb-lb" data-tooltip="Letterboxd">' + mdb.letterboxd.toFixed(1) + '</span>');
-        }
-        if (!parts.length) return '-';
-        return '<div class="mdb-rating-cell">' + parts.join('') + '</div>';
+        return num > 6.9 ? 'rating-good' : num >= 6.0 ? 'rating-warn' : 'rating-bad';
     }
 
-    function mdbSortValue(mdb) {
-        // Sort by IMDb score by default
-        if (!mdb) return 0;
-        return mdb.imdb != null ? mdb.imdb : 0;
+    function ratingItemHtml(iconKey, iconAlt, display, ratingClass, votes) {
+        var tooltipAttr = (votes != null && votes > 0)
+            ? ' data-tooltip="' + Number(votes).toLocaleString() + ' votes"'
+            : '';
+        return '<div class="rating-cell"><div class="rating-item"' + tooltipAttr + '>' +
+            '<img src="' + RATING_ICONS[iconKey] + '" class="rating-icon" alt="' + iconAlt + '">' +
+            '<span class="rating-value ' + ratingClass + '">' + display + '</span>' +
+            '</div></div>';
+    }
+
+    function formatImdbCell(mdb) {
+        if (!mdb || mdb.imdb == null) return '-';
+        var n = mdb.imdb;
+        return ratingItemHtml('imdb', 'IMDb', n.toFixed(1), mdbRatingClass(n, false), mdb.imdb_votes);
+    }
+
+    function formatRtCriticCell(mdb) {
+        if (!mdb || mdb.tomatoes == null) return '-';
+        var n = mdb.tomatoes;
+        return ratingItemHtml('rtTomato', 'RT Critic', n + '%', mdbRatingClass(n, true), mdb.tomatoes_votes);
+    }
+
+    function formatRtAudienceCell(mdb) {
+        if (!mdb || mdb.tomatoesaudience == null) return '-';
+        var n = mdb.tomatoesaudience;
+        return ratingItemHtml('popcorn', 'RT Audience', n + '%', mdbRatingClass(n, true), mdb.tomatoesaudience_votes);
+    }
+
+    function formatMetacriticCell(mdb) {
+        if (!mdb || mdb.metacritic == null) return '-';
+        var n = mdb.metacritic;
+        return ratingItemHtml('metacritic', 'Metacritic', n, mdbRatingClass(n, true), mdb.metacritic_votes);
+    }
+
+    function formatLetterboxdCell(mdb) {
+        if (!mdb || mdb.letterboxd == null) return '-';
+        var n = mdb.letterboxd;
+        var cls = n > 3.5 ? 'rating-good' : n >= 3.0 ? 'rating-warn' : 'rating-bad';
+        return ratingItemHtml('letterboxd', 'Letterboxd', n.toFixed(1), cls, mdb.letterboxd_votes);
+    }
+
+    function mdbCsv(mdb, field, suffix, decimals) {
+        if (!mdb || mdb[field] == null) return '';
+        var v = decimals != null ? Number(mdb[field]).toFixed(decimals) : mdb[field];
+        return String(v) + (suffix || '');
     }
 
     function setMediaTableView(view) {
@@ -1160,14 +1282,12 @@ $(document).ready(function() {
         data: moviesData,
         pageLength: 50,
         lengthMenu: [[50, 100, 200, 500], [50, 100, 200, 500]],
-        order: [[8, 'desc']],
+        order: [[12, 'desc']],
         columns: [
             {
                 data: 'title',
                 render: function(data, type, row) {
-                    if (type !== 'display') {
-                        return data || '';
-                    }
+                    if (type !== 'display') { return data || ''; }
                     var safeTitle = escapeHtml(data || '');
                     if (!row.media_id) {
                         return '<span class="content-title">' + safeTitle + '</span>';
@@ -1176,37 +1296,48 @@ $(document).ready(function() {
                     return '<a class="content-title content-link" href="' + href + '">' + safeTitle + '</a>';
                 }
             },
-            {
-                data: 'added_at',
-                width: '130px',
-                className: 'media-date-col'
-            },
+            { data: 'added_at', width: '100px', className: 'media-date-col' },
             { data: 'video_codec' },
             {
                 data: 'video_resolution',
                 render: function(data, type) {
-                    if (type === 'display') {
-                        return formatResolutionBadges(data);
-                    }
-                    return formatResolutionText(data);
+                    return type === 'display' ? formatResolutionBadges(data) : formatResolutionText(data);
                 }
             },
             {
                 data: 'rating',
                 render: function(data, type, row) {
-                    if (type === 'display') {
-                        return formatRatingCell(row);
-                    }
-                    return parseFloat(data) || 0;
+                    return type === 'display' ? formatRatingCell(row) : (parseFloat(data) || 0);
                 }
             },
             {
                 data: 'mdb',
                 render: function(data, type) {
-                    if (type === 'display') {
-                        return formatMdbRatingCell(data);
-                    }
-                    return mdbSortValue(data);
+                    return type === 'display' ? formatImdbCell(data) : (data && data.imdb != null ? data.imdb : 0);
+                }
+            },
+            {
+                data: 'mdb',
+                render: function(data, type) {
+                    return type === 'display' ? formatRtCriticCell(data) : (data && data.tomatoes != null ? data.tomatoes : 0);
+                }
+            },
+            {
+                data: 'mdb',
+                render: function(data, type) {
+                    return type === 'display' ? formatRtAudienceCell(data) : (data && data.tomatoesaudience != null ? data.tomatoesaudience : 0);
+                }
+            },
+            {
+                data: 'mdb',
+                render: function(data, type) {
+                    return type === 'display' ? formatMetacriticCell(data) : (data && data.metacritic != null ? data.metacritic : 0);
+                }
+            },
+            {
+                data: 'mdb',
+                render: function(data, type) {
+                    return type === 'display' ? formatLetterboxdCell(data) : (data && data.letterboxd != null ? data.letterboxd : 0);
                 }
             },
             {
@@ -1214,19 +1345,12 @@ $(document).ready(function() {
                 className: 'nowrap',
                 render: function(data, type, row) {
                     if (type === 'display') {
-                        if (row.file_size_versions) {
-                            return row.file_size_versions;
-                        }
-                        return data ? data.toFixed(2) : '-';
+                        return row.file_size_versions ? row.file_size_versions : (data ? data.toFixed(2) : '-');
                     }
                     return data || 0;
                 }
             },
-            {
-                data: 'last_played',
-                width: '130px',
-                className: 'media-date-col'
-            },
+            { data: 'last_played', width: '100px', className: 'media-date-col' },
             { data: 'play_count' }
         ],
         language: {
@@ -1243,14 +1367,12 @@ $(document).ready(function() {
         data: tvShowsData,
         pageLength: 50,
         lengthMenu: [[50, 100, 200, 500], [50, 100, 200, 500]],
-        order: [[6, 'desc']],
+        order: [[10, 'desc']],
         columns: [
             {
                 data: 'title',
                 render: function(data, type, row) {
-                    if (type !== 'display') {
-                        return data || '';
-                    }
+                    if (type !== 'display') { return data || ''; }
                     var safeTitle = escapeHtml(data || '');
                     if (!row.media_id) {
                         return '<span class="content-title">' + safeTitle + '</span>';
@@ -1259,41 +1381,49 @@ $(document).ready(function() {
                     return '<a class="content-title content-link" href="' + href + '">' + safeTitle + '</a>';
                 }
             },
-            {
-                data: 'added_at',
-                width: '130px',
-                className: 'media-date-col'
-            },
+            { data: 'added_at', width: '100px', className: 'media-date-col' },
             {
                 data: 'rating',
                 render: function(data, type, row) {
-                    if (type === 'display') {
-                        return formatRatingCell(row);
-                    }
-                    return parseFloat(data) || 0;
+                    return type === 'display' ? formatRatingCell(row) : (parseFloat(data) || 0);
                 }
             },
             {
                 data: 'mdb',
                 render: function(data, type) {
-                    if (type === 'display') {
-                        return formatMdbRatingCell(data);
-                    }
-                    return mdbSortValue(data);
+                    return type === 'display' ? formatImdbCell(data) : (data && data.imdb != null ? data.imdb : 0);
+                }
+            },
+            {
+                data: 'mdb',
+                render: function(data, type) {
+                    return type === 'display' ? formatRtCriticCell(data) : (data && data.tomatoes != null ? data.tomatoes : 0);
+                }
+            },
+            {
+                data: 'mdb',
+                render: function(data, type) {
+                    return type === 'display' ? formatRtAudienceCell(data) : (data && data.tomatoesaudience != null ? data.tomatoesaudience : 0);
+                }
+            },
+            {
+                data: 'mdb',
+                render: function(data, type) {
+                    return type === 'display' ? formatMetacriticCell(data) : (data && data.metacritic != null ? data.metacritic : 0);
+                }
+            },
+            {
+                data: 'mdb',
+                render: function(data, type) {
+                    return type === 'display' ? formatLetterboxdCell(data) : (data && data.letterboxd != null ? data.letterboxd : 0);
                 }
             },
             {
                 data: 'file_size',
                 className: 'nowrap',
-                render: function(data) {
-                    return data ? data.toFixed(2) : '-';
-                }
+                render: function(data) { return data ? data.toFixed(2) : '-'; }
             },
-            {
-                data: 'last_played',
-                width: '130px',
-                className: 'media-date-col'
-            },
+            { data: 'last_played', width: '100px', className: 'media-date-col' },
             { data: 'play_count' }
         ],
         language: {
@@ -1305,6 +1435,100 @@ $(document).ready(function() {
         }
     });
 
+    var MOVIES_COL_DEFS = [
+        { idx: 0,  label: 'Title',       required: true },
+        { idx: 1,  label: 'Added' },
+        { idx: 2,  label: 'Codec' },
+        { idx: 3,  label: 'Resolution' },
+        { idx: 4,  label: 'Tautulli' },
+        { idx: 5,  label: 'IMDb' },
+        { idx: 6,  label: 'RT Critic' },
+        { idx: 7,  label: 'RT Audience' },
+        { idx: 8,  label: 'Metacritic' },
+        { idx: 9,  label: 'Letterboxd' },
+        { idx: 10, label: 'Size (GB)' },
+        { idx: 11, label: 'Last Played' },
+        { idx: 12, label: 'Plays' }
+    ];
+
+    var TV_COL_DEFS = [
+        { idx: 0,  label: 'Title',       required: true },
+        { idx: 1,  label: 'Added' },
+        { idx: 2,  label: 'Tautulli' },
+        { idx: 3,  label: 'IMDb' },
+        { idx: 4,  label: 'RT Critic' },
+        { idx: 5,  label: 'RT Audience' },
+        { idx: 6,  label: 'Metacritic' },
+        { idx: 7,  label: 'Letterboxd' },
+        { idx: 8,  label: 'Size (GB)' },
+        { idx: 9,  label: 'Last Played' },
+        { idx: 10, label: 'Plays' }
+    ];
+
+    function setupColVisibility(table, barId, colDefs, storageKey) {
+        var bar = document.getElementById(barId);
+        if (!bar) return;
+
+        // Restore saved visibility
+        var saved = null;
+        try { saved = JSON.parse(localStorage.getItem(storageKey)); } catch(e) {}
+        if (saved && Array.isArray(saved)) {
+            colDefs.forEach(function(col) {
+                if (!col.required) {
+                    table.column(col.idx).visible(saved.indexOf(col.idx) !== -1, false);
+                }
+            });
+            table.columns.adjust().draw(false);
+        }
+
+        var btnId = barId + '-btn';
+        var dropId = barId + '-drop';
+        var optionalCols = colDefs.filter(function(c) { return !c.required; });
+
+        bar.innerHTML = '<div class="col-vis-wrap">' +
+            '<button class="btn btn-secondary col-vis-btn" id="' + btnId + '">Columns &#9660;</button>' +
+            '<div class="col-vis-drop" id="' + dropId + '">' +
+            optionalCols.map(function(col) {
+                var checked = table.column(col.idx).visible() ? ' checked' : '';
+                return '<label class="col-vis-item"><input type="checkbox" data-colidx="' + col.idx + '"' + checked + '> ' + col.label + '</label>';
+            }).join('') +
+            '</div></div>';
+
+        function syncCheckboxStates() {
+            var boxes = bar.querySelectorAll('input[type="checkbox"]');
+            var checkedCount = 0;
+            boxes.forEach(function(cb) { if (cb.checked) checkedCount++; });
+            boxes.forEach(function(cb) { cb.disabled = cb.checked && checkedCount === 1; });
+        }
+
+        function saveVisibility() {
+            var visible = colDefs.filter(function(col) {
+                return col.required || table.column(col.idx).visible();
+            }).map(function(col) { return col.idx; });
+            try { localStorage.setItem(storageKey, JSON.stringify(visible)); } catch(e) {}
+        }
+
+        bar.addEventListener('change', function(e) {
+            var cb = e.target;
+            if (!cb || cb.type !== 'checkbox') return;
+            table.column(parseInt(cb.dataset.colidx, 10)).visible(cb.checked);
+            syncCheckboxStates();
+            saveVisibility();
+        });
+
+        document.getElementById(btnId).addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.getElementById(dropId).classList.toggle('open');
+        });
+
+        document.addEventListener('click', function(e) {
+            var drop = document.getElementById(dropId);
+            if (drop && !bar.contains(e.target)) drop.classList.remove('open');
+        });
+
+        syncCheckboxStates();
+    }
+
     $('#media-tab-movies').on('click', function() {
         setMediaTableView('movies');
     });
@@ -1312,6 +1536,9 @@ $(document).ready(function() {
     $('#media-tab-tv').on('click', function() {
         setMediaTableView('tv');
     });
+
+    setupColVisibility(moviesTable, 'movies-col-vis-bar', MOVIES_COL_DEFS, 'mpx_movies_col_vis');
+    setupColVisibility(tvShowsTable, 'tv-col-vis-bar', TV_COL_DEFS, 'mpx_tv_col_vis');
 
     setMediaTableView('movies');
 

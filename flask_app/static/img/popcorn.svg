@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Popcorn puffs -->
+  <ellipse cx="34" cy="44" rx="15" ry="14" fill="#fffde7"/>
+  <ellipse cx="50" cy="38" rx="16" ry="15" fill="#fffde7"/>
+  <ellipse cx="66" cy="44" rx="15" ry="14" fill="#fffde7"/>
+  <ellipse cx="42" cy="32" rx="14" ry="13" fill="#fffde7"/>
+  <ellipse cx="58" cy="32" rx="14" ry="13" fill="#fffde7"/>
+  <!-- Bucket rim -->
+  <rect x="24" y="50" width="52" height="8" rx="4" fill="#b91c1c"/>
+  <!-- Bucket body -->
+  <path d="M26 58 L31 92 L69 92 L74 58 Z" fill="#ef4444"/>
+  <!-- Bucket stripes -->
+  <path d="M40 58 L43 92 L49 92 L46 58 Z" fill="#fca5a5" opacity="0.5"/>
+  <path d="M54 58 L57 92 L63 92 L60 58 Z" fill="#fca5a5" opacity="0.5"/>
+</svg>
