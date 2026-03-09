@@ -1,15 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 115">
   <!-- Popcorn puffs -->
-  <ellipse cx="34" cy="44" rx="15" ry="14" fill="#fffde7"/>
-  <ellipse cx="50" cy="38" rx="16" ry="15" fill="#fffde7"/>
-  <ellipse cx="66" cy="44" rx="15" ry="14" fill="#fffde7"/>
-  <ellipse cx="42" cy="32" rx="14" ry="13" fill="#fffde7"/>
-  <ellipse cx="58" cy="32" rx="14" ry="13" fill="#fffde7"/>
+  <circle cx="30" cy="48" r="16" fill="#f9c12e"/>
+  <circle cx="50" cy="40" r="18" fill="#f9c12e"/>
+  <circle cx="70" cy="48" r="16" fill="#f9c12e"/>
+  <circle cx="40" cy="34" r="15" fill="#f9c12e"/>
+  <circle cx="60" cy="34" r="15" fill="#f9c12e"/>
+  <circle cx="50" cy="26" r="14" fill="#f9c12e"/>
+  <!-- Bucket body (red trapezoid, wider at top) -->
+  <path d="M18 60 L24 108 L76 108 L82 60 Z" fill="#e53935"/>
+  <!-- White stripes -->
+  <path d="M36 60 L39 108 L46 108 L43 60 Z" fill="#fff" opacity="0.9"/>
+  <path d="M54 60 L57 108 L64 108 L61 60 Z" fill="#fff" opacity="0.9"/>
   <!-- Bucket rim -->
-  <rect x="24" y="50" width="52" height="8" rx="4" fill="#b91c1c"/>
-  <!-- Bucket body -->
-  <path d="M26 58 L31 92 L69 92 L74 58 Z" fill="#ef4444"/>
-  <!-- Bucket stripes -->
-  <path d="M40 58 L43 92 L49 92 L46 58 Z" fill="#fca5a5" opacity="0.5"/>
-  <path d="M54 58 L57 92 L63 92 L60 58 Z" fill="#fca5a5" opacity="0.5"/>
+  <rect x="14" y="54" width="72" height="10" rx="5" fill="#c62828"/>
 </svg>
