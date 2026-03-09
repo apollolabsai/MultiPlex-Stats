@@ -904,6 +904,7 @@ class MediaService:
             'metacritic': _score('metacritic'),
             'metacritic_votes': _votes('metacritic'),
             'letterboxd': _val('letterboxd'),
+            'letterboxd_score': _score('letterboxd'),
             'letterboxd_votes': _votes('letterboxd'),
         }
 
