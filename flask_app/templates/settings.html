@@ -187,7 +187,7 @@
                     {% endif %}
                 </div>
 
-                <!-- Step 1 Progress -->
+                <!-- Step 1 Progress: Media Library Sync -->
                 <div class="sync-progress" id="media-sync-progress" {% if media_sync_status.status != 'running' %}style="display: none;"{% endif %}>
                     <div class="progress-header">
                         <span class="progress-title">Step 1 of 2: Media Library Sync</span>
@@ -195,6 +195,16 @@
                     <div id="media-server-progress-container"></div>
                     <div class="progress-stats">
                         <span id="media-progress-fetched">{{ media_sync_status.records_fetched or 0 }}</span> records fetched
+                    </div>
+                </div>
+
+                <!-- Step 1 Progress: MDBList Ratings -->
+                <div class="sync-progress" id="mdblist-sync-progress" style="display: none;">
+                    <div class="progress-header">
+                        <span class="progress-title">Step 1 of 2: Fetching MDBList Ratings</span>
+                    </div>
+                    <div class="progress-stats">
+                        <span id="mdblist-progress-text">Fetching ratings...</span>
                     </div>
                 </div>
 
@@ -404,6 +414,8 @@
     function updateMediaSyncStatus(status) {
         mediaStatus = status || {};
         var progressDiv = document.getElementById('media-sync-progress');
+        var mdblistProgressDiv = document.getElementById('mdblist-sync-progress');
+        var mdblistProgressText = document.getElementById('mdblist-progress-text');
         var fetchedLabel = document.getElementById('media-progress-fetched');
         var lastSyncLabel = document.getElementById('last-media-sync-value');
 
@@ -411,10 +423,19 @@
             if (!mediaOnlyInProgress) {
                 pipelineInProgress = true;
             }
-            progressDiv.style.display = 'block';
-            renderSettingsServerProgress('media-server-progress-container', status.servers || [], false);
-            if (fetchedLabel) {
-                fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
+            var isMdblist = status.current_step && status.current_step.indexOf('MDBList') !== -1;
+            progressDiv.style.display = isMdblist ? 'none' : 'block';
+            mdblistProgressDiv.style.display = isMdblist ? 'block' : 'none';
+            if (!isMdblist) {
+                renderSettingsServerProgress('media-server-progress-container', status.servers || [], false);
+                if (fetchedLabel) {
+                    fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
+                }
+            } else if (mdblistProgressText) {
+                var match = status.current_step.match(/\((\d+)\/(\d+)\)/);
+                mdblistProgressText.textContent = match
+                    ? parseInt(match[1]).toLocaleString() + ' / ' + parseInt(match[2]).toLocaleString() + ' items'
+                    : 'Fetching ratings...';
             }
             var label = mediaOnlyInProgress ? 'Refreshing Media Libraries...' : 'Step 1/2: Syncing Media...';
             setActionButtonState(true, label);
@@ -423,6 +444,7 @@
         }
 
         progressDiv.style.display = 'none';
+        mdblistProgressDiv.style.display = 'none';
         if (lastSyncLabel) {
             lastSyncLabel.textContent = formatLastUpdatedValue(status.last_sync_date);
         }
