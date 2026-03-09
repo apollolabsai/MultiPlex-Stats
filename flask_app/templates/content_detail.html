@@ -24,6 +24,20 @@
     {%- endif %}
 {%- endmacro %}
 
+{% macro mdb_source_label(source) -%}
+    {%- if source == 'imdb' %}IMDb
+    {%- elif source == 'tomatoes' %}Rotten Tomatoes (Critics)
+    {%- elif source in ('tomatoesaudience', 'popcorn') %}Rotten Tomatoes (Audience)
+    {%- elif source == 'metacritic' %}Metacritic (Critics)
+    {%- elif source == 'metacriticuser' %}Metacritic (Users)
+    {%- elif source == 'letterboxd' %}Letterboxd
+    {%- elif source == 'tmdb' %}TMDb
+    {%- elif source == 'trakt' %}Trakt
+    {%- elif source == 'rogerebert' %}Roger Ebert
+    {%- else %}{{ source }}
+    {%- endif %}
+{%- endmacro %}
+
 {% macro fmt_votes(votes) -%}
     {%- if votes is none or votes == 0 %}—
     {%- elif votes >= 1000000 %}{{ "%.1f"|format(votes / 1000000) }}M
@@ -76,7 +90,7 @@
             {% if mdb_ratings %}
             <div class="hero-ratings">
                 {% for r in mdb_ratings %}{% if r.value is not none %}
-                <div class="hero-rating-pill">
+                <div class="hero-rating-pill" title="{{ mdb_source_label(r.source) | trim }}">
                     <div class="hero-rating-top">
                         {{- mdb_rating_icon(r.source) -}}
                         <span class="hero-rating-value">
