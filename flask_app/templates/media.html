@@ -105,13 +105,15 @@
 
 <!-- Movies Section -->
 <div class="section" id="movies-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
-    <h2 class="section-header">
-        <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="#ed542c">
-            <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
-        </svg>
-        Movies
-    </h2>
-    <div class="col-vis-bar" id="movies-col-vis-bar"></div>
+    <div class="section-top-bar">
+        <h2 class="section-header">
+            <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="#ed542c">
+                <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
+            </svg>
+            Movies
+        </h2>
+        <div class="col-vis-bar" id="movies-col-vis-bar"></div>
+    </div>
     <div class="table-container">
         <table id="moviesTable" class="display" style="width:100%">
             <thead>
@@ -140,13 +142,15 @@
 
 <!-- TV Shows Section -->
 <div class="section" id="tv-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
-    <h2 class="section-header">
-        <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="#ed542c">
-            <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
-        </svg>
-        TV Shows
-    </h2>
-    <div class="col-vis-bar" id="tv-col-vis-bar"></div>
+    <div class="section-top-bar">
+        <h2 class="section-header">
+            <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="#ed542c">
+                <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 1.99-.9 1.99-2L23 5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
+            </svg>
+            TV Shows
+        </h2>
+        <div class="col-vis-bar" id="tv-col-vis-bar"></div>
+    </div>
     <div class="table-container">
         <table id="tvShowsTable" class="display" style="width:100%">
             <thead>
@@ -502,11 +506,21 @@
     white-space: nowrap;
 }
 
+/* Section title + column picker on same row */
+.section-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.section-top-bar .section-header {
+    margin: 0;
+}
+
 /* Column visibility dropdown */
 .col-vis-bar {
     display: flex;
     justify-content: flex-end;
-    margin-bottom: 8px;
 }
 .col-vis-wrap {
     position: relative;
