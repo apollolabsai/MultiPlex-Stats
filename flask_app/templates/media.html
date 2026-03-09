@@ -49,6 +49,11 @@
     </div>
 </div>
 
+<!-- IMDb Rating Distribution Chart -->
+<div id="imdb-dist-section" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
+    <div id="imdb-dist-chart"></div>
+</div>
+
 <div class="media-controls-row" id="media-controls-row" {% if not sync_status.has_data %}style="display: none;"{% endif %}>
     <div class="media-table-toggle" id="media-table-toggle">
         <button type="button" class="btn btn-secondary media-toggle-btn active" id="media-tab-movies">Movies</button>
@@ -217,6 +222,10 @@
 .media-load-section {
     max-width: 700px;
     margin: 40px auto;
+}
+
+#imdb-dist-section {
+    margin-bottom: 16px;
 }
 
 .media-controls-row {
@@ -594,11 +603,13 @@ $(document).ready(function() {
         var mediaControls = document.getElementById('media-controls-row');
         var moviesSection = document.getElementById('movies-section');
         var tvSection = document.getElementById('tv-section');
+        var imdbDistSection = document.getElementById('imdb-dist-section');
 
         if (statsGrid) statsGrid.style.display = displayValue;
         if (mediaControls) mediaControls.style.display = visible ? 'flex' : 'none';
         if (moviesSection) moviesSection.style.display = displayValue;
         if (tvSection) tvSection.style.display = 'none';
+        if (imdbDistSection) imdbDistSection.style.display = displayValue;
 
         if (visible) {
             setMediaTableView('movies');
@@ -956,6 +967,53 @@ $(document).ready(function() {
         return String(v) + (suffix || '');
     }
 
+    // IMDb distribution chart
+    function buildImdbChartData(data) {
+        var buckets = {};
+        for (var i = 1; i <= 10; i++) buckets[i] = 0;
+        data.forEach(function(item) {
+            if (!item.mdb || item.mdb.imdb == null) return;
+            var b = Math.min(10, Math.max(1, Math.floor(item.mdb.imdb)));
+            buckets[b]++;
+        });
+        var out = [];
+        for (var i = 1; i <= 10; i++) {
+            var color = i >= 7 ? '#4caf50' : (i === 6 ? '#e6b413' : '#e05252');
+            out.push({ y: buckets[i], color: color });
+        }
+        return out;
+    }
+
+    var imdbChart = null;
+
+    function initImdbChart() {
+        if (typeof Highcharts === 'undefined' || !document.getElementById('imdb-dist-chart')) return;
+        imdbChart = Highcharts.chart('imdb-dist-chart', {
+            chart: { type: 'column', height: 280, marginTop: 16 },
+            title: { text: null },
+            xAxis: {
+                categories: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
+                title: { text: 'IMDb Rating' }
+            },
+            yAxis: {
+                min: 0,
+                allowDecimals: false,
+                title: { text: 'Movies' }
+            },
+            legend: { enabled: false },
+            tooltip: {
+                formatter: function() {
+                    var label = currentMediaView === 'tv' ? 'shows' : 'movies';
+                    return '<b>IMDb ' + this.x + '</b><br>' + this.y.toLocaleString() + ' ' + label;
+                }
+            },
+            plotOptions: {
+                column: { borderWidth: 0, borderRadius: 2 }
+            },
+            series: [{ name: 'Movies', data: buildImdbChartData(moviesData) }]
+        });
+    }
+
     function setMediaTableView(view) {
         var moviesSection = document.getElementById('movies-section');
         var tvSection = document.getElementById('tv-section');
@@ -975,6 +1033,11 @@ $(document).ready(function() {
             if (tvShowsTable) {
                 tvShowsTable.columns.adjust().draw(false);
             }
+            if (imdbChart) {
+                imdbChart.series[0].setData(buildImdbChartData(tvShowsData), true);
+                imdbChart.yAxis[0].setTitle({ text: 'TV Shows' }, false);
+                imdbChart.redraw();
+            }
         } else {
             currentMediaView = 'movies';
             moviesSection.style.display = 'block';
@@ -983,6 +1046,11 @@ $(document).ready(function() {
             tvBtn.classList.remove('active');
             if (moviesTable) {
                 moviesTable.columns.adjust().draw(false);
+            }
+            if (imdbChart) {
+                imdbChart.series[0].setData(buildImdbChartData(moviesData), true);
+                imdbChart.yAxis[0].setTitle({ text: 'Movies' }, false);
+                imdbChart.redraw();
             }
         }
         updateExportButtonLabel();
@@ -1273,6 +1341,7 @@ $(document).ready(function() {
     setupColVisibility(tvShowsTable, 'tv-col-vis-bar', TV_COL_DEFS, 'mpx_tv_col_vis_v3');
 
     setMediaTableView('movies');
+    initImdbChart();
 
     function startCombinedRefresh() {
         window.location.href = settingsDataSyncUrl;
