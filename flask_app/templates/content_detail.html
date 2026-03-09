@@ -12,18 +12,15 @@
     {%- endif %}
 {%- endmacro %}
 
-{% macro mdb_source_label(source) -%}
-    {%- if source == 'imdb' %}IMDb
-    {%- elif source == 'tmdb' %}TMDb
-    {%- elif source == 'metacritic' %}Metacritic
-    {%- elif source == 'metacriticuser' %}Metacritic User
-    {%- elif source == 'trakt' %}Trakt
-    {%- elif source == 'tomatoes' %}Rotten Tomatoes
-    {%- elif source in ('tomatoesaudience', 'popcorn') %}RT Audience
-    {%- elif source == 'letterboxd' %}Letterboxd
-    {%- elif source == 'rogerebert' %}Roger Ebert
-    {%- elif source == 'myanimelist' %}MyAnimeList
-    {%- else %}{{ source }}
+{% macro mdb_rating_icon(source) -%}
+    {%- if source == 'imdb' -%}<img src="{{ url_for('static', filename='img/imdb.svg') }}" class="hero-rating-icon" alt="IMDb">
+    {%- elif source == 'tomatoes' -%}<img src="{{ url_for('static', filename='img/rottentomatoes.svg') }}" class="hero-rating-icon-lg" alt="RT">
+    {%- elif source in ('tomatoesaudience', 'popcorn') -%}<img src="{{ url_for('static', filename='img/popcorn.svg') }}" class="hero-rating-icon-lg" alt="RT Audience">
+    {%- elif source in ('metacritic', 'metacriticuser') -%}<img src="{{ url_for('static', filename='img/metacritic.svg') }}" class="hero-rating-icon-lg" alt="Metacritic">
+    {%- elif source == 'letterboxd' -%}<img src="{{ url_for('static', filename='img/letterboxd.svg') }}" class="hero-rating-icon-lg" alt="Letterboxd">
+    {%- elif source == 'tmdb' -%}<img src="{{ url_for('static', filename='img/themoviedb.svg') }}" class="hero-rating-icon-lg" alt="TMDb">
+    {%- elif source == 'trakt' -%}<img src="{{ url_for('static', filename='img/trakt.png') }}" class="hero-rating-icon-lg" alt="Trakt">
+    {%- elif source == 'rogerebert' -%}<img src="{{ url_for('static', filename='img/re.png') }}" class="hero-rating-icon-lg" alt="Roger Ebert">
     {%- endif %}
 {%- endmacro %}
 
@@ -76,20 +73,36 @@
                 </div>
                 {% endif %}
             </div>
-            {% if metadata.critic_rating_display or metadata.audience_rating_display %}
+            {% if mdb_ratings %}
+            <div class="hero-ratings">
+                {% for r in mdb_ratings %}{% if r.value is not none %}
+                <div class="hero-rating-pill">
+                    <div class="hero-rating-top">
+                        {{- mdb_rating_icon(r.source) -}}
+                        <span class="hero-rating-value">
+                            {%- if r.source in ('tomatoes', 'tomatoesaudience', 'popcorn', 'metacritic', 'metacriticuser', 'tmdb') -%}{{ r.value | int }}%{%- else -%}{{ r.value | float | round(1) }}{%- endif -%}
+                        </span>
+                    </div>
+                    {% if r.votes %}<div class="hero-rating-votes">{{ fmt_votes(r.votes) }}</div>{% endif %}
+                </div>
+                {% endif %}{% endfor %}
+            </div>
+            {% elif metadata.critic_rating_display or metadata.audience_rating_display %}
             <div class="hero-ratings">
                 {% if metadata.critic_rating_display %}
                 <div class="hero-rating-pill">
-                    {{ rating_icon(metadata.critic_rating_image) }}
-                    <span class="hero-rating-value">{{ metadata.critic_rating_display }}</span>
-                    <span class="hero-rating-type">Critic</span>
+                    <div class="hero-rating-top">
+                        {{ rating_icon(metadata.critic_rating_image) }}
+                        <span class="hero-rating-value">{{ metadata.critic_rating_display }}</span>
+                    </div>
                 </div>
                 {% endif %}
                 {% if metadata.audience_rating_display %}
                 <div class="hero-rating-pill">
-                    {{ rating_icon(metadata.audience_rating_image) }}
-                    <span class="hero-rating-value">{{ metadata.audience_rating_display }}</span>
-                    <span class="hero-rating-type">Audience</span>
+                    <div class="hero-rating-top">
+                        {{ rating_icon(metadata.audience_rating_image) }}
+                        <span class="hero-rating-value">{{ metadata.audience_rating_display }}</span>
+                    </div>
                 </div>
                 {% endif %}
             </div>
@@ -111,36 +124,6 @@
         </div>
     </div>
 </section>
-
-{% if mdb_ratings %}
-<div class="section">
-    <h2 class="section-title">Ratings</h2>
-    <div class="mdb-ratings-grid">
-        {% for r in mdb_ratings %}
-        <div class="mdb-rating-card">
-            <div class="mdb-rating-source">{{ mdb_source_label(r.source) }}</div>
-            <div class="mdb-rating-value">
-                {% if r.source == 'rogerebert' and r.value is not none %}
-                    {{ r.value }}/4
-                {% elif r.source == 'letterboxd' and r.value is not none %}
-                    {{ r.value }}/5
-                {% elif r.value is not none %}
-                    {{ r.value }}{% if r.source in ('imdb', 'tmdb', 'trakt') %}/10{% elif r.source in ('metacritic', 'metacriticuser', 'tomatoes', 'tomatoesaudience', 'popcorn') %}%{% endif %}
-                {% elif r.score is not none %}
-                    {{ r.score }}/100
-                {% else %}
-                    —
-                {% endif %}
-            </div>
-            <div class="mdb-rating-meta">
-                {% if r.votes %}{{ fmt_votes(r.votes) }} votes{% else %}&nbsp;{% endif %}
-                {% if r.source == 'imdb' and r.popular %}· #{{ r.popular }} popular{% endif %}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
 
 <div class="section">
     <h2 class="section-title">Plays by Year (All Servers)</h2>
@@ -260,17 +243,31 @@
 
 .hero-rating-pill {
     display: inline-flex;
+    flex-direction: column;
     align-items: center;
-    gap: 8px;
-    padding: 7px 11px;
-    border-radius: 999px;
+    gap: 3px;
+    padding: 7px 12px;
+    border-radius: 10px;
     background: rgba(0, 0, 0, 0.35);
     border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.hero-rating-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .hero-rating-icon {
     width: 18px;
     height: 18px;
+    flex-shrink: 0;
+}
+
+.hero-rating-icon-lg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
 }
 
 .hero-rating-value {
@@ -278,11 +275,10 @@
     font-weight: 700;
 }
 
-.hero-rating-type {
-    color: #f18a3d;
-    font-size: 0.78em;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+.hero-rating-votes {
+    font-size: 0.72em;
+    color: rgba(255, 255, 255, 0.45);
+    line-height: 1;
 }
 
 .hero-stats {
@@ -361,41 +357,6 @@
     }
 }
 
-/* MDBList ratings grid */
-.mdb-ratings-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 12px;
-    margin-top: 8px;
-}
-
-.mdb-rating-card {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 8px;
-    padding: 12px;
-    text-align: center;
-}
-
-.mdb-rating-source {
-    font-size: 11px;
-    color: rgba(255,255,255,0.5);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 6px;
-}
-
-.mdb-rating-value {
-    font-size: 20px;
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 4px;
-}
-
-.mdb-rating-meta {
-    font-size: 11px;
-    color: rgba(255,255,255,0.4);
-}
 </style>
 
 <script>
