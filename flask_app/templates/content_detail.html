@@ -16,8 +16,8 @@
     {%- if source == 'imdb' -%}<img src="{{ url_for('static', filename='img/imdb.svg') }}" class="hero-rating-icon" alt="IMDb">
     {%- elif source == 'tomatoes' -%}<img src="{{ url_for('static', filename='img/rottentomatoes.svg') }}" class="hero-rating-icon-lg" alt="RT">
     {%- elif source in ('tomatoesaudience', 'popcorn') -%}<img src="{{ url_for('static', filename='img/popcorn.svg') }}" class="hero-rating-icon-lg" alt="RT Audience">
-    {%- elif source in ('metacritic', 'metacriticuser') -%}<img src="{{ url_for('static', filename='img/metacritic.svg') }}" class="hero-rating-icon-lg" alt="Metacritic">
-    {%- elif source == 'letterboxd' -%}<img src="{{ url_for('static', filename='img/letterboxd.svg') }}" class="hero-rating-icon-lg" alt="Letterboxd">
+    {%- elif source in ('metacritic', 'metacriticuser') -%}<img src="{{ url_for('static', filename='img/metacritic.png') }}" class="hero-rating-icon-lg" alt="Metacritic">
+    {%- elif source == 'letterboxd' -%}<img src="{{ url_for('static', filename='img/letterboxd.png') }}" class="hero-rating-icon-lg" alt="Letterboxd">
     {%- elif source == 'tmdb' -%}<img src="{{ url_for('static', filename='img/themoviedb.svg') }}" class="hero-rating-icon-lg" alt="TMDb">
     {%- elif source == 'trakt' -%}<img src="{{ url_for('static', filename='img/trakt.png') }}" class="hero-rating-icon-lg" alt="Trakt">
     {%- elif source == 'rogerebert' -%}<img src="{{ url_for('static', filename='img/re.png') }}" class="hero-rating-icon-lg" alt="Roger Ebert">
@@ -80,7 +80,7 @@
                     <div class="hero-rating-top">
                         {{- mdb_rating_icon(r.source) -}}
                         <span class="hero-rating-value">
-                            {%- if r.source in ('tomatoes', 'tomatoesaudience', 'popcorn', 'metacritic', 'metacriticuser', 'tmdb') -%}{{ r.value | int }}%{%- else -%}{{ r.value | float | round(1) }}{%- endif -%}
+                            {%- if r.source in ('tomatoes', 'tomatoesaudience', 'popcorn', 'metacritic', 'metacriticuser', 'tmdb', 'trakt') -%}{{ r.value | int }}%{%- else -%}{{ r.value | float | round(1) }}{%- endif -%}
                         </span>
                     </div>
                     {% if r.votes %}<div class="hero-rating-votes">{{ fmt_votes(r.votes) }}</div>{% endif %}
