@@ -119,7 +119,8 @@
             <thead>
                 <tr>
                     <th>Title</th>
-                    <th>Added</th>
+                    <th>Plays</th>
+                    <th>Size (GB)</th>
                     <th>Codec</th>
                     <th>Resolution</th>
                     <th>Tautulli</th>
@@ -129,9 +130,8 @@
                     <th>Metacritic</th>
                     <th>Letterboxd</th>
                     <th>TMDb</th>
-                    <th>Size (GB)</th>
+                    <th>Added</th>
                     <th>Last Played</th>
-                    <th>Plays</th>
                 </tr>
             </thead>
             <tbody>
@@ -156,7 +156,8 @@
             <thead>
                 <tr>
                     <th>Title</th>
-                    <th>Added</th>
+                    <th>Plays</th>
+                    <th>Size (GB)</th>
                     <th>Tautulli</th>
                     <th>IMDb</th>
                     <th>RT Critic</th>
@@ -164,9 +165,8 @@
                     <th>Metacritic</th>
                     <th>Letterboxd</th>
                     <th>TMDb</th>
-                    <th>Size (GB)</th>
+                    <th>Added</th>
                     <th>Last Played</th>
-                    <th>Plays</th>
                 </tr>
             </thead>
             <tbody>
@@ -1131,11 +1131,12 @@ $(document).ready(function() {
 
         if (currentMediaView === 'tv') {
             var tvRows = tvShowsTable.rows().data().toArray();
-            var tvCsvRows = [['Title', 'Added', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Size (GB)', 'Last Played', 'Plays']];
+            var tvCsvRows = [['Title', 'Plays', 'Size (GB)', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Added', 'Last Played']];
             tvRows.forEach(function(row) {
                 tvCsvRows.push([
                     row.title || '',
-                    row.added_at || '',
+                    row.play_count == null ? '' : row.play_count,
+                    formatTvSizeForCsv(row),
                     formatRatingForCsv(row),
                     mdbCsv(row.mdb, 'imdb', '', 1),
                     mdbCsv(row.mdb, 'tomatoes', '%'),
@@ -1143,9 +1144,8 @@ $(document).ready(function() {
                     mdbCsv(row.mdb, 'metacritic'),
                     mdbCsv(row.mdb, 'letterboxd', '', 1),
                     mdbCsv(row.mdb, 'tmdb', '', 1),
-                    formatTvSizeForCsv(row),
-                    row.last_played || '',
-                    row.play_count == null ? '' : row.play_count
+                    row.added_at || '',
+                    row.last_played || ''
                 ]);
             });
             downloadCsv('tv_shows_' + timestamp + '.csv', tvCsvRows);
@@ -1153,11 +1153,12 @@ $(document).ready(function() {
         }
 
         var movieRows = moviesTable.rows().data().toArray();
-        var movieCsvRows = [['Title', 'Added', 'Codec', 'Resolution', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Size (GB)', 'Last Played', 'Plays']];
+        var movieCsvRows = [['Title', 'Plays', 'Size (GB)', 'Codec', 'Resolution', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Added', 'Last Played']];
         movieRows.forEach(function(row) {
             movieCsvRows.push([
                 row.title || '',
-                row.added_at || '',
+                row.play_count == null ? '' : row.play_count,
+                formatMovieSizeForCsv(row),
                 row.video_codec || '',
                 formatResolutionText(row.video_resolution),
                 formatRatingForCsv(row),
@@ -1167,9 +1168,8 @@ $(document).ready(function() {
                 mdbCsv(row.mdb, 'metacritic'),
                 mdbCsv(row.mdb, 'letterboxd', '', 1),
                 mdbCsv(row.mdb, 'tmdb', '', 1),
-                formatMovieSizeForCsv(row),
-                row.last_played || '',
-                row.play_count == null ? '' : row.play_count
+                row.added_at || '',
+                row.last_played || ''
             ]);
         });
         downloadCsv('movies_' + timestamp + '.csv', movieCsvRows);
@@ -1308,7 +1308,7 @@ $(document).ready(function() {
         data: moviesData,
         pageLength: 50,
         lengthMenu: [[50, 100, 200, 500], [50, 100, 200, 500]],
-        order: [[13, 'desc']],
+        order: [[1, 'desc']],
         columns: [
             {
                 data: 'title',
@@ -1322,7 +1322,17 @@ $(document).ready(function() {
                     return '<a class="content-title content-link" href="' + href + '">' + safeTitle + '</a>';
                 }
             },
-            { data: 'added_at', width: '100px', className: 'media-date-col' },
+            { data: 'play_count' },
+            {
+                data: 'file_size',
+                className: 'nowrap',
+                render: function(data, type, row) {
+                    if (type === 'display') {
+                        return row.file_size_versions ? row.file_size_versions : (data ? data.toFixed(2) : '-');
+                    }
+                    return data || 0;
+                }
+            },
             { data: 'video_codec' },
             {
                 data: 'video_resolution',
@@ -1372,18 +1382,8 @@ $(document).ready(function() {
                     return type === 'display' ? formatTmdbCell(data) : (data && data.tmdb != null ? data.tmdb : 0);
                 }
             },
-            {
-                data: 'file_size',
-                className: 'nowrap',
-                render: function(data, type, row) {
-                    if (type === 'display') {
-                        return row.file_size_versions ? row.file_size_versions : (data ? data.toFixed(2) : '-');
-                    }
-                    return data || 0;
-                }
-            },
-            { data: 'last_played', width: '100px', className: 'media-date-col' },
-            { data: 'play_count' }
+            { data: 'added_at', width: '100px', className: 'media-date-col' },
+            { data: 'last_played', width: '100px', className: 'media-date-col' }
         ],
         language: {
             search: "Filter:",
@@ -1399,7 +1399,7 @@ $(document).ready(function() {
         data: tvShowsData,
         pageLength: 50,
         lengthMenu: [[50, 100, 200, 500], [50, 100, 200, 500]],
-        order: [[11, 'desc']],
+        order: [[1, 'desc']],
         columns: [
             {
                 data: 'title',
@@ -1413,7 +1413,12 @@ $(document).ready(function() {
                     return '<a class="content-title content-link" href="' + href + '">' + safeTitle + '</a>';
                 }
             },
-            { data: 'added_at', width: '100px', className: 'media-date-col' },
+            { data: 'play_count' },
+            {
+                data: 'file_size',
+                className: 'nowrap',
+                render: function(data) { return data ? data.toFixed(2) : '-'; }
+            },
             {
                 data: 'rating',
                 render: function(data, type, row) {
@@ -1456,13 +1461,8 @@ $(document).ready(function() {
                     return type === 'display' ? formatTmdbCell(data) : (data && data.tmdb != null ? data.tmdb : 0);
                 }
             },
-            {
-                data: 'file_size',
-                className: 'nowrap',
-                render: function(data) { return data ? data.toFixed(2) : '-'; }
-            },
-            { data: 'last_played', width: '100px', className: 'media-date-col' },
-            { data: 'play_count' }
+            { data: 'added_at', width: '100px', className: 'media-date-col' },
+            { data: 'last_played', width: '100px', className: 'media-date-col' }
         ],
         language: {
             search: "Filter:",
@@ -1475,34 +1475,34 @@ $(document).ready(function() {
 
     var MOVIES_COL_DEFS = [
         { idx: 0,  label: 'Title',       required: true },
-        { idx: 1,  label: 'Added' },
-        { idx: 2,  label: 'Codec' },
-        { idx: 3,  label: 'Resolution' },
-        { idx: 4,  label: 'Tautulli',     defaultHidden: true },
-        { idx: 5,  label: 'IMDb' },
-        { idx: 6,  label: 'RT Critic' },
-        { idx: 7,  label: 'RT Audience' },
-        { idx: 8,  label: 'Metacritic' },
-        { idx: 9,  label: 'Letterboxd' },
-        { idx: 10, label: 'TMDb' },
-        { idx: 11, label: 'Size (GB)' },
-        { idx: 12, label: 'Last Played' },
-        { idx: 13, label: 'Plays' }
+        { idx: 1,  label: 'Plays' },
+        { idx: 2,  label: 'Size (GB)' },
+        { idx: 3,  label: 'Codec' },
+        { idx: 4,  label: 'Resolution' },
+        { idx: 5,  label: 'Tautulli',    defaultHidden: true },
+        { idx: 6,  label: 'IMDb' },
+        { idx: 7,  label: 'RT Critic' },
+        { idx: 8,  label: 'RT Audience' },
+        { idx: 9,  label: 'Metacritic' },
+        { idx: 10, label: 'Letterboxd' },
+        { idx: 11, label: 'TMDb' },
+        { idx: 12, label: 'Added' },
+        { idx: 13, label: 'Last Played' }
     ];
 
     var TV_COL_DEFS = [
         { idx: 0,  label: 'Title',       required: true },
-        { idx: 1,  label: 'Added' },
-        { idx: 2,  label: 'Tautulli',    defaultHidden: true },
-        { idx: 3,  label: 'IMDb' },
-        { idx: 4,  label: 'RT Critic' },
-        { idx: 5,  label: 'RT Audience' },
-        { idx: 6,  label: 'Metacritic' },
-        { idx: 7,  label: 'Letterboxd',  defaultHidden: true },
-        { idx: 8,  label: 'TMDb' },
-        { idx: 9,  label: 'Size (GB)' },
-        { idx: 10, label: 'Last Played' },
-        { idx: 11, label: 'Plays' }
+        { idx: 1,  label: 'Plays' },
+        { idx: 2,  label: 'Size (GB)' },
+        { idx: 3,  label: 'Tautulli',    defaultHidden: true },
+        { idx: 4,  label: 'IMDb' },
+        { idx: 5,  label: 'RT Critic' },
+        { idx: 6,  label: 'RT Audience' },
+        { idx: 7,  label: 'Metacritic' },
+        { idx: 8,  label: 'Letterboxd',  defaultHidden: true },
+        { idx: 9,  label: 'TMDb' },
+        { idx: 10, label: 'Added' },
+        { idx: 11, label: 'Last Played' }
     ];
 
     function setupColVisibility(table, barId, colDefs, storageKey) {
