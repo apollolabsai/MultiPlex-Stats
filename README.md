@@ -5,6 +5,7 @@ A web application for combining and visualizing statistics from multiple Tautull
 ![MultiPlex Stats Dashboard](images/Dashboard.png)
 ![MultiPlex Stats Dashboard](images/ViewingHistory.png)
 ![MultiPlex Stats Dashboard](images/media.png)
+![MultiPlex Stats Dashboard](images/contentdetail.png)
 ![MultiPlex Stats Dashboard](images/users.png)
 ---
 
