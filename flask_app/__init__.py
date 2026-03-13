@@ -1,7 +1,9 @@
 """
 Flask application factory.
 """
+import glob
 import os
+import re
 from datetime import datetime, timezone
 from urllib.parse import quote
 from flask import Flask
@@ -140,6 +142,7 @@ def create_app(config_name='development'):
         db.create_all()
         _ensure_additive_schema_updates()
         _initialize_default_settings()
+        _cleanup_orphaned_cache(app)
 
     return app
 
@@ -270,3 +273,30 @@ def _ensure_additive_schema_updates():
     with db.engine.begin() as connection:
         for statement in statements:
             connection.execute(text(statement))
+
+
+def _cleanup_orphaned_cache(app):
+    """Remove cache files that don't belong to any existing analytics run.
+
+    When the database is deleted and recreated, auto-increment IDs restart
+    from 1 but old cache files (from previous runs) remain on disk.  These
+    stale files can contain incompatible data (e.g. old HTML-string charts)
+    and collide with new run IDs, breaking the dashboard.
+    """
+    from flask_app.models import AnalyticsRun
+
+    cache_dir = os.path.join(app.instance_path, 'cache')
+    if not os.path.isdir(cache_dir):
+        return
+
+    valid_ids = {r.id for r in AnalyticsRun.query.with_entities(AnalyticsRun.id).all()}
+
+    removed = 0
+    for path in glob.glob(os.path.join(cache_dir, 'run_*')):
+        match = re.search(r'run_(\d+)_', os.path.basename(path))
+        if match and int(match.group(1)) not in valid_ids:
+            os.remove(path)
+            removed += 1
+
+    if removed:
+        app.logger.info('Removed %d orphaned cache file(s)', removed)
