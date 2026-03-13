@@ -326,3 +326,18 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
         self.assertEqual(user['server_b_plays'], 7)
         self.assertEqual(user['first_play'], 100)
         self.assertEqual(user['last_play'], 200)
+
+    def test_normalize_cached_charts_replaces_invalid_payloads(self):
+        cached = {
+            'daily': '<div>unexpected cached markup</div>',
+            'monthly': {'title': 'Monthly', 'categories': [], 'series': []},
+            'category': '<script>unexpected renderer output</script>',
+            'movies': {'title': 'Movies', 'categories': [], 'data': []},
+        }
+
+        sanitized = AnalyticsService._normalize_cached_charts(cached)
+
+        self.assertIsNone(sanitized['daily'])
+        self.assertIsNone(sanitized['category'])
+        self.assertEqual(sanitized['monthly']['title'], 'Monthly')
+        self.assertEqual(sanitized['movies']['title'], 'Movies')

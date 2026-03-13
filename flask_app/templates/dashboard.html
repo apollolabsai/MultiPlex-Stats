@@ -1522,52 +1522,67 @@ $(document).ready(function() {
         });
     }
 
+    function isRenderableChartObject(chartData) {
+        return !!chartData && typeof chartData === 'object' && !Array.isArray(chartData);
+    }
+
     // Initial chart data from server (rendered on page load)
     var chartsJson = {{ charts_json | tojson | safe }};
+    var hasDailyChart = isRenderableChartObject(chartsJson.daily);
+    var hasMonthlyChart = isRenderableChartObject(chartsJson.monthly);
+    var hasCategoryChart = isRenderableChartObject(chartsJson.category);
+    var hasServerChart = isRenderableChartObject(chartsJson.server);
+    var hasPlatformChart = isRenderableChartObject(chartsJson.platform);
+    var hasDayOfWeekChart = isRenderableChartObject(chartsJson.distribution_day_of_week);
+    var hasStreamTypeChart = isRenderableChartObject(chartsJson.distribution_stream_type);
+    var hasHourOfDayChart = isRenderableChartObject(chartsJson.distribution_hour_of_day);
+    var hasUserChart = isRenderableChartObject(chartsJson.users);
+    var hasMovieChart = isRenderableChartObject(chartsJson.movies);
+    var hasTvChart = isRenderableChartObject(chartsJson.tv);
 
     // Render initial charts from cached data
-    if (chartsJson.daily) {
+    if (hasDailyChart) {
         renderStackedBarChart('daily-chart-container', chartsJson.daily);
     }
-    if (chartsJson.monthly) {
+    if (hasMonthlyChart) {
         renderStackedBarChart('monthly-chart-container', chartsJson.monthly);
     }
-    if (chartsJson.category) {
+    if (hasCategoryChart) {
         renderPieChart('distribution-category-container', chartsJson.category);
     }
-    if (chartsJson.server) {
+    if (hasServerChart) {
         renderPieChart('distribution-server-container', chartsJson.server);
     }
-    if (chartsJson.platform) {
+    if (hasPlatformChart) {
         renderPieChart('distribution-platform-container', chartsJson.platform);
     }
-    if (chartsJson.distribution_day_of_week) {
+    if (hasDayOfWeekChart) {
         renderStackedBarChart('distribution-day-of-week-container', chartsJson.distribution_day_of_week, { height: 420, labelRotation: 0 });
     }
-    if (chartsJson.distribution_stream_type) {
+    if (hasStreamTypeChart) {
         renderStackedBarChart('distribution-stream-type-container', chartsJson.distribution_stream_type, { height: 420, labelRotation: 0 });
     }
-    if (chartsJson.distribution_hour_of_day) {
+    if (hasHourOfDayChart) {
         renderStackedBarChart('distribution-hour-of-day-container', chartsJson.distribution_hour_of_day, { height: 420, labelRotation: -60 });
     }
-    if (chartsJson.users) {
+    if (hasUserChart) {
         renderUserStackedBarChart('user-chart-container', chartsJson.users);
     }
-    if (chartsJson.movies) {
+    if (hasMovieChart) {
         renderGradientBarChart('movie-chart-container', chartsJson.movies);
         renderMoviePosterRail(chartsJson.movies.poster_cards || []);
     }
-    if (chartsJson.tv) {
+    if (hasTvChart) {
         renderGradientBarChart('tv-chart-container', chartsJson.tv);
         renderTvPosterRail(chartsJson.tv.poster_cards || []);
     }
 
     // Backward-compatibility: older cached dashboard payloads don't include poster_cards yet.
     // Hydrate from the movie-chart API so the poster rail appears without forcing a full analytics rerun.
-    var initialMovieCards = chartsJson.movies && Array.isArray(chartsJson.movies.poster_cards)
+    var initialMovieCards = hasMovieChart && Array.isArray(chartsJson.movies.poster_cards)
         ? chartsJson.movies.poster_cards
         : [];
-    if (!initialMovieCards.length) {
+    if (!hasMovieChart || !initialMovieCards.length) {
         var initialMovieDays = {{ summary.movie_chart_days|default(60) }};
         var initialTopInput = document.getElementById('movie-top-n');
         var initialMovieTop = initialTopInput ? parseInt(initialTopInput.value, 10) : null;
@@ -1575,10 +1590,10 @@ $(document).ready(function() {
     }
 
     // Backward-compatibility: older cached dashboard payloads don't include TV poster_cards yet.
-    var initialTvCards = chartsJson.tv && Array.isArray(chartsJson.tv.poster_cards)
+    var initialTvCards = hasTvChart && Array.isArray(chartsJson.tv.poster_cards)
         ? chartsJson.tv.poster_cards
         : [];
-    if (!initialTvCards.length) {
+    if (!hasTvChart || !initialTvCards.length) {
         var initialTvDays = {{ summary.tv_chart_days|default(60) }};
         var initialTvTopInput = document.getElementById('tv-top-n');
         var initialTvTop = initialTvTopInput ? parseInt(initialTvTopInput.value, 10) : null;
@@ -1588,9 +1603,12 @@ $(document).ready(function() {
     // Backward-compatibility: older cached dashboard payloads may not include
     // the newer distribution stacked charts yet.
     if (
-        !chartsJson.distribution_day_of_week ||
-        !chartsJson.distribution_stream_type ||
-        !chartsJson.distribution_hour_of_day
+        !hasCategoryChart ||
+        !hasServerChart ||
+        !hasPlatformChart ||
+        !hasDayOfWeekChart ||
+        !hasStreamTypeChart ||
+        !hasHourOfDayChart
     ) {
         var initialDistributionDays = {{ summary.distribution_days|default(60) }};
         fetchDistributionCharts(initialDistributionDays);
@@ -2136,6 +2154,21 @@ $(document).ready(function() {
                 fetchTvChart(days);
             }
         });
+    }
+
+    if (!hasDailyChart) {
+        fetchDailyChart({{ summary.daily_trend_days|default(60) }});
+    }
+
+    if (!hasMonthlyChart) {
+        fetchMonthlyChart({{ summary.monthly_trend_months|default(60) }});
+    }
+
+    if (!hasUserChart) {
+        var initialUserDays = {{ summary.user_chart_days|default(60) }};
+        var initialUserTopInput = document.getElementById('user-top-n');
+        var initialUserTop = initialUserTopInput ? parseInt(initialUserTopInput.value, 10) : null;
+        fetchUserChart(initialUserDays, initialUserTop);
     }
 });
 </script>

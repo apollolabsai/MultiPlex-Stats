@@ -33,6 +33,20 @@ from flask_app.models import CachedMedia, LifetimeMediaPlayCount, ServerConfig, 
 class AnalyticsService:
     """Service to execute analytics pipeline using database configuration."""
 
+    _CACHED_DASHBOARD_CHART_KEYS = (
+        'daily',
+        'monthly',
+        'users',
+        'movies',
+        'tv',
+        'category',
+        'server',
+        'platform',
+        'distribution_day_of_week',
+        'distribution_stream_type',
+        'distribution_hour_of_day',
+    )
+
     def __init__(self):
         self.cache_dir = os.path.join('instance', 'cache')
         os.makedirs(self.cache_dir, exist_ok=True)
@@ -814,15 +828,17 @@ class AnalyticsService:
 
         return posters
 
-    def get_cached_charts(self, run_id: int) -> Dict[str, str]:
+    def get_cached_charts(self, run_id: int) -> Dict[str, Any]:
         """
-        Load cached chart HTML from previous run.
+        Load cached chart JSON from a previous run.
 
         Args:
             run_id: Database ID of AnalyticsRun record
 
         Returns:
-            Dictionary with chart names as keys and HTML strings as values
+            Dictionary with chart names as keys and Highcharts-compatible payloads.
+            Invalid cached entries are converted to ``None`` so the dashboard
+            can refetch fresh JSON without crashing the page.
         """
         cache_path = os.path.join(self.cache_dir, f'run_{run_id}_charts.json')
 
@@ -830,7 +846,23 @@ class AnalyticsService:
             raise FileNotFoundError(f"No cached charts found for run {run_id}")
 
         with open(cache_path, 'r') as f:
-            return json.load(f)
+            cached = json.load(f)
+
+        return self._normalize_cached_charts(cached)
+
+    @classmethod
+    def _normalize_cached_charts(cls, cached: Any) -> Dict[str, Any]:
+        """Replace invalid cached chart payloads with ``None`` placeholders."""
+        if not isinstance(cached, dict):
+            return {}
+
+        sanitized = dict(cached)
+        for key in cls._CACHED_DASHBOARD_CHART_KEYS:
+            value = sanitized.get(key)
+            if value is not None and not isinstance(value, dict):
+                sanitized[key] = None
+
+        return sanitized
 
     def get_viewing_history_table_data(self) -> List[Dict[str, Any]]:
         """
