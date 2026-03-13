@@ -6,9 +6,10 @@
     <title>{% block title %}MultiPlex Stats{% endblock %}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
     {% block head_extras %}{% endblock %}
-    <script defer src="https://cdn.jsdelivr.net/npm/highcharts@11/highcharts.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/highcharts@11/modules/accessibility.js"></script>
-    <script defer src="{{ url_for('static', filename='js/highcharts-theme.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/vendor/highcharts.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/vendor/highcharts-accessibility.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/highcharts-theme.js') }}"
+            onerror="console.warn('[MultiPlex] Failed to load Highcharts theme.');"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>

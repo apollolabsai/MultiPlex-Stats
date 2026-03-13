@@ -2,6 +2,27 @@
  * Highcharts rendering functions for MultiPlex Stats
  */
 
+/**
+ * Check if Highcharts is loaded and log an error if not.
+ * Optionally displays an error message inside the target container.
+ */
+function _requireHighcharts(containerId) {
+    if (typeof Highcharts !== 'undefined') {
+        return true;
+    }
+    var msg = '[MultiPlex] Highcharts is not loaded — cannot render chart' +
+              (containerId ? ' in #' + containerId : '') + '. Check browser console for CDN errors.';
+    console.error(msg);
+    if (containerId) {
+        var el = document.getElementById(containerId);
+        if (el) {
+            el.innerHTML = '<div style="color:#e8833a;padding:2em;text-align:center;">' +
+                'Chart library failed to load. Check browser console for details.</div>';
+        }
+    }
+    return false;
+}
+
 function getDynamicBarHeight(count, minHeight, rowHeight, padding) {
     var items = Math.max(count || 0, 0);
     return Math.max(minHeight, items * rowHeight + padding);
@@ -11,11 +32,12 @@ function getDynamicBarHeight(count, minHeight, rowHeight, padding) {
  * Render a stacked bar chart (daily/monthly)
  */
 function renderStackedBarChart(containerId, chartData, options) {
+    if (!_requireHighcharts(containerId)) return;
     options = options || {};
     var chartHeight = typeof options.height === 'number' ? options.height : 600;
     var labelRotation = typeof options.labelRotation === 'number' ? options.labelRotation : -45;
 
-    Highcharts.chart(containerId, {
+    try { Highcharts.chart(containerId, {
         chart: {
             type: 'column',
             height: chartHeight
@@ -70,19 +92,20 @@ function renderStackedBarChart(containerId, chartData, options) {
             }
         },
         series: chartData.series
-    });
+    }); } catch (e) { console.error('[MultiPlex] renderStackedBarChart error for #' + containerId + ':', e); }
 }
 
 /**
  * Render a bar chart with gradient coloring (user/movie/tv)
  */
 function renderGradientBarChart(containerId, chartData, options) {
+    if (!_requireHighcharts(containerId)) return;
     options = options || {};
     var minHeight = typeof options.minHeight === 'number' ? options.minHeight : 700;
     var rowHeight = typeof options.rowHeight === 'number' ? options.rowHeight : 22;
     var padding = typeof options.padding === 'number' ? options.padding : 220;
     var height = getDynamicBarHeight(chartData.categories ? chartData.categories.length : 0, minHeight, rowHeight, padding);
-    return Highcharts.chart(containerId, {
+    try { return Highcharts.chart(containerId, {
         chart: {
             type: 'bar',
             height: height
@@ -132,15 +155,16 @@ function renderGradientBarChart(containerId, chartData, options) {
             name: 'Plays',
             data: chartData.data
         }]
-    });
+    }); } catch (e) { console.error('[MultiPlex] renderGradientBarChart error for #' + containerId + ':', e); }
 }
 
 /**
  * Render a stacked bar chart with gradient colors (users by server)
  */
 function renderUserStackedBarChart(containerId, chartData) {
+    if (!_requireHighcharts(containerId)) return;
     var height = getDynamicBarHeight(chartData.categories ? chartData.categories.length : 0, 700, 22, 220);
-    Highcharts.chart(containerId, {
+    try { Highcharts.chart(containerId, {
         chart: {
             type: 'bar',
             height: height
@@ -193,14 +217,15 @@ function renderUserStackedBarChart(containerId, chartData) {
             }
         },
         series: chartData.series
-    });
+    }); } catch (e) { console.error('[MultiPlex] renderUserStackedBarChart error for #' + containerId + ':', e); }
 }
 
 /**
  * Render a pie chart with percentage labels
  */
 function renderPieChart(containerId, chartData) {
-    Highcharts.chart(containerId, {
+    if (!_requireHighcharts(containerId)) return;
+    try { Highcharts.chart(containerId, {
         chart: {
             type: 'pie',
             height: 400
@@ -248,14 +273,15 @@ function renderPieChart(containerId, chartData) {
             colorByPoint: true,
             data: chartData.data
         }]
-    });
+    }); } catch (e) { console.error('[MultiPlex] renderPieChart error for #' + containerId + ':', e); }
 }
 
 /**
  * Render an area chart with gradient fill and optional line overlays (concurrent streams)
  */
 function renderAreaChart(containerId, chartData) {
-    Highcharts.chart(containerId, {
+    if (!_requireHighcharts(containerId)) return;
+    try { Highcharts.chart(containerId, {
         chart: {
             height: 400
         },
@@ -317,7 +343,7 @@ function renderAreaChart(containerId, chartData) {
             }
         },
         series: chartData.series
-    });
+    }); } catch (e) { console.error('[MultiPlex] renderAreaChart error for #' + containerId + ':', e); }
 }
 
 /**
