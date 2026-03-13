@@ -7,9 +7,12 @@ Ratings are fetched for all items with an IMDb ID on every user-triggered sync.
 
 API docs: https://mdblist.docs.apiary.io/
 """
+import logging
 from datetime import UTC, datetime
 
-import requests
+from flask_app.utils.http import logged_session
+
+logger = logging.getLogger('multiplex.mdblist')
 
 from flask_app.models import db, CachedMedia, MediaRating
 
@@ -119,7 +122,7 @@ class MDBListService:
         if not endpoint:
             return [], False
         try:
-            response = requests.post(
+            response = logged_session.post(
                 endpoint,
                 params={'apikey': self.api_key},
                 json={'ids': imdb_ids, 'append_to_response': ['ratings']},
@@ -134,13 +137,13 @@ class MDBListService:
                 return [], False
             # Non-200 response — log it
             snippet = response.text[:500] if response.text else '(empty body)'
-            print(
-                f"MDBList API error ({media_type}): HTTP {response.status_code} "
-                f"for {len(imdb_ids)} IDs — {snippet}"
+            logger.warning(
+                "MDBList API error (%s): HTTP %s for %d IDs — %s",
+                media_type, response.status_code, len(imdb_ids), snippet,
             )
             return [], True
         except Exception as e:
-            print(f"MDBList batch fetch error ({media_type}): {e}")
+            logger.error("MDBList batch fetch error (%s): %s", media_type, e)
             return [], True
 
     def _upsert_ratings(self, cached_media_id: int, ratings: list) -> int:

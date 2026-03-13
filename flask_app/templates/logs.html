@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Logs - MultiPlex Stats{% endblock %}
+
+{% block content %}
+<header>
+    <h1>Application Logs</h1>
+    <div class="subtitle">Real-time application log viewer</div>
+</header>
+
+<div class="log-controls">
+    <div class="log-controls-left">
+        <span class="log-controls-label">LEVEL</span>
+        <button class="log-filter-btn active" data-level="DEBUG">Debug</button>
+        <button class="log-filter-btn active" data-level="INFO">Info</button>
+        <button class="log-filter-btn active" data-level="WARNING">Warning</button>
+        <button class="log-filter-btn active" data-level="ERROR">Error</button>
+        <button class="log-filter-btn active" data-level="CRITICAL">Critical</button>
+    </div>
+    <div class="log-controls-right">
+        <label class="log-autoscroll-label">
+            <input type="checkbox" id="log-autoscroll" checked>
+            Auto-scroll
+        </label>
+        <button class="btn btn-secondary btn-sm" id="log-clear">Clear</button>
+        <a href="{{ url_for('logs.download') }}" class="btn btn-secondary btn-sm">Download</a>
+    </div>
+</div>
+
+<div class="log-connection-status" id="log-connection-status"></div>
+<div class="log-container" id="log-container"></div>
+<div class="log-entry-count" id="log-entry-count">0 entries</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var container = document.getElementById('log-container');
+    var countEl = document.getElementById('log-entry-count');
+    var statusEl = document.getElementById('log-connection-status');
+    var autoscrollCheckbox = document.getElementById('log-autoscroll');
+    var clearBtn = document.getElementById('log-clear');
+    var filterBtns = document.querySelectorAll('.log-filter-btn');
+    var entryCount = 0;
+    var evtSource = null;
+    var STORAGE_KEY = 'multiplex_log_levels';
+
+    // ---- Level filter persistence ----
+    function getHiddenLevels() {
+        try {
+            var stored = localStorage.getItem(STORAGE_KEY);
+            return stored ? JSON.parse(stored) : [];
+        } catch (e) { return []; }
+    }
+
+    function saveHiddenLevels(hidden) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(hidden));
+    }
+
+    function applyHiddenLevels() {
+        var hidden = getHiddenLevels();
+        ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'].forEach(function(level) {
+            var isHidden = hidden.indexOf(level) !== -1;
+            container.classList.toggle('hide-' + level.toLowerCase(), isHidden);
+        });
+        filterBtns.forEach(function(btn) {
+            var level = btn.getAttribute('data-level');
+            btn.classList.toggle('active', hidden.indexOf(level) === -1);
+        });
+        updateCount();
+    }
+
+    filterBtns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var level = btn.getAttribute('data-level');
+            var hidden = getHiddenLevels();
+            var idx = hidden.indexOf(level);
+            if (idx === -1) {
+                hidden.push(level);
+            } else {
+                hidden.splice(idx, 1);
+            }
+            saveHiddenLevels(hidden);
+            applyHiddenLevels();
+        });
+    });
+
+    // ---- Entry rendering ----
+    function createEntry(log) {
+        var div = document.createElement('div');
+        div.className = 'log-entry log-level-' + log.level;
+        div.setAttribute('data-id', log.id);
+
+        var ts = document.createElement('span');
+        ts.className = 'log-ts';
+        ts.textContent = log.timestamp;
+
+        var badge = document.createElement('span');
+        badge.className = 'log-badge log-badge-' + log.level.toLowerCase();
+        badge.textContent = log.level;
+
+        var msg = document.createElement('span');
+        msg.className = 'log-msg';
+        msg.textContent = log.message;
+
+        div.appendChild(ts);
+        div.appendChild(badge);
+        div.appendChild(msg);
+        return div;
+    }
+
+    function appendEntry(log) {
+        var el = createEntry(log);
+        container.appendChild(el);
+        entryCount++;
+        if (autoscrollCheckbox.checked) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+
+    function updateCount() {
+        var visible = container.querySelectorAll('.log-entry:not([style*="display: none"])');
+        var visibleCount = 0;
+        var entries = container.querySelectorAll('.log-entry');
+        var hidden = getHiddenLevels();
+        entries.forEach(function(e) {
+            var level = '';
+            e.classList.forEach(function(c) {
+                if (c.indexOf('log-level-') === 0) level = c.replace('log-level-', '');
+            });
+            if (hidden.indexOf(level) === -1) visibleCount++;
+        });
+        countEl.textContent = visibleCount + ' of ' + entryCount + ' entries';
+    }
+
+    // ---- Clear ----
+    clearBtn.addEventListener('click', function() {
+        container.innerHTML = '';
+        entryCount = 0;
+        updateCount();
+    });
+
+    // ---- Bootstrap: load recent entries ----
+    fetch('{{ url_for("logs.api") }}?level=DEBUG')
+        .then(function(r) { return r.json(); })
+        .then(function(entries) {
+            entries.forEach(appendEntry);
+            updateCount();
+        })
+        .catch(function(e) {
+            console.error('[MultiPlex] Failed to load initial logs:', e);
+        });
+
+    // ---- SSE connection ----
+    function connectSSE() {
+        if (evtSource) {
+            evtSource.close();
+        }
+        evtSource = new EventSource('{{ url_for("logs.stream") }}?level=DEBUG');
+
+        evtSource.onopen = function() {
+            statusEl.textContent = '';
+            statusEl.className = 'log-connection-status';
+        };
+
+        evtSource.onmessage = function(event) {
+            try {
+                var log = JSON.parse(event.data);
+                appendEntry(log);
+                updateCount();
+            } catch (e) {
+                // Ignore keepalive comments or malformed data
+            }
+        };
+
+        evtSource.onerror = function() {
+            statusEl.textContent = 'Connection lost \u2014 reconnecting\u2026';
+            statusEl.className = 'log-connection-status log-connection-error';
+        };
+    }
+
+    connectSSE();
+    applyHiddenLevels();
+})();
+</script>
+{% endblock %}

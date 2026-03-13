@@ -3,9 +3,12 @@ IP geolocation lookup service with database caching.
 Uses ip-api.com (45 requests/minute free tier, no API key required).
 """
 import ipaddress
+import logging
 from datetime import UTC, datetime
 
-import requests
+from flask_app.utils.http import logged_session
+
+logger = logging.getLogger('multiplex.geolocation')
 from flask_app.models import db, IPGeolocation
 
 
@@ -65,9 +68,9 @@ class GeolocationService:
     def _lookup_remote(self, normalized_ip, cached_record=None):
         """Query the remote geolocation API and upsert the cache record."""
         try:
-            response = requests.get(
+            response = logged_session.get(
                 self.api_url.format(ip=normalized_ip),
-                timeout=5
+                timeout=5,
             )
 
             if response.status_code == 200:
@@ -125,7 +128,7 @@ class GeolocationService:
                 return self._empty_result()
 
         except Exception as e:
-            print(f"Error looking up IP {normalized_ip}: {e}")
+            logger.error("Error looking up IP %s: %s", normalized_ip, e)
             # Don't overwrite cached records on refresh failure.
             return None if cached_record else self._empty_result()
 

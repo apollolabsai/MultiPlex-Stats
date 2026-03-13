@@ -2,11 +2,12 @@
 Flask application factory.
 """
 import glob
+import logging
 import os
 import re
 from datetime import datetime, timezone
 from urllib.parse import quote
-from flask import Flask
+from flask import Flask, request
 from multiplex_stats.timezone_utils import get_local_timezone
 
 
@@ -113,8 +114,26 @@ def create_app(config_name='development'):
     try:
         os.makedirs(app.instance_path, exist_ok=True)
         os.makedirs(os.path.join(app.instance_path, 'cache'), exist_ok=True)
+        os.makedirs(os.path.join(app.instance_path, 'logs'), exist_ok=True)
     except OSError:
         pass
+
+    # Configure application logging (ring buffer + rotating file)
+    from flask_app.services.log_service import setup_logging, status_text
+    setup_logging(app)
+    _request_logger = logging.getLogger('multiplex.requests')
+
+    @app.after_request
+    def _log_request(response):
+        # Skip static files, SSE stream, and log API to avoid noise
+        path = request.path
+        if path.startswith('/static/') or path == '/logs/stream' or path == '/logs/api':
+            return response
+        _request_logger.info(
+            'IN  %s %s -> %s',
+            request.method, path, status_text(response.status_code),
+        )
+        return response
 
     # Initialize extensions
     from flask_app.models import db
@@ -133,9 +152,11 @@ def create_app(config_name='development'):
     # Register blueprints
     from flask_app.routes.main import main_bp
     from flask_app.routes.settings import settings_bp
+    from flask_app.routes.logs import logs_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(settings_bp, url_prefix='/settings')
+    app.register_blueprint(logs_bp, url_prefix='/logs')
 
     # Create database tables and initialize default settings
     with app.app_context():

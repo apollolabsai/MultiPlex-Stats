@@ -22,6 +22,7 @@
                 <a href="{{ url_for('main.users') }}" class="nav-link{% if request.endpoint == 'main.users' %} active{% endif %}">Users</a>
                 <a href="{{ url_for('main.media') }}" class="nav-link{% if request.endpoint == 'main.media' %} active{% endif %}">Media</a>
                 <a href="{{ url_for('settings.index') }}" class="nav-link{% if request.endpoint and request.endpoint.startswith('settings.') %} active{% endif %}">Settings</a>
+                <a href="{{ url_for('logs.index') }}" class="nav-link{% if request.endpoint and request.endpoint.startswith('logs.') %} active{% endif %}">Logs</a>
             </div>
         </div>
     </nav>

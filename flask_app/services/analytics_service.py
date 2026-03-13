@@ -1,6 +1,7 @@
 """
 Analytics service that bridges Flask to the existing multiplex_stats package.
 """
+import logging
 import os
 import json
 import re
@@ -8,6 +9,8 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 import pandas as pd
+
+logger = logging.getLogger('multiplex.analytics')
 from sqlalchemy import and_, func, or_
 
 from multiplex_stats import TautulliClient
@@ -550,7 +553,7 @@ class AnalyticsService:
                         thumb_url = f"{server_a_config.ip_address}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
                         user_thumb_map[str(user_id)] = thumb_url
         except Exception as e:
-            print(f"Error fetching users from {server_a_config.name}: {e}")
+            logger.error("Error fetching users from %s: %s", server_a_config.name, e)
 
         # Fetch users from Server B if configured
         if server_b_config:
@@ -568,7 +571,7 @@ class AnalyticsService:
                             thumb_url = f"{server_b_config.ip_address}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
                             user_thumb_map[str(user_id)] = thumb_url
             except Exception as e:
-                print(f"Error fetching users from {server_b_config.name}: {e}")
+                logger.error("Error fetching users from %s: %s", server_b_config.name, e)
 
         return user_thumb_map
 
@@ -1504,7 +1507,7 @@ class AnalyticsService:
                             self._parse_session(session, server_config, server_order, geo_service=geo_service)
                         )
             except Exception as e:
-                print(f"Error fetching activity from {server_config.name}: {e}")
+                logger.error("Error fetching activity from %s: %s", server_config.name, e)
 
         return current_streams
 
@@ -1535,7 +1538,7 @@ class AnalyticsService:
                         if user_id and friendly_name:
                             users_by_id[user_id] = friendly_name
             except Exception as e:
-                print(f"Error fetching users for filter: {e}")
+                logger.error("Error fetching users for filter: %s", e)
 
         client_a = TautulliClient(server_a_config)
         fetch_users_from_server(client_a)
@@ -1686,7 +1689,7 @@ class AnalyticsService:
                         if friendly_name:
                             friendly_to_key[friendly_name.lower()] = user_key
             except Exception as e:
-                print(f"Error fetching users from {server_config.name}: {e}")
+                logger.error("Error fetching users from %s: %s", server_config.name, e)
 
             for section_id in [1, 2]:
                 try:
@@ -1728,7 +1731,7 @@ class AnalyticsService:
                             if stat_friendly:
                                 friendly_to_key.setdefault(stat_friendly.lower(), user_key)
                 except Exception as e:
-                    print(f"Error fetching library stats (section {section_id}) from {server_config.name}: {e}")
+                    logger.error("Error fetching library stats (section %s) from %s: %s", section_id, server_config.name, e)
 
             return users, play_counts, library_counts, plays_key
 

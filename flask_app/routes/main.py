@@ -1,9 +1,12 @@
 """
 Main application routes for dashboard and analytics execution.
 """
+import logging
 import json
 from datetime import datetime, timezone
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, abort
+
+logger = logging.getLogger('multiplex.routes.main')
 from flask_app.models import db, AnalyticsRun, ViewingHistory
 from flask_app.services.analytics_service import AnalyticsService
 from flask_app.services.media_service import MediaService
@@ -67,13 +70,13 @@ def run_analytics():
                 flash('Analytics completed. Lifetime cache rebuild is already running.', 'success')
         except Exception as lifetime_error:
             flash('Analytics completed, but lifetime cache rebuild could not be started.', 'error')
-            print(f"Lifetime cache rebuild start error: {lifetime_error}")
+            logger.error("Lifetime cache rebuild start error: %s", lifetime_error)
         return redirect(url_for('main.dashboard'))
 
     except Exception as e:
         import traceback
         error_traceback = traceback.format_exc()
-        print(f"Analytics error traceback:\n{error_traceback}")
+        logger.error("Analytics error traceback:\n%s", error_traceback)
 
         if 'run' in locals():
             run.status = 'failed'

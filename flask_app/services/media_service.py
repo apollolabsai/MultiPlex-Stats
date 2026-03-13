@@ -3,6 +3,7 @@ Service for syncing media library info from Tautulli to local database.
 Uses export_metadata API for rich metadata including ratings.
 Supports parallel fetching from multiple servers.
 """
+import logging
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -12,6 +13,8 @@ from typing import Optional
 from flask import current_app
 
 import re
+
+logger = logging.getLogger('multiplex.media')
 
 from flask_app.models import db, MediaSyncStatus, CachedMedia, MediaRating
 from flask_app.services.config_service import ConfigService
@@ -207,7 +210,7 @@ class MediaService:
             s = self.get_or_create_status()
             s.mdblist_warning = warning
             db.session.commit()
-            print(f"[MDBList] Warning: {warning}")
+            logger.warning("MDBList: %s", warning)
 
     def _run_media_sync_parallel(self, app):
         """Run the actual media sync operation with parallel server fetching."""
