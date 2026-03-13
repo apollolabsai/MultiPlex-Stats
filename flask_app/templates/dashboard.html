@@ -1773,12 +1773,12 @@ $(document).ready(function() {
             // Get current daily range
             var dailyActiveBtn = document.querySelector('#daily-range-form .range-pill.active[data-days]');
             var dailyCustomInput = document.querySelector('#daily-range-form input[name="daily_trend_days_custom"]');
-            var dailyDays = dailyActiveBtn ? parseInt(dailyActiveBtn.getAttribute('data-days'), 10) : (dailyCustomInput && dailyCustomInput.value ? parseInt(dailyCustomInput.value, 10) : {{ summary.daily_trend_days }});
+            var dailyDays = dailyActiveBtn ? parseInt(dailyActiveBtn.getAttribute('data-days'), 10) : (dailyCustomInput && dailyCustomInput.value ? parseInt(dailyCustomInput.value, 10) : {{ summary.daily_trend_days|default(60) }});
 
             // Get current monthly range
             var monthlyActiveBtn = document.querySelector('#monthly-range-form .range-pill.active[data-months]');
             var monthlyCustomInput = document.querySelector('#monthly-range-form input[name="monthly_trend_months_custom"]');
-            var monthlyMonths = monthlyActiveBtn ? parseInt(monthlyActiveBtn.getAttribute('data-months'), 10) : (monthlyCustomInput && monthlyCustomInput.value ? parseInt(monthlyCustomInput.value, 10) : {{ summary.monthly_trend_months }});
+            var monthlyMonths = monthlyActiveBtn ? parseInt(monthlyActiveBtn.getAttribute('data-months'), 10) : (monthlyCustomInput && monthlyCustomInput.value ? parseInt(monthlyCustomInput.value, 10) : {{ summary.monthly_trend_months|default(60) }});
 
             // Refresh both charts with the selected user
             if (dailyDays) {
