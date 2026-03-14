@@ -24,6 +24,12 @@ def index():
     return redirect(url_for('main.dashboard'))
 
 
+@main_bp.route('/health')
+def health():
+    """Lightweight health check — confirms the app process is alive."""
+    return '', 204
+
+
 @main_bp.route('/run-analytics', methods=['POST'])
 def run_analytics():
     """Execute analytics synchronously, then trigger a lifetime cache rebuild."""

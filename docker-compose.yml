@@ -31,7 +31,7 @@ services:
       # - STADIA_MAPS_API_KEY=your_stadia_maps_api_key
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8487')"]
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8487/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
