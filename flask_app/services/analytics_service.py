@@ -116,13 +116,16 @@ class AnalyticsService:
         df_tv = aggregate_tv_stats(df_history, top_n=settings.top_tv_shows)
 
         # 4. Generate chart data (JSON for Highcharts)
-        # Distribution charts (use history_days range)
-        dist_daily_a = client_a.get_plays_by_date(time_range=settings.history_days)
-        dist_daily_b = client_b.get_plays_by_date(time_range=settings.history_days) if client_b else None
-        df_daily_dist = process_daily_data(
-            dist_daily_a, dist_daily_b,
-            server_a_config.name, server_b_config.name if server_b_config else None
-        )
+        # Distribution charts (use history_days range) — reuse df_daily if the range matches
+        if daily_trend_days == settings.history_days:
+            df_daily_dist = df_daily
+        else:
+            dist_daily_a = client_a.get_plays_by_date(time_range=settings.history_days)
+            dist_daily_b = client_b.get_plays_by_date(time_range=settings.history_days) if client_b else None
+            df_daily_dist = process_daily_data(
+                dist_daily_a, dist_daily_b,
+                server_a_config.name, server_b_config.name if server_b_config else None
+            )
 
         movie_chart = get_movie_chart_data(df_movies, settings.history_days)
         movie_chart['poster_cards'] = self._build_movie_poster_cards(df_movies)
