@@ -106,10 +106,10 @@
 
     function appendEntry(log) {
         var el = createEntry(log);
-        container.appendChild(el);
+        container.insertBefore(el, container.firstChild);
         entryCount++;
         if (autoscrollCheckbox.checked) {
-            container.scrollTop = container.scrollHeight;
+            container.scrollTop = 0;
         }
     }
 
@@ -139,6 +139,8 @@
     fetch('{{ url_for("logs.api") }}?level=DEBUG')
         .then(function(r) { return r.json(); })
         .then(function(entries) {
+            // Reverse so newest entries are at the top
+            entries.reverse();
             var frag = document.createDocumentFragment();
             entries.forEach(function(log) {
                 frag.appendChild(createEntry(log));
@@ -146,10 +148,6 @@
             });
             container.appendChild(frag);
             updateCount();
-            // Scroll to bottom after browser has laid out the new entries
-            requestAnimationFrame(function() {
-                container.scrollTop = container.scrollHeight;
-            });
         })
         .catch(function(e) {
             console.error('[MultiPlex] Failed to load initial logs:', e);
