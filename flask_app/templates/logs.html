@@ -39,6 +39,7 @@
     var entryCount = 0;
     var evtSource = null;
     var STORAGE_KEY = 'multiplex_log_levels';
+    var MAX_VISIBLE_ENTRIES = 2000;
 
     // ---- Level filter persistence ----
     function getHiddenLevels() {
@@ -108,8 +109,16 @@
         var el = createEntry(log);
         container.insertBefore(el, container.firstChild);
         entryCount++;
+        trimEntries();
         if (autoscrollCheckbox.checked) {
             container.scrollTop = 0;
+        }
+    }
+
+    function trimEntries() {
+        while (container.children.length > MAX_VISIBLE_ENTRIES) {
+            container.removeChild(container.lastChild);
+            entryCount--;
         }
     }
 
@@ -136,7 +145,7 @@
     });
 
     // ---- Bootstrap: load recent entries ----
-    fetch('{{ url_for("logs.api") }}?level=DEBUG')
+    fetch('{{ url_for("logs.api") }}?level=DEBUG&limit=' + MAX_VISIBLE_ENTRIES)
         .then(function(r) { return r.json(); })
         .then(function(entries) {
             // Reverse so newest entries are at the top
@@ -147,6 +156,7 @@
                 entryCount++;
             });
             container.appendChild(frag);
+            trimEntries();
             updateCount();
         })
         .catch(function(e) {

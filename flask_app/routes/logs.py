@@ -36,7 +36,7 @@ def api():
     """JSON endpoint returning recent log entries (for initial page load)."""
     min_level = request.args.get('level', 'DEBUG').upper()
     since_id = request.args.get('since_id', 0, type=int)
-    limit = request.args.get('limit', 500, type=int)
+    limit = request.args.get('limit', 2000, type=int)
     entries = get_logs(min_level=min_level, since_id=since_id, limit=limit)
     return jsonify(entries)
 

@@ -59,6 +59,19 @@ def _passes_level(entry_level, min_level):
 
 def get_logs(min_level='DEBUG', since_id=0, limit=2000):
     """Return log entries from the ring buffer, filtered by level and cursor."""
+    if limit <= 0:
+        return []
+
+    if since_id <= 0:
+        # Initial page loads should see the newest matching entries, not the
+        # oldest slice of the buffer.
+        recent_entries = deque(maxlen=limit)
+        for entry in _log_buffer:
+            if not _passes_level(entry['level'], min_level):
+                continue
+            recent_entries.append(entry)
+        return list(recent_entries)
+
     result = []
     for entry in _log_buffer:
         if entry['id'] <= since_id:
