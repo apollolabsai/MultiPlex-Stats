@@ -127,7 +127,7 @@ def create_app(config_name='development'):
     def _log_request(response):
         # Skip static files, SSE stream, and log API to avoid noise
         path = request.path
-        if path.startswith('/static/') or path == '/logs/stream' or path == '/logs/api':
+        if path.startswith('/static/') or path in ('/logs/stream', '/logs/api', '/health'):
             return response
         _request_logger.info(
             'IN  %s %s -> %s',

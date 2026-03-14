@@ -5,6 +5,7 @@ import itertools
 import json
 import logging
 import os
+import re
 import threading
 import time
 from collections import deque
@@ -56,7 +57,7 @@ def _passes_level(entry_level, min_level):
     return _LEVEL_VALUES.get(entry_level, 0) >= _LEVEL_VALUES.get(min_level, 0)
 
 
-def get_logs(min_level='DEBUG', since_id=0, limit=500):
+def get_logs(min_level='DEBUG', since_id=0, limit=2000):
     """Return log entries from the ring buffer, filtered by level and cursor."""
     result = []
     for entry in _log_buffer:
@@ -115,6 +116,55 @@ class BufferedLogHandler(logging.Handler):
 # ---------------------------------------------------------------------------
 # Logging setup
 # ---------------------------------------------------------------------------
+
+# Matches lines written by the file formatter:
+# 2026-03-14 07:41:37 [INFO    ] multiplex.requests: IN  GET /health -> 204 No Content
+_LOG_LINE_RE = re.compile(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\s*\] (.+)$')
+
+
+def _seed_buffer_from_file(log_dir):
+    """Pre-populate the ring buffer from the persisted log file after a restart."""
+    log_file = os.path.join(log_dir, 'multiplex_stats.log')
+
+    # Collect files: oldest backup first, current last
+    candidates = []
+    for i in range(3, 0, -1):
+        backup = f"{log_file}.{i}"
+        if os.path.exists(backup):
+            candidates.append(backup)
+    if os.path.exists(log_file):
+        candidates.append(log_file)
+
+    if not candidates:
+        return
+
+    # Use a temporary deque to keep only the last _BUFFER_MAX parsed lines
+    parsed = deque(maxlen=_BUFFER_MAX)
+    for path in candidates:
+        try:
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                for line in f:
+                    m = _LOG_LINE_RE.match(line.rstrip('\n'))
+                    if not m:
+                        continue
+                    rest = m.group(3)
+                    sep = rest.find(': ')
+                    logger_name = rest[:sep] if sep != -1 else ''
+                    message = rest[sep + 2:] if sep != -1 else rest
+                    parsed.append({
+                        'timestamp': m.group(1),
+                        'level': m.group(2).strip(),
+                        'logger': logger_name,
+                        'message': message,
+                    })
+        except OSError:
+            continue
+
+    for entry in parsed:
+        entry['id'] = next(_log_id_counter)
+        _log_buffer.append(entry)
+
+
 def setup_logging(app):
     """Configure application-wide logging with file and buffer handlers."""
     log_dir = os.path.join(app.instance_path, 'logs')
@@ -157,4 +207,5 @@ def setup_logging(app):
     app.logger.addHandler(buffer_handler)
     app.logger.setLevel(logging.DEBUG)
 
+    _seed_buffer_from_file(log_dir)
     app_logger.info('Logging initialised (buffer=%d, file=%s)', _BUFFER_MAX, log_dir)
