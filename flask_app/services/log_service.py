@@ -122,6 +122,23 @@ class BufferedLogHandler(logging.Handler):
 _LOG_LINE_RE = re.compile(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) \[(\w+)\s*\] (.+)$')
 
 
+# Messages to drop when seeding the buffer from old log files.
+# These match the paths suppressed in the live after_request hook,
+# plus the old health-check pattern (GET / -> 302) from before
+# the /health endpoint existed.
+_SEED_SKIP_PREFIXES = (
+    'IN  GET /health ',
+    'IN  GET / -> 302',
+    'IN  GET /logs/stream ',
+    'IN  GET /logs/api ',
+)
+
+
+def _is_suppressed_message(message):
+    """Return True if this log message should be filtered from the seed buffer."""
+    return any(message.startswith(p) for p in _SEED_SKIP_PREFIXES)
+
+
 def _seed_buffer_from_file(log_dir):
     """Pre-populate the ring buffer from the persisted log file after a restart."""
     log_file = os.path.join(log_dir, 'multiplex_stats.log')
@@ -151,6 +168,9 @@ def _seed_buffer_from_file(log_dir):
                     sep = rest.find(': ')
                     logger_name = rest[:sep] if sep != -1 else ''
                     message = rest[sep + 2:] if sep != -1 else rest
+                    # Skip health-check noise (matches live suppression rules)
+                    if _is_suppressed_message(message):
+                        continue
                     parsed.append({
                         'timestamp': m.group(1),
                         'level': m.group(2).strip(),
