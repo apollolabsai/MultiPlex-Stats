@@ -56,7 +56,7 @@ ENV GIT_BRANCH=$GIT_BRANCH
 EXPOSE 8487
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+HEALTHCHECK --interval=60s --timeout=10s --start-period=40s --retries=3 \
     CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8487/health')" || exit 1
 
 # Run the application via entrypoint
