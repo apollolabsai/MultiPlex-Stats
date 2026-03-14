@@ -19,6 +19,27 @@ logger = logging.getLogger(__name__)
 _MAX_RETRIES = 3
 _RETRY_BACKOFF_BASE = 1  # seconds
 
+# Human-readable descriptions for each Tautulli API command
+_CMD_LABELS: dict[str, str] = {
+    'get_plays_by_date':                    'Fetch daily play counts',
+    'get_plays_per_month':                  'Fetch monthly play counts',
+    'get_history':                          'Fetch viewing history',
+    'get_activity':                         'Fetch current streams',
+    'get_users':                            'Fetch user list',
+    'get_library_user_stats':               'Fetch per-user library stats',
+    'get_library_media_info':               'Fetch library media info',
+    'get_libraries':                        'Fetch library list',
+    'get_concurrent_streams_by_stream_type':'Fetch concurrent stream data',
+    'get_metadata':                         'Fetch item metadata',
+    'get_children_metadata':                'Fetch child item metadata',
+    'get_item_watch_time_stats':            'Fetch item watch-time stats',
+    'get_item_user_stats':                  'Fetch item per-user stats',
+    'export_metadata':                      'Start library metadata export',
+    'get_exports_table':                    'Check export status',
+    'download_export':                      'Download completed export',
+    'pms_image_proxy':                      'Fetch poster image',
+}
+
 
 class TautulliClient:
     """Client for interacting with Tautulli API."""
@@ -54,19 +75,28 @@ class TautulliClient:
         for key, value in params.items():
             url += f"&{key}={value}"
 
+        label = _CMD_LABELS.get(command, command)
+        server_name = getattr(self.config, 'name', None) or 'Tautulli'
+
         last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES):
             try:
+                start = time.monotonic()
                 response = requests.get(url, verify=self.verify_ssl, timeout=30)
+                elapsed_ms = (time.monotonic() - start) * 1000
                 response.raise_for_status()
+                logger.info(
+                    'Tautulli [%s] %s -> %s (%.0fms)',
+                    server_name, label, response.status_code, elapsed_ms,
+                )
                 return response.json()
             except (requests.ConnectionError, requests.Timeout) as exc:
                 last_exc = exc
                 if attempt < _MAX_RETRIES - 1:
                     delay = _RETRY_BACKOFF_BASE * (2 ** attempt)
                     logger.warning(
-                        "Tautulli API request failed (attempt %d/%d), retrying in %ds: %s",
-                        attempt + 1, _MAX_RETRIES, delay, exc,
+                        "Tautulli [%s] %s failed (attempt %d/%d), retrying in %ds: %s",
+                        server_name, label, attempt + 1, _MAX_RETRIES, delay, exc,
                     )
                     time.sleep(delay)
 
@@ -434,6 +464,13 @@ class TautulliClient:
         url = f"{self.base_url}?apikey={self.api_key}&cmd=pms_image_proxy"
         url += f"&img={img}&width={width}&height={height}&fallback={fallback}"
 
+        server_name = getattr(self.config, 'name', None) or 'Tautulli'
+        start = time.monotonic()
         response = requests.get(url, verify=self.verify_ssl, timeout=30)
+        elapsed_ms = (time.monotonic() - start) * 1000
         response.raise_for_status()
+        logger.info(
+            'Tautulli [%s] Fetch poster image -> %s (%.0fms)',
+            server_name, response.status_code, elapsed_ms,
+        )
         return response.content

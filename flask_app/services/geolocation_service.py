@@ -67,6 +67,7 @@ class GeolocationService:
 
     def _lookup_remote(self, normalized_ip, cached_record=None):
         """Query the remote geolocation API and upsert the cache record."""
+        logger.info('Geolocation Looking up IP %s', normalized_ip)
         try:
             response = logged_session.get(
                 self.api_url.format(ip=normalized_ip),
@@ -78,6 +79,7 @@ class GeolocationService:
 
                 # Check for API error response
                 if data.get('status') == 'fail':
+                    logger.warning('Geolocation Lookup failed for IP %s: %s', normalized_ip, data.get('message', 'unknown error'))
                     return None if cached_record else self._empty_result()
 
                 # Extract location data (ip-api.com field names)
@@ -99,6 +101,9 @@ class GeolocationService:
                 geo_record.lookup_date = datetime.now(UTC)
                 db.session.add(geo_record)
                 db.session.commit()
+
+                location_label = ', '.join(filter(None, [city, region, country])) or 'Unknown'
+                logger.info('Geolocation %s -> %s (%s)', normalized_ip, location_label, isp or 'unknown ISP')
 
                 return {
                     'city': city,

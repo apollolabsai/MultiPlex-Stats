@@ -121,6 +121,8 @@ class MDBListService:
         endpoint = _TYPE_ENDPOINT.get(media_type)
         if not endpoint:
             return [], False
+        kind = 'movies' if media_type == 'movie' else 'TV shows'
+        logger.info('MDBList Fetching ratings for %d %s', len(imdb_ids), kind)
         try:
             response = logged_session.post(
                 endpoint,
@@ -138,12 +140,12 @@ class MDBListService:
             # Non-200 response — log it
             snippet = response.text[:500] if response.text else '(empty body)'
             logger.warning(
-                "MDBList API error (%s): HTTP %s for %d IDs — %s",
-                media_type, response.status_code, len(imdb_ids), snippet,
+                "MDBList ratings fetch failed for %d %s — HTTP %s: %s",
+                len(imdb_ids), kind, response.status_code, snippet,
             )
             return [], True
         except Exception as e:
-            logger.error("MDBList batch fetch error (%s): %s", media_type, e)
+            logger.error("MDBList ratings fetch error for %d %s: %s", len(imdb_ids), kind, e)
             return [], True
 
     def _upsert_ratings(self, cached_media_id: int, ratings: list) -> int:
