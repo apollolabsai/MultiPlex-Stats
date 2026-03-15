@@ -112,6 +112,23 @@
   # - TAUTULLI_SERVER_B_SSL=false
   # - TAUTULLI_SERVER_B_VERIFY_SSL=false</code></pre>
             </div>
+
+            <div class="runtime-config-card">
+                <h4>MultiPlex Configuration</h4>
+                <div class="runtime-config-list">
+                    {% for item in runtime_configuration %}
+                    <div class="runtime-config-row">
+                        <div class="runtime-config-label">{{ item.label }}</div>
+                        <div class="runtime-config-value">
+                            <span>{{ item.value }}</span>
+                            {% if item.meta %}
+                            <span class="runtime-config-meta">{{ item.meta }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
     </div>
 
@@ -996,6 +1013,73 @@
     font-size: 0.85em;
     color: #7cb3f1;
     line-height: 1.6;
+}
+
+.runtime-config-card {
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.runtime-config-card h4 {
+    margin: 0 0 12px;
+    color: #aaa;
+    font-size: 0.9em;
+}
+
+.runtime-config-list {
+    display: grid;
+    gap: 10px;
+}
+
+.runtime-config-row {
+    display: grid;
+    grid-template-columns: minmax(140px, 180px) minmax(0, 1fr);
+    gap: 10px 16px;
+    align-items: start;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.runtime-config-row:first-child {
+    padding-top: 0;
+    border-top: none;
+}
+
+.runtime-config-label {
+    color: #aaa;
+    font-size: 0.9em;
+    font-weight: 600;
+}
+
+.runtime-config-value {
+    min-width: 0;
+    color: #f3f3f3;
+    font-size: 0.9em;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.runtime-config-meta {
+    margin-left: 8px;
+    color: #f18a3d;
+    font-size: 0.88em;
+    white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+    .runtime-config-row {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+
+    .runtime-config-meta {
+        display: block;
+        margin-left: 0;
+        margin-top: 4px;
+    }
 }
 </style>
 {% endblock %}

@@ -1,6 +1,13 @@
 """
 Settings routes for managing server configuration and analytics settings.
 """
+import locale
+import os
+import platform
+import sqlite3
+import sys
+from datetime import datetime
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from flask_app.models import db, ServerConfig, AnalyticsSettings
 from flask_app.services.config_service import ConfigService
@@ -8,8 +15,83 @@ from flask_app.services.history_sync_service import HistorySyncService
 from flask_app.services.media_service import MediaService
 from flask_app.services.media_lifetime_stats_service import MediaLifetimeStatsService
 from flask_app.utils.validators import validate_server_config
+from multiplex_stats.timezone_utils import get_local_timezone
 
 settings_bp = Blueprint('settings', __name__)
+
+
+def _project_root() -> str:
+    """Return the repository root for this application."""
+    return os.path.abspath(os.path.join(current_app.root_path, '..'))
+
+
+def _get_config_file_display() -> str:
+    """Return the legacy config.ini path if present, otherwise explain the current source."""
+    config_path = os.path.join(_project_root(), 'config.ini')
+    if os.path.exists(config_path):
+        return config_path
+    return 'Not present. MultiPlex Stats currently uses database + environment settings.'
+
+
+def _get_database_display() -> tuple[str, str]:
+    """Return the database location and status string."""
+    database_uri = (current_app.config.get('SQLALCHEMY_DATABASE_URI') or '').strip()
+    if database_uri == 'sqlite:///:memory:':
+        return 'In-memory SQLite database', 'Memory only'
+
+    sqlite_prefix = 'sqlite:///'
+    if database_uri.startswith(sqlite_prefix):
+        db_path = database_uri[len(sqlite_prefix):]
+        if not db_path:
+            return 'SQLite database path unavailable', 'Unknown'
+        if not db_path.startswith('/'):
+            db_path = os.path.abspath(os.path.join(_project_root(), db_path))
+        status = 'Exists' if os.path.exists(db_path) else 'Missing'
+        return db_path, status
+
+    if database_uri:
+        dialect = database_uri.split(':', 1)[0]
+        return f'{dialect} database configured via SQLALCHEMY_DATABASE_URI', 'Configured'
+
+    return 'Database URI not configured', 'Unknown'
+
+
+def _get_system_language() -> str:
+    """Return the active system locale in a compact display form."""
+    locale_value = locale.setlocale(locale.LC_CTYPE, None) or ''
+    if locale_value and locale_value not in ('C', 'POSIX'):
+        return locale_value
+
+    language_code, encoding = locale.getlocale()
+    if language_code and encoding:
+        return f'{language_code}.{encoding}'
+    if language_code:
+        return language_code
+    if locale_value:
+        return locale_value
+    return 'Unknown'
+
+
+def _build_runtime_configuration() -> list[dict[str, str]]:
+    """Collect runtime configuration details for the settings page."""
+    timezone_name = get_local_timezone()
+    timezone_offset = datetime.now(timezone_name).strftime('%z')
+    db_value, db_status = _get_database_display()
+
+    return [
+        {'label': 'Git Branch', 'value': current_app.config.get('GIT_BRANCH', 'unknown')},
+        {'label': 'Git Commit Hash', 'value': current_app.config.get('GIT_COMMIT_HASH', 'unknown')},
+        {'label': 'Configuration File', 'value': _get_config_file_display()},
+        {'label': 'Database File', 'value': db_value, 'meta': f'Status: {db_status}'},
+        {'label': 'Log File', 'value': os.path.join(current_app.instance_path, 'logs', 'multiplex_stats.log')},
+        {'label': 'Cache Directory', 'value': os.path.join(current_app.instance_path, 'cache')},
+        {'label': 'Arguments', 'value': repr(sys.argv[1:])},
+        {'label': 'Platform', 'value': f'{platform.system()} {platform.release()} ({platform.version()})'},
+        {'label': 'System Timezone', 'value': f'{getattr(timezone_name, "key", str(timezone_name))} (UTC{timezone_offset})'},
+        {'label': 'System Language', 'value': _get_system_language()},
+        {'label': 'Python Version', 'value': sys.version.replace('\n', ' ')},
+        {'label': 'SQLite Version', 'value': sqlite3.sqlite_version},
+    ]
 
 
 @settings_bp.route('/')
@@ -28,6 +110,7 @@ def index():
     stored_stadia_key_present = bool((getattr(settings, 'stadia_maps_api_key', '') or '').strip()) if settings else False
     env_mdblist_key_present = bool((current_app.config.get('MDBLIST_API_KEY', '') or '').strip())
     stored_mdblist_key_present = bool((getattr(settings, 'mdblist_api_key', '') or '').strip()) if settings else False
+    runtime_configuration = _build_runtime_configuration()
 
     return render_template('settings.html',
                           servers=servers,
@@ -39,7 +122,8 @@ def index():
                           env_stadia_key_present=env_stadia_key_present,
                           stored_stadia_key_present=stored_stadia_key_present,
                           env_mdblist_key_present=env_mdblist_key_present,
-                          stored_mdblist_key_present=stored_mdblist_key_present)
+                          stored_mdblist_key_present=stored_mdblist_key_present,
+                          runtime_configuration=runtime_configuration)
 
 
 @settings_bp.route('/server/add', methods=['POST'])

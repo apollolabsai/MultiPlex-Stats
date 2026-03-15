@@ -4,6 +4,8 @@ import unittest
 from flask import Flask
 
 from flask_app.models import AnalyticsSettings, db
+from flask_app.routes.logs import logs_bp
+from flask_app.routes.main import main_bp
 from flask_app.routes.settings import settings_bp
 from flask_app.services.config_service import ConfigService
 
@@ -16,7 +18,10 @@ class SettingsRoutesTests(unittest.TestCase):
         cls.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         cls.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
         cls.app.config['SECRET_KEY'] = 'test-secret'
+        cls.app.config['GIT_COMMIT_DATE'] = 'unknown'
         cls.app.register_blueprint(settings_bp, url_prefix='/settings')
+        cls.app.register_blueprint(main_bp)
+        cls.app.register_blueprint(logs_bp, url_prefix='/logs')
         db.init_app(cls.app)
         with cls.app.app_context():
             db.create_all()
@@ -75,3 +80,17 @@ class SettingsRoutesTests(unittest.TestCase):
     def test_env_default_used_when_no_db_key(self):
         effective = ConfigService.get_effective_stadia_maps_api_key('env-key')
         self.assertEqual(effective, 'env-key')
+
+    def test_settings_page_includes_runtime_configuration_panel(self):
+        self.app.config['GIT_BRANCH'] = 'dev'
+        self.app.config['GIT_COMMIT_HASH'] = 'abc123'
+
+        response = self.client.get('/settings/')
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('MultiPlex Configuration', html)
+        self.assertIn('Git Branch', html)
+        self.assertIn('abc123', html)
+        self.assertIn('Database File', html)
+        self.assertIn('SQLite Version', html)
