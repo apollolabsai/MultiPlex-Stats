@@ -256,20 +256,22 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
         server_b = SimpleNamespace(name='ApolloSS', ip_address='192.168.1.214:8181')
         mock_get_server_configs.return_value = (server_a, server_b)
 
-        self._add_history(
-            row_id=101,
-            server_name='Apollo',
-            server_order=0,
-            user='pdti7',
-            started=100,
-        )
-        self._add_history(
-            row_id=1_000_000_101,
-            server_name='ApolloSS',
-            server_order=1,
-            user='pdti7',
-            started=200,
-        )
+        for index in range(5):
+            self._add_history(
+                row_id=101 + index,
+                server_name='Apollo',
+                server_order=0,
+                user='pdti7',
+                started=100 + index,
+            )
+        for index in range(7):
+            self._add_history(
+                row_id=1_000_000_101 + index,
+                server_name='ApolloSS',
+                server_order=1,
+                user='pdti7',
+                started=200 + index,
+            )
 
         def build_response(items):
             return {'response': {'data': items}}
@@ -325,7 +327,7 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
         self.assertEqual(user['server_a_plays'], 5)
         self.assertEqual(user['server_b_plays'], 7)
         self.assertEqual(user['first_play'], 100)
-        self.assertEqual(user['last_play'], 200)
+        self.assertEqual(user['last_play'], 206)
 
     @patch('flask_app.services.analytics_service.ConfigService.get_server_configs')
     @patch('flask_app.services.analytics_service.AnalyticsService._find_user_directory_entry')

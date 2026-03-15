@@ -1815,8 +1815,8 @@ class AnalyticsService:
         """
         Get all users from all configured servers with their statistics.
 
-        Fetches user info from get_users API, play counts from get_library_user_stats,
-        and last play dates from the local ViewingHistory database.
+        Fetches user info from get_users API and uses the local ViewingHistory
+        database as the source of truth for play counts and play dates.
         Servers are queried in parallel using a thread pool.
 
         Returns:
@@ -1856,12 +1856,9 @@ class AnalyticsService:
             return friendly_text.lower()
 
         def fetch_server_data(server_config, server_ip: str, plays_key: str):
-            """Fetch users and play counts from a single server (thread-safe)."""
+            """Fetch users from a single server (thread-safe)."""
             users: Dict[str, Dict[str, Any]] = {}  # user_key -> user_data
-            play_counts: Dict[str, int] = {}  # user_key -> plays for this server
             library_counts: Dict[str, int] = {}  # user_key -> library count
-            user_id_to_key: Dict[int, str] = {}
-            friendly_to_key: Dict[str, str] = {}
 
             client = TautulliClient(server_config)
 
@@ -1938,57 +1935,10 @@ class AnalyticsService:
                             thumb_url=thumb_url,
                             is_active=active_flag if active_flag is not None else 1,
                         )
-
-                        if user_id is not None:
-                            user_id_to_key[user_id] = user_key
-                        if friendly_name:
-                            friendly_to_key[friendly_name.lower()] = user_key
             except Exception as e:
                 logger.error("Error fetching users from %s: %s", server_config.name, e)
 
-            for section_id in [1, 2]:
-                try:
-                    stats_response = client.get_library_user_stats(section_id=section_id)
-                    if stats_response and 'response' in stats_response and 'data' in stats_response['response']:
-                        for stat in stats_response['response']['data']:
-                            stat_user_id = to_int(stat.get('user_id'))
-                            stat_username = str(stat.get('username') or '').strip()
-                            stat_friendly = str(stat.get('friendly_name') or '').strip()
-                            plays = to_int(stat.get('total_plays')) or 0
-
-                            user_key = ''
-                            if stat_user_id is not None:
-                                user_key = user_id_to_key.get(stat_user_id, '')
-                            if not user_key and stat_username:
-                                user_key = normalize_user_key(username=stat_username)
-                            if not user_key and stat_friendly:
-                                user_key = friendly_to_key.get(stat_friendly.lower(), '')
-                            if not user_key:
-                                user_key = normalize_user_key(
-                                    username=stat_username,
-                                    user_id=stat_user_id,
-                                    friendly_name=stat_friendly,
-                                )
-
-                            if not user_key:
-                                continue
-
-                            ensure_user_entry(
-                                user_key=user_key,
-                                user_id=stat_user_id,
-                                username=stat_username,
-                                friendly_name=stat_friendly,
-                            )
-                            play_counts[user_key] = play_counts.get(user_key, 0) + plays
-
-                            if stat_user_id is not None:
-                                user_id_to_key[stat_user_id] = user_key
-                            if stat_friendly:
-                                friendly_to_key.setdefault(stat_friendly.lower(), user_key)
-                except Exception as e:
-                    logger.error("Error fetching library stats (section %s) from %s: %s", section_id, server_config.name, e)
-
-            return users, play_counts, library_counts, plays_key
+            return users, library_counts, plays_key
 
         # Build task list and run in parallel
         tasks = [(server_a_config, server_a_config.ip_address, server_a_key)]
@@ -2000,7 +1950,7 @@ class AnalyticsService:
 
         # Merge results from all servers
         users_by_username: Dict[str, Dict[str, Any]] = {}
-        for users, play_counts, library_counts, plays_key in results:
+        for users, library_counts, plays_key in results:
             for user_key, user_data in users.items():
                 if user_key not in users_by_username:
                     users_by_username[user_key] = user_data
@@ -2027,25 +1977,50 @@ class AnalyticsService:
                     if not merged.get('friendly_name') and user_data.get('friendly_name'):
                         merged['friendly_name'] = user_data.get('friendly_name')
 
-            for user_key, plays in play_counts.items():
-                if user_key not in users_by_username:
-                    users_by_username[user_key] = {
-                        'user_id': None,
-                        'friendly_name': '',
-                        'username': '',
-                        'email': '',
-                        'total_plays': 0,
-                        'first_play': None,
-                        'last_play': None,
-                        'user_thumb': '',
-                        'is_active': 1,
-                        'library_count': 0,
-                        '_friendly_names_by_server': {},
-                    }
-                    ensure_play_keys(users_by_username[user_key])
+        # Use local viewing_history as the source of truth for user play counts.
+        history_play_counts = (
+            db.session.query(
+                ViewingHistory.user,
+                ViewingHistory.user_id,
+                ViewingHistory.server_name,
+                func.count(ViewingHistory.id).label('total_plays'),
+            )
+            .group_by(ViewingHistory.user, ViewingHistory.user_id, ViewingHistory.server_name)
+            .all()
+        )
+        history_server_key_map = {
+            server_a_config.name: server_a_key,
+        }
+        if server_b_config and server_b_key:
+            history_server_key_map[server_b_config.name] = server_b_key
 
+        for row in history_play_counts:
+            user_key = normalize_user_key(username=row.user, user_id=row.user_id)
+            if not user_key:
+                continue
+
+            if user_key not in users_by_username:
+                users_by_username[user_key] = {
+                    'user_id': to_int(row.user_id),
+                    'friendly_name': str(row.user or '').strip(),
+                    'username': str(row.user or '').strip(),
+                    'email': '',
+                    'total_plays': 0,
+                    'first_play': None,
+                    'last_play': None,
+                    'user_thumb': '',
+                    'is_active': 1,
+                    'library_count': 0,
+                    '_friendly_names_by_server': {},
+                }
                 ensure_play_keys(users_by_username[user_key])
-                users_by_username[user_key]['total_plays'] += plays
+
+            ensure_play_keys(users_by_username[user_key])
+            plays = int(row.total_plays or 0)
+            users_by_username[user_key]['total_plays'] += plays
+
+            plays_key = history_server_key_map.get(row.server_name)
+            if plays_key:
                 users_by_username[user_key][plays_key] += plays
 
         # Get first/last play dates from ViewingHistory database
