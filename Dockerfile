@@ -33,6 +33,9 @@ COPY flask_app/ ./flask_app/
 COPY run_multiplex_stats.py .
 COPY entrypoint.sh /entrypoint.sh
 
+# Ensure copied source files remain readable after dropping privileges.
+RUN chmod -R a+rX /app
+
 # Make entrypoint executable
 RUN chmod +x /entrypoint.sh
 

@@ -3,7 +3,7 @@ import unittest
 
 from flask import Flask
 
-from flask_app.models import AnalyticsSettings, db
+from flask_app.models import AnalyticsSettings, ServerConfig, ViewingHistory, db
 from flask_app.routes.logs import logs_bp
 from flask_app.routes.main import main_bp
 from flask_app.routes.settings import settings_bp
@@ -40,6 +40,8 @@ class SettingsRoutesTests(unittest.TestCase):
         self.ctx.push()
         settings = AnalyticsSettings.query.first()
         settings.stadia_maps_api_key = None
+        ServerConfig.query.delete()
+        ViewingHistory.query.delete()
         db.session.commit()
 
     def tearDown(self):
@@ -102,3 +104,27 @@ class SettingsRoutesTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("?mode=' + MEDIA_RUN_MODE_FULL_PIPELINE", html)
         self.assertIn("?mode=' + MEDIA_RUN_MODE_MEDIA_ONLY", html)
+
+    def test_settings_page_includes_media_refresh_hover_help(self):
+        db.session.add(ServerConfig(
+            name='Apollo',
+            ip_address='127.0.0.1:8181',
+            api_key='abc123',
+            server_order=0,
+        ))
+        db.session.add(ViewingHistory(
+            row_id=1,
+            server_name='Apollo',
+            server_order=0,
+            title='Heat',
+            started=1710000000,
+        ))
+        db.session.commit()
+
+        response = self.client.get('/settings/')
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Refresh the media from your libraries to load poster image URLs and fetch ratings from MDBList', html)
+        self.assertIn('This job is run automatically at 1am local time daily.', html)
+        self.assertIn('}, 210);', html)

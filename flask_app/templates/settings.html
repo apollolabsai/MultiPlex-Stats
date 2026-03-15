@@ -171,7 +171,12 @@
                         <div class="status-row">
                             <span class="status-label">
                                 {% if servers %}
-                                <button type="button" class="btn-media-refresh" id="media-refresh-btn" title="Refresh media libraries only">
+                                <button
+                                    type="button"
+                                    class="btn-media-refresh"
+                                    id="media-refresh-btn"
+                                    data-hover-help="Refresh the media from your libraries to load poster image URLs and fetch ratings from MDBList (IMDb, Rotten Tomatoes, etc.), if configured. This job is run automatically at 1am local time daily."
+                                >
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                         <polyline points="23 4 23 10 17 10"></polyline>
                                         <polyline points="1 20 1 14 7 14"></polyline>
@@ -359,6 +364,9 @@
     var pipelineInProgress = false;
     var mediaOnlyInProgress = false;
     var hasServerConfig = {{ 'true' if servers else 'false' }};
+    var mediaHelpTooltipEl = null;
+    var mediaHelpHoverTimer = null;
+    var mediaHelpTargetEl = null;
     var MEDIA_RUN_MODE_MEDIA_ONLY = 'media_only';
     var MEDIA_RUN_MODE_FULL_PIPELINE = 'full_pipeline';
 
@@ -440,6 +448,101 @@
         }
         clearInterval(intervalRef);
         return null;
+    }
+
+    function ensureMediaHelpTooltip() {
+        if (mediaHelpTooltipEl) {
+            return mediaHelpTooltipEl;
+        }
+        mediaHelpTooltipEl = document.createElement('div');
+        mediaHelpTooltipEl.className = 'button-help-tooltip';
+        mediaHelpTooltipEl.setAttribute('role', 'tooltip');
+        document.body.appendChild(mediaHelpTooltipEl);
+        return mediaHelpTooltipEl;
+    }
+
+    function placeMediaHelpTooltip(target) {
+        if (!target || !mediaHelpTooltipEl) {
+            return;
+        }
+        var rect = target.getBoundingClientRect();
+        var spacing = 10;
+        var top = rect.bottom + spacing;
+        var left = rect.left + (rect.width / 2);
+
+        mediaHelpTooltipEl.style.left = '0px';
+        mediaHelpTooltipEl.style.top = '0px';
+        mediaHelpTooltipEl.style.maxWidth = '340px';
+
+        var tooltipRect = mediaHelpTooltipEl.getBoundingClientRect();
+        left = left - (tooltipRect.width / 2);
+
+        var minLeft = 10;
+        var maxLeft = window.innerWidth - tooltipRect.width - 10;
+        if (left < minLeft) left = minLeft;
+        if (left > maxLeft) left = maxLeft;
+
+        if (top + tooltipRect.height > window.innerHeight - 10) {
+            top = rect.top - tooltipRect.height - spacing;
+        }
+
+        mediaHelpTooltipEl.style.left = Math.round(left) + 'px';
+        mediaHelpTooltipEl.style.top = Math.round(top) + 'px';
+    }
+
+    function showMediaHelpTooltip(target) {
+        var text = target && target.getAttribute('data-hover-help');
+        if (!text) {
+            return;
+        }
+        var tooltip = ensureMediaHelpTooltip();
+        tooltip.textContent = text;
+        mediaHelpTargetEl = target;
+        placeMediaHelpTooltip(target);
+        tooltip.classList.add('is-visible');
+    }
+
+    function hideMediaHelpTooltip() {
+        if (mediaHelpHoverTimer) {
+            clearTimeout(mediaHelpHoverTimer);
+            mediaHelpHoverTimer = null;
+        }
+        if (mediaHelpTooltipEl) {
+            mediaHelpTooltipEl.classList.remove('is-visible');
+        }
+        mediaHelpTargetEl = null;
+    }
+
+    function bindMediaHelpTooltip() {
+        var button = document.getElementById('media-refresh-btn');
+        if (!button) {
+            return;
+        }
+
+        button.addEventListener('mouseenter', function() {
+            hideMediaHelpTooltip();
+            mediaHelpHoverTimer = setTimeout(function() {
+                showMediaHelpTooltip(button);
+            }, 210);
+        });
+        button.addEventListener('mouseleave', hideMediaHelpTooltip);
+        button.addEventListener('blur', hideMediaHelpTooltip);
+        button.addEventListener('click', hideMediaHelpTooltip);
+        button.addEventListener('focus', function() {
+            showMediaHelpTooltip(button);
+        });
+
+        window.addEventListener('scroll', function() {
+            if (mediaHelpTargetEl) {
+                placeMediaHelpTooltip(mediaHelpTargetEl);
+            }
+        }, true);
+
+        window.addEventListener('resize', function() {
+            if (mediaHelpTargetEl) {
+                placeMediaHelpTooltip(mediaHelpTargetEl);
+            }
+        });
     }
 
     function updateMediaSyncStatus(status) {
@@ -743,6 +846,7 @@
     if (mediaRefreshButton) {
         mediaRefreshButton.addEventListener('click', startMediaOnlySync);
     }
+    bindMediaHelpTooltip();
 
     formatTimestampElement('last-media-sync-value');
     formatTimestampElement('last-history-sync-value');
@@ -861,6 +965,29 @@
 
 .settings-note-card strong {
     color: #f3f3f3;
+}
+
+.button-help-tooltip {
+    position: fixed;
+    z-index: 14000;
+    max-width: 340px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(241, 138, 61, 0.4);
+    background: rgba(12, 12, 12, 0.96);
+    color: #f7f7f7;
+    font-size: 0.84em;
+    line-height: 1.35;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.button-help-tooltip.is-visible {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .load-process-copy {
