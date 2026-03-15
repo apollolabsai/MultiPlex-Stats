@@ -22,7 +22,7 @@
             {% if user.username and user.username != user.display_name %}
             <span class="user-handle">@{{ user.username }}</span>
             {% else %}
-            <span>User playback trends and account-sharing details</span>
+            <span>User playback trends device details</span>
             {% endif %}
         </div>
         {% if user.email %}
@@ -34,6 +34,14 @@
 <div class="stats-grid" id="user-detail-stats-grid">
     <div class="stat-card">
         <div class="stat-number">{{ "{:,}".format(user.total_plays) }}</div>
+        <div class="user-detail-stat-breakdown">
+            {% if user.server_a_name %}
+            <span>{{ user.server_a_name }}: {{ "{:,}".format(user.server_a_plays) }}</span>
+            {% endif %}
+            {% if user.server_b_name %}
+            <span>{{ user.server_b_name }}: {{ "{:,}".format(user.server_b_plays) }}</span>
+            {% endif %}
+        </div>
         <div class="stat-label">Total Plays</div>
     </div>
     <div class="stat-card">
@@ -135,14 +143,16 @@
                     </td>
                     <td data-order="{{ row.first_streamed or -1 }}">
                         {% if row.first_streamed %}
-                        {{ row.first_streamed | timestamp_to_date }}
+                        <div>{{ row.first_streamed | timestamp_to_date }}</div>
+                        <div class="date-age-label">{{ row.first_streamed | timestamp_to_age_label }}</div>
                         {% else %}
                         -
                         {% endif %}
                     </td>
                     <td data-order="{{ row.last_streamed or -1 }}">
                         {% if row.last_streamed %}
-                        {{ row.last_streamed | timestamp_to_date }}
+                        <div>{{ row.last_streamed | timestamp_to_date }}</div>
+                        <div class="date-age-label">{{ row.last_streamed | timestamp_to_age_label }}</div>
                         {% else %}
                         -
                         {% endif %}
@@ -256,6 +266,21 @@
 #user-detail-stats-grid .stat-label {
     font-size: 0.72em;
     letter-spacing: 0.06em;
+}
+
+.user-detail-stat-breakdown {
+    margin-bottom: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: #a9a9a9;
+    font-size: 0.78em;
+}
+
+.date-age-label {
+    margin-top: 2px;
+    color: #8c8c8c;
+    font-size: 0.82em;
 }
 
 .chart-controls {

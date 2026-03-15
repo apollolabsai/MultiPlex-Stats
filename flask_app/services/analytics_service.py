@@ -1733,6 +1733,13 @@ class AnalyticsService:
                 first_play = min(started_values)
                 last_play = max(started_values)
 
+        server_play_counts: Dict[str, int] = {}
+        for record in history_records:
+            server_name = str(record.server_name or '').strip()
+            if not server_name:
+                continue
+            server_play_counts[server_name] = server_play_counts.get(server_name, 0) + 1
+
         ip_rows = []
         if user_filter is not None:
             ip_rows = (
@@ -1803,6 +1810,10 @@ class AnalyticsService:
             'email': str((directory_entry or {}).get('email') or '').strip(),
             'user_thumb': user_thumb,
             'total_plays': len(history_records),
+            'server_a_name': server_a_name,
+            'server_b_name': server_b_name,
+            'server_a_plays': server_play_counts.get(server_a_name, 0) if server_a_name else 0,
+            'server_b_plays': server_play_counts.get(server_b_name, 0) if server_b_name else 0,
             'first_play': first_play,
             'last_play': last_play,
             'unique_devices': len(device_chart.get('categories') or []),

@@ -32,6 +32,31 @@ def create_app(config_name='development'):
         except (ValueError, TypeError, OSError):
             return 'Unknown'
 
+    @app.template_filter('timestamp_to_age_label')
+    def timestamp_to_age_label(timestamp):
+        """Convert a Unix timestamp to a coarse relative age label."""
+        if timestamp is None:
+            return ''
+        try:
+            dt_utc = datetime.fromtimestamp(int(timestamp), tz=timezone.utc)
+            dt_local = dt_utc.astimezone(app_timezone)
+            now_local = datetime.now(timezone.utc).astimezone(app_timezone)
+            delta_days = max((now_local.date() - dt_local.date()).days, 0)
+
+            if delta_days < 30:
+                unit = 'day' if delta_days == 1 else 'days'
+                return f'{delta_days} {unit} ago'
+            if delta_days < 365:
+                months = max(delta_days // 30, 1)
+                unit = 'month' if months == 1 else 'months'
+                return f'{months} {unit} ago'
+
+            years = max(delta_days // 365, 1)
+            unit = 'year' if years == 1 else 'years'
+            return f'{years} {unit} ago'
+        except (ValueError, TypeError, OSError):
+            return ''
+
     @app.template_filter('datetime_to_local')
     def datetime_to_local(value, fmt='%Y-%m-%d %H:%M:%S'):
         """Format a datetime value in the configured timezone."""

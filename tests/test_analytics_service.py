@@ -399,6 +399,8 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
         self.assertEqual(detail['display_name'], 'PDTI New')
         self.assertEqual(detail['username'], 'pdti7')
         self.assertEqual(detail['total_plays'], 3)
+        self.assertEqual(detail['server_a_plays'], 2)
+        self.assertEqual(detail['server_b_plays'], 1)
         self.assertEqual(detail['first_play'], 100)
         self.assertEqual(detail['last_play'], 300)
         self.assertEqual(detail['unique_devices'], 2)

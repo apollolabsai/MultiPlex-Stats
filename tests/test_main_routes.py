@@ -25,6 +25,10 @@ class MainRoutesTests(unittest.TestCase):
         def _timestamp_to_date(value):
             return str(value)
 
+        @cls.app.template_filter('timestamp_to_age_label')
+        def _timestamp_to_age_label(value):
+            return str(value)
+
         cls.app.register_blueprint(main_bp)
         cls.app.register_blueprint(settings_bp, url_prefix='/settings')
         cls.app.register_blueprint(logs_bp, url_prefix='/logs')
