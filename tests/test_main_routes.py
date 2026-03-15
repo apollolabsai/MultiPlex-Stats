@@ -103,3 +103,26 @@ class MainRoutesTests(unittest.TestCase):
         self.assertEqual(payload['isp'], 'Example ISP')
         self.assertEqual(payload['latitude'], 34.0522)
         self.assertEqual(payload['longitude'], -118.2437)
+
+    @patch('flask_app.routes.main.ConfigService.has_valid_config')
+    @patch('flask_app.routes.main.MediaService.start_media_load')
+    def test_api_media_start_load_passes_requested_run_mode(self, mock_start_media_load, mock_has_valid_config):
+        mock_has_valid_config.return_value = True
+        mock_start_media_load.return_value = True
+
+        response = self.client.post('/api/media/start-load?mode=full_pipeline')
+        payload = response.get_json()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload['run_mode'], 'full_pipeline')
+        mock_start_media_load.assert_called_once_with(run_mode='full_pipeline')
+
+    @patch('flask_app.routes.main.ConfigService.has_valid_config')
+    def test_api_media_start_load_rejects_invalid_run_mode(self, mock_has_valid_config):
+        mock_has_valid_config.return_value = True
+
+        response = self.client.post('/api/media/start-load?mode=unexpected')
+        payload = response.get_json()
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(payload['error'], 'Invalid media sync mode.')

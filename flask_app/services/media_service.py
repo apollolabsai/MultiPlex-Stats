@@ -27,6 +27,8 @@ class MediaService:
 
     EXPORT_POLL_INTERVAL = 2   # seconds between export status checks
     EXPORT_TIMEOUT = 1500      # max seconds to wait for export (25 minutes)
+    RUN_MODE_MEDIA_ONLY = 'media_only'
+    RUN_MODE_FULL_PIPELINE = 'full_pipeline'
 
     def __init__(self):
         self.local_tz = get_local_timezone()
@@ -78,6 +80,7 @@ class MediaService:
 
         return {
             'status': status.status,
+            'run_mode': status.run_mode or self.RUN_MODE_MEDIA_ONLY,
             'current_step': status.current_step,
             'records_fetched': status.records_fetched,
             'records_total': status.records_total,
@@ -94,7 +97,7 @@ class MediaService:
         """Check if there's any media data in the database."""
         return CachedMedia.query.count() > 0
 
-    def start_media_load(self, app=None) -> bool:
+    def start_media_load(self, app=None, run_mode: str = RUN_MODE_MEDIA_ONLY) -> bool:
         """
         Start loading media library data in background thread.
 
@@ -117,6 +120,7 @@ class MediaService:
         status.started_at = datetime.utcnow()
         status.completed_at = None
         status.current_step = 'Initializing...'
+        status.run_mode = run_mode
         status.records_fetched = 0
         status.records_total = None
         status.movies_count = 0

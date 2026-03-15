@@ -94,3 +94,11 @@ class SettingsRoutesTests(unittest.TestCase):
         self.assertIn('abc123', html)
         self.assertIn('Database File', html)
         self.assertIn('SQLite Version', html)
+
+    def test_settings_page_uses_distinct_media_run_modes(self):
+        response = self.client.get('/settings/')
+        html = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("?mode=' + MEDIA_RUN_MODE_FULL_PIPELINE", html)
+        self.assertIn("?mode=' + MEDIA_RUN_MODE_MEDIA_ONLY", html)

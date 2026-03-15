@@ -359,6 +359,20 @@
     var pipelineInProgress = false;
     var mediaOnlyInProgress = false;
     var hasServerConfig = {{ 'true' if servers else 'false' }};
+    var MEDIA_RUN_MODE_MEDIA_ONLY = 'media_only';
+    var MEDIA_RUN_MODE_FULL_PIPELINE = 'full_pipeline';
+
+    function getMediaRunMode(status) {
+        return (status && status.run_mode) ? String(status.run_mode) : MEDIA_RUN_MODE_MEDIA_ONLY;
+    }
+
+    function isFullPipelineMediaRun(status) {
+        return getMediaRunMode(status) === MEDIA_RUN_MODE_FULL_PIPELINE;
+    }
+
+    function isMediaOnlyRun(status) {
+        return getMediaRunMode(status) === MEDIA_RUN_MODE_MEDIA_ONLY;
+    }
 
     function formatTimestampElement(elementId) {
         var element = document.getElementById(elementId);
@@ -437,7 +451,8 @@
         var lastSyncLabel = document.getElementById('last-media-sync-value');
 
         if (status.status === 'running') {
-            if (!mediaOnlyInProgress) {
+            mediaOnlyInProgress = isMediaOnlyRun(status);
+            if (isFullPipelineMediaRun(status)) {
                 pipelineInProgress = true;
             }
             var isMdblist = status.current_step && status.current_step.indexOf('MDBList') !== -1;
@@ -454,7 +469,7 @@
                     ? parseInt(match[1]).toLocaleString() + ' / ' + parseInt(match[2]).toLocaleString() + ' items'
                     : 'Fetching ratings...';
             }
-            var label = mediaOnlyInProgress ? 'Refreshing Media Libraries...' : 'Step 1/2: Syncing Media...';
+            var label = isFullPipelineMediaRun(status) ? 'Step 1/2: Syncing Media...' : 'Refreshing Media Libraries...';
             setActionButtonState(true, label);
             setMediaRefreshState(true);
             return;
@@ -479,7 +494,7 @@
 
         mediaPollInterval = stopPoll(mediaPollInterval);
 
-        if (mediaOnlyInProgress) {
+        if (isMediaOnlyRun(status) || mediaOnlyInProgress) {
             mediaOnlyInProgress = false;
             setActionButtonState(false, getActionButtonLabel());
             setMediaRefreshState(false);
@@ -613,7 +628,7 @@
 
     function startMediaSync() {
         setActionButtonState(true, 'Step 1/2: Syncing Media...');
-        fetch('{{ url_for("main.api_media_start_load") }}', { method: 'POST' })
+        fetch('{{ url_for("main.api_media_start_load") }}?mode=' + MEDIA_RUN_MODE_FULL_PIPELINE, { method: 'POST' })
             .then(function(response) {
                 return response.json().then(function(payload) {
                     if (!response.ok && response.status !== 409) {
@@ -696,7 +711,7 @@
         mediaOnlyInProgress = true;
         setActionButtonState(true, 'Refreshing Media Libraries...');
         setMediaRefreshState(true);
-        fetch('{{ url_for("main.api_media_start_load") }}', { method: 'POST' })
+        fetch('{{ url_for("main.api_media_start_load") }}?mode=' + MEDIA_RUN_MODE_MEDIA_ONLY, { method: 'POST' })
             .then(function(response) {
                 return response.json().then(function(payload) {
                     if (!response.ok && response.status !== 409) {
@@ -734,7 +749,8 @@
     formatTimestampElement('last-lifetime-sync-value');
 
     if (mediaStatus && mediaStatus.status === 'running') {
-        pipelineInProgress = true;
+        pipelineInProgress = isFullPipelineMediaRun(mediaStatus);
+        mediaOnlyInProgress = isMediaOnlyRun(mediaStatus);
         setMediaRefreshState(true);
         if (!mediaPollInterval) {
             mediaPollInterval = setInterval(pollMediaStatus, 2000);

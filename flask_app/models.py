@@ -183,6 +183,7 @@ class MediaSyncStatus(db.Model):
 
     # Overall progress tracking (legacy, kept for compatibility)
     current_step = db.Column(db.String(100), nullable=True)
+    run_mode = db.Column(db.String(30), nullable=True, default='media_only')  # media_only, full_pipeline
     records_fetched = db.Column(db.Integer, default=0)
     records_total = db.Column(db.Integer, nullable=True)
 

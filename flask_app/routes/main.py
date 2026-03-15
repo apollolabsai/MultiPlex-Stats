@@ -565,12 +565,16 @@ def api_media_start_load():
     if not ConfigService.has_valid_config():
         return jsonify({'error': 'No server configuration found.'}), 400
 
+    run_mode = (request.args.get('mode', MediaService.RUN_MODE_MEDIA_ONLY) or '').strip().lower()
+    if run_mode not in {MediaService.RUN_MODE_MEDIA_ONLY, MediaService.RUN_MODE_FULL_PIPELINE}:
+        return jsonify({'error': 'Invalid media sync mode.'}), 400
+
     try:
         service = MediaService()
-        started = service.start_media_load()
+        started = service.start_media_load(run_mode=run_mode)
         if not started:
             return jsonify({'error': 'Media load already in progress.'}), 409
-        return jsonify({'status': 'started'})
+        return jsonify({'status': 'started', 'run_mode': run_mode})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
