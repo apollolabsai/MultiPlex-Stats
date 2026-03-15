@@ -1,12 +1,13 @@
 """
 Analytics service that bridges Flask to the existing multiplex_stats package.
 """
+import calendar
 import logging
 import os
 import json
 import re
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 import pandas as pd
 
@@ -1687,6 +1688,57 @@ class AnalyticsService:
             'title': 'Number of Plays by Device'
         }
 
+    @staticmethod
+    def _format_duration_part(value: int, unit: str) -> str:
+        """Format a duration component with singular/plural units."""
+        suffix = unit if value == 1 else f'{unit}s'
+        return f'{value} {suffix}'
+
+    @classmethod
+    def _calculate_elapsed_calendar_duration(
+        cls,
+        start_timestamp: int | None,
+        end_dt: datetime | None = None,
+    ) -> str:
+        """Return elapsed time from a timestamp as years, months, and days."""
+        if start_timestamp is None:
+            return 'No history'
+
+        try:
+            local_tz = get_local_timezone()
+            start_date = datetime.fromtimestamp(int(start_timestamp), tz=timezone.utc).astimezone(local_tz).date()
+            if end_dt is None:
+                end_date = datetime.now(timezone.utc).astimezone(local_tz).date()
+            else:
+                if end_dt.tzinfo is None:
+                    end_dt = end_dt.replace(tzinfo=timezone.utc)
+                end_date = end_dt.astimezone(local_tz).date()
+
+            if end_date < start_date:
+                end_date = start_date
+
+            years = end_date.year - start_date.year
+            months = end_date.month - start_date.month
+            days = end_date.day - start_date.day
+
+            if days < 0:
+                prev_month = end_date.month - 1 or 12
+                prev_year = end_date.year if end_date.month > 1 else end_date.year - 1
+                days += calendar.monthrange(prev_year, prev_month)[1]
+                months -= 1
+
+            if months < 0:
+                years -= 1
+                months += 12
+
+            return ', '.join([
+                cls._format_duration_part(years, 'Year'),
+                cls._format_duration_part(months, 'Month'),
+                cls._format_duration_part(days, 'Day'),
+            ])
+        except (ValueError, TypeError, OSError):
+            return 'Unknown'
+
     def get_user_detail(self, user_ref: str, user_id: int | None = None) -> Optional[Dict[str, Any]]:
         """Build the payload for the user detail page."""
         normalized_ref = str(user_ref or '').strip()
@@ -1815,6 +1867,7 @@ class AnalyticsService:
             'server_a_plays': server_play_counts.get(server_a_name, 0) if server_a_name else 0,
             'server_b_plays': server_play_counts.get(server_b_name, 0) if server_b_name else 0,
             'first_play': first_play,
+            'access_duration': self._calculate_elapsed_calendar_duration(first_play),
             'last_play': last_play,
             'unique_devices': len(device_chart.get('categories') or []),
             'unique_ips': len(ip_addresses),

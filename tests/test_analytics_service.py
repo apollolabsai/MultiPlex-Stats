@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -410,6 +411,17 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
         self.assertEqual(detail['device_chart']['series'][1]['data'], [0, 1])
         self.assertEqual(detail['ip_addresses'][0]['ip_address'], '1.1.1.1')
         self.assertEqual(detail['ip_addresses'][0]['total_plays'], 2)
+
+    def test_calculate_elapsed_calendar_duration_formats_years_months_days(self):
+        start_timestamp = int(datetime(2023, 1, 15, tzinfo=timezone.utc).timestamp())
+        end_dt = datetime(2026, 3, 20, tzinfo=timezone.utc)
+
+        duration = AnalyticsService._calculate_elapsed_calendar_duration(
+            start_timestamp,
+            end_dt=end_dt,
+        )
+
+        self.assertEqual(duration, '3 Years, 2 Months, 5 Days')
 
     def test_normalize_cached_charts_replaces_invalid_payloads(self):
         cached = {
