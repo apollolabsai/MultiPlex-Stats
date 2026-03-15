@@ -149,7 +149,14 @@
             </td>
 
             <!-- Location -->
-            <td>{{ stream.location }}</td>
+            <td>
+                <div class="content-cell">
+                    <div class="platform-name">{{ stream.location }}</div>
+                    {% if stream.ip_address %}
+                        <div class="platform-product">{{ stream.ip_address }}</div>
+                    {% endif %}
+                </div>
+            </td>
         </tr>
         {% endfor %}
     </tbody>

@@ -83,6 +83,7 @@ class MainRoutesTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('Alice', payload['html'])
+        self.assertIn('8.8.8.8', payload['html'])
         self.assertEqual(len(payload['streams']), 1)
         self.assertEqual(payload['streams'][0]['geo_lat'], 34.0522)
 
