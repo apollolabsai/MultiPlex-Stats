@@ -1,0 +1,639 @@
+{% extends "base.html" %}
+
+{% block title %}{{ user.display_name }} - Users - MultiPlex Stats{% endblock %}
+
+{% block content %}
+<header class="user-detail-hero">
+    <div class="user-detail-avatar-shell">
+        {% if user.user_thumb %}
+        <img src="{{ user.user_thumb }}" alt="{{ user.display_name }}" class="user-detail-avatar">
+        {% else %}
+        <div class="user-detail-avatar-placeholder">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+        </div>
+        {% endif %}
+    </div>
+    <div class="user-detail-heading">
+        <h1 class="settings-title">{{ user.display_name }}</h1>
+        <div class="subtitle">
+            {% if user.username and user.username != user.display_name %}
+            <span class="user-handle">@{{ user.username }}</span>
+            {% else %}
+            <span>User playback trends and account-sharing details</span>
+            {% endif %}
+        </div>
+        {% if user.email %}
+        <div class="user-detail-email">{{ user.email }}</div>
+        {% endif %}
+    </div>
+</header>
+
+<div class="stats-grid" id="user-detail-stats-grid">
+    <div class="stat-card">
+        <div class="stat-number">{{ "{:,}".format(user.total_plays) }}</div>
+        <div class="stat-label">Total Plays</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ user.unique_devices }}</div>
+        <div class="stat-label">Devices Seen</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">{{ user.unique_ips }}</div>
+        <div class="stat-label">IP Addresses</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-number">
+            {% if user.last_play %}
+            {{ user.last_play | timestamp_to_date }}
+            {% else %}
+            Never
+            {% endif %}
+        </div>
+        <div class="stat-label">Last Streamed</div>
+    </div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">
+        <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+        </svg>
+        Monthly View
+    </h2>
+    {% if monthly_chart_available %}
+    <div class="chart-controls">
+        <div class="chart-controls-label">Monthly range</div>
+        <form class="chart-controls-form" id="monthly-range-form">
+            <div class="chart-controls-group">
+                <button type="button" data-months="12" class="range-pill {% if monthly_chart.monthly_trend_months == 12 %}active{% endif %}">1y</button>
+                <button type="button" data-months="24" class="range-pill {% if monthly_chart.monthly_trend_months == 24 %}active{% endif %}">2y</button>
+                <button type="button" data-months="60" class="range-pill {% if monthly_chart.monthly_trend_months == 60 %}active{% endif %}">5y</button>
+                <button type="button" data-months="120" class="range-pill {% if monthly_chart.monthly_trend_months == 120 %}active{% endif %}">10y</button>
+                <div class="range-custom">
+                    <input type="number" name="monthly_trend_months_custom" min="1" max="120" placeholder="Custom months"
+                           value="{% if monthly_chart.monthly_trend_months not in [12, 24, 60, 120] %}{{ monthly_chart.monthly_trend_months }}{% endif %}">
+                    <button type="button" class="range-pill range-apply-monthly">Apply</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    {% else %}
+    <p class="info-message">Monthly View requires a resolvable Plex user ID for this account.</p>
+    {% endif %}
+    <div class="chart-container" id="user-monthly-chart-container"></div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">
+        <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="20" height="12" rx="2" ry="2"></rect>
+            <path d="M17 3l-5 4-5-4"></path>
+        </svg>
+        Plays by Device
+    </h2>
+    <div class="chart-container" id="user-device-chart-container"></div>
+</div>
+
+<div class="section">
+    <h2 class="section-title">
+        <svg class="section-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"></path>
+            <circle cx="12" cy="9" r="2.5"></circle>
+        </svg>
+        IP Address Detail
+    </h2>
+    <div class="table-container">
+        <table id="userIpTable" class="display" style="width:100%">
+            <thead>
+                <tr>
+                    <th>IP Address</th>
+                    <th>First Streamed</th>
+                    <th>Last Streamed</th>
+                    <th>Total Plays</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in user.ip_addresses %}
+                <tr>
+                    <td data-order="{{ row.ip_address }}">
+                        <div class="ip-cell">
+                            <button class="geo-trigger" type="button"
+                                    data-ip="{{ row.ip_address }}"
+                                    data-location="{{ row.location }}"
+                                    data-city="{{ row.geo_city }}"
+                                    data-region="{{ row.geo_region }}"
+                                    data-country="{{ row.geo_country }}">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>
+                            </button>
+                            <span class="ip-text">{{ row.ip_address }}</span>
+                        </div>
+                    </td>
+                    <td data-order="{{ row.first_streamed or -1 }}">
+                        {% if row.first_streamed %}
+                        {{ row.first_streamed | timestamp_to_date }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td data-order="{{ row.last_streamed or -1 }}">
+                        {% if row.last_streamed %}
+                        {{ row.last_streamed | timestamp_to_date }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td data-order="{{ row.total_plays }}">{{ "{:,}".format(row.total_plays) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="geo-modal" id="geo-modal" aria-hidden="true">
+    <div class="geo-modal-backdrop" data-geo-close="true"></div>
+    <div class="geo-modal-card" role="dialog" aria-modal="true">
+        <div class="geo-modal-header">
+            <div class="geo-modal-title" id="geo-modal-title">IP Address</div>
+            <button class="geo-modal-close" type="button" data-geo-close="true">×</button>
+        </div>
+        <div class="geo-modal-body">
+            <div class="geo-section">
+                <div class="geo-section-title">Connection Details</div>
+                <div class="geo-row">
+                    <span class="geo-label">Location</span>
+                    <span class="geo-value" id="geo-modal-location">Unknown</span>
+                </div>
+            </div>
+            <div class="geo-section">
+                <div class="geo-section-title">Geolocation Lookup</div>
+                <div class="geo-row">
+                    <span class="geo-label">City</span>
+                    <span class="geo-value" id="geo-modal-city">Unknown</span>
+                </div>
+                <div class="geo-row">
+                    <span class="geo-label">Region</span>
+                    <span class="geo-value" id="geo-modal-region">Unknown</span>
+                </div>
+                <div class="geo-row">
+                    <span class="geo-label">Country</span>
+                    <span class="geo-value" id="geo-modal-country">Unknown</span>
+                </div>
+                <div class="geo-row">
+                    <span class="geo-label">ISP</span>
+                    <span class="geo-value" id="geo-modal-isp">Unknown</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+
+<style>
+.user-detail-hero {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 28px 24px;
+}
+
+.user-detail-avatar-shell {
+    flex-shrink: 0;
+}
+
+.user-detail-avatar,
+.user-detail-avatar-placeholder {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+}
+
+.user-detail-avatar {
+    object-fit: cover;
+    border: 2px solid rgba(241, 138, 61, 0.7);
+}
+
+.user-detail-avatar-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    background: #151515;
+    color: #777;
+}
+
+.user-detail-heading {
+    text-align: left;
+}
+
+.user-handle,
+.user-detail-email {
+    color: #b8b8b8;
+}
+
+#user-detail-stats-grid .stat-card {
+    padding: 12px 16px;
+}
+
+#user-detail-stats-grid .stat-number {
+    font-size: 1.5em;
+    margin-bottom: 2px;
+    line-height: 1.1;
+}
+
+#user-detail-stats-grid .stat-label {
+    font-size: 0.72em;
+    letter-spacing: 0.06em;
+}
+
+.chart-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.chart-controls-label {
+    font-size: 0.86em;
+    color: #bdbdbd;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.chart-controls-form {
+    flex: 1;
+}
+
+.chart-controls-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.range-pill {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #141414;
+    color: #e4e4e4;
+    padding: 8px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.range-pill:hover {
+    border-color: rgba(241, 138, 61, 0.6);
+}
+
+.range-pill.active {
+    background: rgba(241, 138, 61, 0.16);
+    border-color: rgba(241, 138, 61, 0.9);
+}
+
+.range-custom {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.range-custom input {
+    width: 130px;
+    background: #101010;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    padding: 8px 12px;
+}
+
+.chart-container.is-loading {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.chart-empty-state {
+    padding: 42px 16px;
+    text-align: center;
+    color: #9e9e9e;
+}
+
+.ip-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ip-text {
+    color: #fff;
+    font-size: 0.92em;
+}
+
+.geo-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid rgba(241, 138, 61, 0.5);
+    background: rgba(241, 138, 61, 0.12);
+    color: #f18a3d;
+    cursor: pointer;
+}
+
+.geo-trigger svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+}
+
+.geo-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    z-index: 12000;
+}
+
+.geo-modal.is-open {
+    display: block;
+}
+
+.geo-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.geo-modal-card {
+    position: relative;
+    width: min(520px, 90vw);
+    margin: 10vh auto;
+    background: #1b1b1b;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    padding: 20px 24px;
+}
+
+.geo-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.geo-modal-title {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: #fff;
+}
+
+.geo-modal-close {
+    border: none;
+    background: transparent;
+    color: #aaa;
+    font-size: 1.4em;
+    cursor: pointer;
+}
+
+.geo-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.geo-section-title {
+    font-size: 0.95em;
+    color: #f18a3d;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.geo-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+}
+
+.geo-label {
+    color: #9e9e9e;
+    font-size: 0.9em;
+}
+
+.geo-value {
+    color: #fff;
+    font-size: 0.9em;
+    text-align: right;
+}
+
+@media (max-width: 820px) {
+    .user-detail-hero {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .user-detail-heading {
+        text-align: center;
+    }
+
+    .chart-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .chart-controls-group {
+        justify-content: flex-start;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var monthlyChartPayload = {{ monthly_chart.chart_data | tojson }};
+    var monthlyChartUserId = {{ user.user_id | tojson }};
+    var deviceChartPayload = {{ user.device_chart | tojson }};
+
+    function isRenderableChartObject(payload) {
+        return payload && typeof payload === 'object' && Array.isArray(payload.series) && Array.isArray(payload.categories);
+    }
+
+    function showEmptyChartMessage(containerId, message) {
+        var container = document.getElementById(containerId);
+        if (!container) {
+            return;
+        }
+        container.innerHTML = '<div class="chart-empty-state">' + message + '</div>';
+    }
+
+    if (isRenderableChartObject(monthlyChartPayload) && (monthlyChartPayload.series.length || monthlyChartPayload.categories.length)) {
+        renderStackedBarChart('user-monthly-chart-container', monthlyChartPayload);
+    } else {
+        showEmptyChartMessage(
+            'user-monthly-chart-container',
+            monthlyChartUserId ? 'No monthly play history is available for this user yet.' : 'Monthly View is unavailable because this user could not be matched to a Plex user ID.'
+        );
+    }
+
+    if (isRenderableChartObject(deviceChartPayload) && deviceChartPayload.categories.length) {
+        renderUserStackedBarChart('user-device-chart-container', deviceChartPayload);
+    } else {
+        showEmptyChartMessage('user-device-chart-container', 'No device history is available for this user yet.');
+    }
+
+    function setActiveMonths(months) {
+        document.querySelectorAll('#monthly-range-form .range-pill[data-months]').forEach(function(button) {
+            button.classList.toggle('active', parseInt(button.getAttribute('data-months'), 10) === months);
+        });
+
+        var customInput = document.querySelector('#monthly-range-form input[name="monthly_trend_months_custom"]');
+        if (customInput) {
+            if ([12, 24, 60, 120].indexOf(months) === -1) {
+                customInput.value = months;
+            } else {
+                customInput.value = '';
+            }
+        }
+    }
+
+    function fetchMonthlyChart(months) {
+        if (!monthlyChartUserId) {
+            return;
+        }
+
+        var container = document.getElementById('user-monthly-chart-container');
+        if (!container || !months) {
+            return;
+        }
+
+        container.classList.add('is-loading');
+
+        fetch('{{ url_for("main.api_monthly_chart") }}?months=' + encodeURIComponent(months) + '&user_id=' + encodeURIComponent(monthlyChartUserId))
+            .then(function(response) {
+                if (!response.ok) {
+                    return response.json().then(function(payload) {
+                        throw new Error(payload.error || 'Failed to load chart.');
+                    });
+                }
+                return response.json();
+            })
+            .then(function(payload) {
+                renderStackedBarChart('user-monthly-chart-container', payload.chart_data);
+                setActiveMonths(payload.monthly_trend_months);
+            })
+            .catch(function(error) {
+                alert(error.message || 'Unable to update the monthly chart.');
+            })
+            .finally(function() {
+                container.classList.remove('is-loading');
+            });
+    }
+
+    document.querySelectorAll('#monthly-range-form .range-pill[data-months]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            var value = parseInt(button.getAttribute('data-months'), 10);
+            if (value) {
+                fetchMonthlyChart(value);
+            }
+        });
+    });
+
+    var monthlyApplyButton = document.querySelector('#monthly-range-form .range-custom .range-apply-monthly');
+    if (monthlyApplyButton) {
+        monthlyApplyButton.addEventListener('click', function() {
+            var customInput = document.querySelector('#monthly-range-form input[name="monthly_trend_months_custom"]');
+            var value = customInput ? parseInt(customInput.value, 10) : null;
+            if (!value || value < 1 || value > 120) {
+                alert('Please enter a valid number of months (1-120).');
+                return;
+            }
+            fetchMonthlyChart(value);
+        });
+    }
+
+    $('#userIpTable').DataTable({
+        order: [[3, 'desc'], [2, 'desc']],
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+        language: {
+            search: "Filter IPs:",
+            lengthMenu: "Show _MENU_ IPs",
+            info: "Showing _START_ to _END_ of _TOTAL_ IP addresses",
+            infoEmpty: "No IP addresses found for this user.",
+            emptyTable: "No IP addresses found for this user."
+        }
+    });
+
+    function showGeoModal(data) {
+        var modal = document.getElementById('geo-modal');
+        if (!modal) {
+            return;
+        }
+
+        document.getElementById('geo-modal-title').textContent = 'IP Address: ' + (data.ip || 'Unknown');
+        document.getElementById('geo-modal-location').textContent = data.location || 'Unknown';
+        document.getElementById('geo-modal-city').textContent = data.city || 'Unknown';
+        document.getElementById('geo-modal-region').textContent = data.region || 'Unknown';
+        document.getElementById('geo-modal-country').textContent = data.country || 'Unknown';
+        document.getElementById('geo-modal-isp').textContent = data.isp || 'Unknown';
+
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeGeoModal() {
+        var modal = document.getElementById('geo-modal');
+        if (!modal) {
+            return;
+        }
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+
+    document.querySelectorAll('[data-geo-close="true"]').forEach(function(element) {
+        element.addEventListener('click', closeGeoModal);
+    });
+
+    $('#userIpTable').on('click', '.geo-trigger', function() {
+        var button = this;
+        var ip = button.getAttribute('data-ip') || '';
+        if (!ip) {
+            return;
+        }
+
+        fetch('{{ url_for("main.api_ip_lookup") }}?ip=' + encodeURIComponent(ip))
+            .then(function(response) {
+                if (!response.ok) {
+                    return response.json().then(function(payload) {
+                        throw new Error(payload.error || 'Unable to lookup IP address.');
+                    });
+                }
+                return response.json();
+            })
+            .then(function(payload) {
+                payload.location = payload.location || button.getAttribute('data-location') || '';
+                payload.city = payload.city || button.getAttribute('data-city') || '';
+                payload.region = payload.region || button.getAttribute('data-region') || '';
+                payload.country = payload.country || button.getAttribute('data-country') || '';
+                showGeoModal(payload);
+            })
+            .catch(function(error) {
+                alert(error.message || 'Unable to lookup IP address.');
+            });
+    });
+});
+</script>
+{% endblock %}

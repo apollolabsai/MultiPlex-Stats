@@ -498,6 +498,48 @@ def users():
     return render_template('users.html', users=all_users)
 
 
+@main_bp.route('/users/<path:user_ref>')
+def user_detail(user_ref):
+    """Display detail page for a specific user."""
+    if not ConfigService.has_valid_config():
+        flash('Please configure at least one server before viewing users.', 'error')
+        return redirect(url_for('settings.index'))
+
+    requested_user_id = request.args.get('user_id', type=int)
+    service = AnalyticsService()
+    detail = service.get_user_detail(user_ref, user_id=requested_user_id)
+    if not detail:
+        abort(404)
+
+    settings = ConfigService.get_analytics_settings()
+    monthly_chart = {
+        'chart_data': {
+            'categories': [],
+            'series': [],
+            'title': 'Monthly Play Counts by Server and Media Type',
+        },
+        'monthly_trend_months': settings.monthly_trend_months,
+        'user_id': detail.get('user_id'),
+    }
+
+    if detail.get('user_id') is not None:
+        try:
+            monthly_chart = service.get_monthly_chart_json(
+                monthly_trend_months=settings.monthly_trend_months,
+                user_id=detail['user_id'],
+            )
+        except Exception as exc:
+            logger.error("Unable to build monthly user chart for %s: %s", user_ref, exc)
+
+    return render_template(
+        'user_detail.html',
+        user=detail,
+        monthly_chart=monthly_chart,
+        monthly_chart_available=detail.get('user_id') is not None,
+        monthly_default_months=settings.monthly_trend_months,
+    )
+
+
 @main_bp.route('/media')
 def media():
     """Display media library page with Movies and TV Shows."""

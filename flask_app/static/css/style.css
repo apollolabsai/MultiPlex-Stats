@@ -71,6 +71,18 @@ body {
     background: rgba(237, 84, 43, 0.12);
 }
 
+.user-link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(241, 138, 61, 0.75);
+    transition: border-color 0.2s ease;
+}
+
+.user-link:hover {
+    color: inherit;
+    border-bottom-color: #f18a3d;
+}
+
 /* Flash Messages */
 .flash-messages {
     max-width: 1800px;

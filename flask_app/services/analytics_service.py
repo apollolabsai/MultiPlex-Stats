@@ -945,6 +945,7 @@ class AnalyticsService:
 
             table_data.append({
                 'history_id': record.id,
+                'user_id': record.user_id,
                 'date_pt': date_str,
                 'time_pt': time_str,
                 'sortable_datetime': sortable_datetime,
@@ -1110,6 +1111,7 @@ class AnalyticsService:
 
             data.append({
                 'history_id': record.id,
+                'user_id': record.user_id,
                 'date_pt': date_str,
                 'time_pt': time_str,
                 'sortable_datetime': sortable_datetime,
@@ -1452,6 +1454,8 @@ class AnalyticsService:
             'server': server_config.name,
             'server_order': server_order,
             'user': session.get('friendly_name', session.get('username', 'Unknown')),
+            'username': session.get('username', ''),
+            'user_id': to_int(session.get('user_id')),
             'title': title,
             'subtitle': subtitle,
             'media_type': media_type,
@@ -1558,6 +1562,254 @@ class AnalyticsService:
         users.sort(key=lambda x: x['friendly_name'].lower())
 
         return users
+
+    @staticmethod
+    def _normalize_user_lookup_value(value: Any) -> str:
+        """Normalize user lookup values for case-insensitive matching."""
+        return str(value or '').strip().lower()
+
+    @staticmethod
+    def _build_device_label(record: Any) -> str:
+        """Choose the most specific available device label for a history record."""
+        for field in ('player', 'product', 'platform'):
+            value = str(getattr(record, field, '') or '').strip()
+            if value:
+                return value
+        return 'Unknown Device'
+
+    def _find_user_directory_entry(
+        self,
+        user_ref: str = '',
+        user_id: int | None = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Match a user against the current live user directory."""
+        normalized_ref = self._normalize_user_lookup_value(user_ref)
+
+        try:
+            for user in self.get_all_users():
+                entry_user_id = to_int(user.get('user_id'))
+                if user_id is not None and entry_user_id == user_id:
+                    return user
+
+                for candidate in (user.get('username'), user.get('friendly_name')):
+                    if normalized_ref and self._normalize_user_lookup_value(candidate) == normalized_ref:
+                        return user
+        except Exception as exc:
+            logger.error("Unable to enrich user detail for %s: %s", user_ref or user_id, exc)
+
+        return None
+
+    def _build_user_history_filter(
+        self,
+        user_ref: str = '',
+        user_id: int | None = None,
+        username: str = '',
+    ):
+        """Build a flexible history filter for user detail lookups."""
+        filters = []
+
+        if user_id is not None:
+            filters.append(ViewingHistory.user_id == user_id)
+
+        normalized_candidates = {
+            self._normalize_user_lookup_value(user_ref),
+            self._normalize_user_lookup_value(username),
+        }
+        normalized_candidates.discard('')
+
+        if normalized_candidates:
+            filters.append(or_(*[
+                func.lower(ViewingHistory.user) == candidate
+                for candidate in sorted(normalized_candidates)
+            ]))
+
+        if not filters:
+            return None
+
+        return or_(*filters)
+
+    def _build_user_device_chart_data(
+        self,
+        records: List[ViewingHistory],
+        server_a_name: str,
+        server_b_name: Optional[str],
+    ) -> Dict[str, Any]:
+        """Build a stacked bar chart of play counts by device."""
+        if not records:
+            return {
+                'categories': [],
+                'series': [],
+                'title': 'Number of Plays by Device'
+            }
+
+        device_totals: Dict[str, Dict[str, int]] = {}
+        for record in records:
+            device_label = self._build_device_label(record)
+            server_name = str(record.server_name or '').strip() or 'Unknown Server'
+            bucket = device_totals.setdefault(device_label, {})
+            bucket[server_name] = bucket.get(server_name, 0) + 1
+
+        sorted_devices = sorted(
+            device_totals.items(),
+            key=lambda item: (-sum(item[1].values()), item[0].lower())
+        )
+        categories = [device for device, _counts in sorted_devices]
+
+        def build_series(server_name: str, color: str) -> Dict[str, Any]:
+            return {
+                'name': server_name,
+                'data': [
+                    int(device_totals[device].get(server_name, 0))
+                    for device in categories
+                ],
+                'color': color,
+            }
+
+        series = []
+        if server_a_name:
+            series.append(build_series(server_a_name, '#E6B413'))
+        if server_b_name:
+            series.append(build_series(server_b_name, '#e36414'))
+
+        other_servers = sorted({
+            server_name
+            for _device, counts in sorted_devices
+            for server_name in counts.keys()
+            if server_name not in {server_a_name, server_b_name}
+        })
+        fallback_colors = ['#5aa9e6', '#9c89b8', '#4caf50', '#f18a3d']
+        for index, server_name in enumerate(other_servers):
+            series.append(build_series(server_name, fallback_colors[index % len(fallback_colors)]))
+
+        return {
+            'categories': categories,
+            'series': series,
+            'title': 'Number of Plays by Device'
+        }
+
+    def get_user_detail(self, user_ref: str, user_id: int | None = None) -> Optional[Dict[str, Any]]:
+        """Build the payload for the user detail page."""
+        normalized_ref = str(user_ref or '').strip()
+        requested_user_id = to_int(user_id)
+        directory_entry = self._find_user_directory_entry(normalized_ref, requested_user_id)
+
+        resolved_user_id = requested_user_id
+        if resolved_user_id is None and directory_entry:
+            resolved_user_id = to_int(directory_entry.get('user_id'))
+
+        resolved_username = str(
+            (directory_entry or {}).get('username')
+            or normalized_ref
+        ).strip()
+        resolved_friendly_name = str((directory_entry or {}).get('friendly_name') or '').strip()
+
+        user_filter = self._build_user_history_filter(
+            user_ref=normalized_ref,
+            user_id=resolved_user_id,
+            username=resolved_username,
+        )
+
+        history_records: List[ViewingHistory] = []
+        if user_filter is not None:
+            history_records = (
+                ViewingHistory.query
+                .filter(user_filter)
+                .order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc())
+                .all()
+            )
+
+        if not history_records and not directory_entry and resolved_user_id is None and not normalized_ref:
+            return None
+
+        server_a_config, server_b_config = ConfigService.get_server_configs()
+        server_a_name = server_a_config.name if server_a_config else ''
+        server_b_name = server_b_config.name if server_b_config else None
+
+        first_play = None
+        last_play = None
+        if history_records:
+            started_values = [record.started for record in history_records if record.started is not None]
+            if started_values:
+                first_play = min(started_values)
+                last_play = max(started_values)
+
+        ip_rows = []
+        if user_filter is not None:
+            ip_rows = (
+                db.session.query(
+                    ViewingHistory.ip_address.label('ip_address'),
+                    func.min(ViewingHistory.started).label('first_streamed'),
+                    func.max(ViewingHistory.started).label('last_streamed'),
+                    func.count(ViewingHistory.id).label('total_plays'),
+                    func.max(ViewingHistory.location).label('location'),
+                    func.max(ViewingHistory.geo_city).label('geo_city'),
+                    func.max(ViewingHistory.geo_region).label('geo_region'),
+                    func.max(ViewingHistory.geo_country).label('geo_country'),
+                )
+                .filter(
+                    user_filter,
+                    ViewingHistory.ip_address.isnot(None),
+                    ViewingHistory.ip_address != '',
+                )
+                .group_by(ViewingHistory.ip_address)
+                .order_by(
+                    func.count(ViewingHistory.id).desc(),
+                    func.max(ViewingHistory.started).desc(),
+                    ViewingHistory.ip_address.asc(),
+                )
+                .all()
+            )
+
+        ip_addresses = [{
+            'ip_address': row.ip_address,
+            'first_streamed': row.first_streamed,
+            'last_streamed': row.last_streamed,
+            'total_plays': int(row.total_plays or 0),
+            'location': row.location or '',
+            'geo_city': row.geo_city or '',
+            'geo_region': row.geo_region or '',
+            'geo_country': row.geo_country or '',
+        } for row in ip_rows]
+
+        device_chart = self._build_user_device_chart_data(
+            history_records,
+            server_a_name=server_a_name,
+            server_b_name=server_b_name,
+        )
+
+        display_name = (
+            resolved_friendly_name
+            or resolved_username
+            or normalized_ref
+            or f'User {resolved_user_id}'
+        )
+
+        username = resolved_username or str(normalized_ref or '').strip()
+        if not username and history_records:
+            username = str(history_records[0].user or '').strip()
+
+        if not username and not display_name:
+            return None
+
+        user_thumb = str((directory_entry or {}).get('user_thumb') or '').strip()
+        if user_thumb and not user_thumb.startswith(('http://', 'https://')):
+            user_thumb = f"http://{user_thumb}"
+
+        return {
+            'display_name': display_name,
+            'friendly_name': resolved_friendly_name,
+            'username': username,
+            'user_id': resolved_user_id,
+            'email': str((directory_entry or {}).get('email') or '').strip(),
+            'user_thumb': user_thumb,
+            'total_plays': len(history_records),
+            'first_play': first_play,
+            'last_play': last_play,
+            'unique_devices': len(device_chart.get('categories') or []),
+            'unique_ips': len(ip_addresses),
+            'device_chart': device_chart,
+            'ip_addresses': ip_addresses,
+        }
 
     def get_all_users(self) -> List[Dict[str, Any]]:
         """

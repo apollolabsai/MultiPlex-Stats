@@ -17,6 +17,10 @@
     <tbody>
         {% for stream in current_activity %}
         {% set content_href = url_for('main.media_content_details', media_id=stream.media_id) if stream.media_id else None %}
+        {% set stream_username = stream.username if stream.username is defined else None %}
+        {% set stream_user_id = stream.user_id if stream.user_id is defined else None %}
+        {% set user_ref = stream_username or stream.user or ('user-' ~ stream_user_id if stream_user_id is not none else None) %}
+        {% set user_href = url_for('main.user_detail', user_ref=user_ref, user_id=stream_user_id) if user_ref else None %}
         <tr>
             <td>{{ loop.index }}</td>
 
@@ -28,7 +32,13 @@
             </td>
 
             <!-- User -->
-            <td>{{ stream.user }}</td>
+            <td>
+                {% if user_href %}
+                <a href="{{ user_href }}" class="user-link">{{ stream.user }}</a>
+                {% else %}
+                {{ stream.user }}
+                {% endif %}
+            </td>
 
             <!-- Content (Title with Icon and Subtitle) -->
             <td>

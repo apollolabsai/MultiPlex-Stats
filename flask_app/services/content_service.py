@@ -994,6 +994,7 @@ class ContentService:
             'Server': item.server_name or '',
             'server_order': server_order_class,
             'user': item.user or '',
+            'user_id': item.user_id,
             'ip_address': item.ip_address or '',
             'media_type': media_type,
             'title': title,
@@ -1489,4 +1490,3 @@ class ContentService:
             return f"id:{parsed_user_id}"
 
         return ''
-

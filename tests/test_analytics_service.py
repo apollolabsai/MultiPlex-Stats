@@ -327,6 +327,86 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
         self.assertEqual(user['first_play'], 100)
         self.assertEqual(user['last_play'], 200)
 
+    @patch('flask_app.services.analytics_service.ConfigService.get_server_configs')
+    @patch('flask_app.services.analytics_service.AnalyticsService._find_user_directory_entry')
+    def test_get_user_detail_aggregates_devices_and_ip_addresses(
+        self,
+        mock_find_user_directory_entry,
+        mock_get_server_configs,
+    ):
+        mock_get_server_configs.return_value = (
+            SimpleNamespace(name='Apollo'),
+            SimpleNamespace(name='ApolloSS'),
+        )
+        mock_find_user_directory_entry.return_value = {
+            'user_id': 42,
+            'username': 'pdti7',
+            'friendly_name': 'PDTI New',
+            'email': 'pdti7@example.com',
+            'user_thumb': 'http://example.test/user.png',
+        }
+
+        self._add_history(
+            row_id=4001,
+            server_name='Apollo',
+            server_order=0,
+            user_id=42,
+            user='pdti7',
+            player='Living Room AppleTV',
+            platform='tvOS',
+            ip_address='1.1.1.1',
+            started=100,
+            location='wan',
+            geo_city='Seattle',
+            geo_region='Washington',
+            geo_country='United States',
+        )
+        self._add_history(
+            row_id=4002,
+            server_name='Apollo',
+            server_order=0,
+            user_id=42,
+            user='pdti7',
+            player='Living Room AppleTV',
+            platform='tvOS',
+            ip_address='1.1.1.1',
+            started=200,
+            location='wan',
+            geo_city='Seattle',
+            geo_region='Washington',
+            geo_country='United States',
+        )
+        self._add_history(
+            row_id=4003,
+            server_name='ApolloSS',
+            server_order=1,
+            user_id=42,
+            user='pdti7',
+            player='iPad',
+            platform='iOS',
+            ip_address='2.2.2.2',
+            started=300,
+            location='wan',
+            geo_city='Portland',
+            geo_region='Oregon',
+            geo_country='United States',
+        )
+
+        detail = AnalyticsService().get_user_detail('pdti7', user_id=42)
+
+        self.assertEqual(detail['display_name'], 'PDTI New')
+        self.assertEqual(detail['username'], 'pdti7')
+        self.assertEqual(detail['total_plays'], 3)
+        self.assertEqual(detail['first_play'], 100)
+        self.assertEqual(detail['last_play'], 300)
+        self.assertEqual(detail['unique_devices'], 2)
+        self.assertEqual(detail['unique_ips'], 2)
+        self.assertEqual(detail['device_chart']['categories'], ['Living Room AppleTV', 'iPad'])
+        self.assertEqual(detail['device_chart']['series'][0]['data'], [2, 0])
+        self.assertEqual(detail['device_chart']['series'][1]['data'], [0, 1])
+        self.assertEqual(detail['ip_addresses'][0]['ip_address'], '1.1.1.1')
+        self.assertEqual(detail['ip_addresses'][0]['total_plays'], 2)
+
     def test_normalize_cached_charts_replaces_invalid_payloads(self):
         cached = {
             'daily': '<div>unexpected cached markup</div>',
