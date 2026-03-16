@@ -717,8 +717,6 @@ class MediaService:
                 'audienceRatingImage',
                 'guid',
                 'guids',
-                'seasons.title',
-                'seasons.episodes.title',
                 'seasons.episodes.media.parts.size',
                 'seasons.episodes.media.parts.sizeHuman',
             ]
