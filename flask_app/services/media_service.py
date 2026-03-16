@@ -639,7 +639,7 @@ class MediaService:
                 if key in data_dict:
                     existing = data_dict[key]
 
-                    existing['file_size'] += file_size
+                    existing['file_size'] = max(existing['file_size'], file_size)
                     existing['play_count'] += play_count
                     existing['season_count'] = max(existing['season_count'], season_count)
                     existing['episode_count'] = max(existing['episode_count'], episode_count)

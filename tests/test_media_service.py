@@ -119,6 +119,54 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.assertEqual(show['episode_count'], 3)
         self.assertEqual(show['file_size'], 250)
 
+    def test_process_export_data_keeps_largest_show_size_across_servers(self):
+        service = MediaService()
+        data_dict = {}
+        data_lock = threading.Lock()
+
+        smaller_export = [{
+            'title': 'Sample Show',
+            'seasons': [
+                {
+                    'episodes': [
+                        {'media': [{'parts': [{'size': 100}]}]},
+                    ],
+                },
+            ],
+        }]
+        larger_export = [{
+            'title': 'Sample Show',
+            'seasons': [
+                {
+                    'episodes': [
+                        {'media': [{'parts': [{'size': 250}]}]},
+                    ],
+                },
+            ],
+        }]
+
+        service._process_export_data_parallel(
+            export_data=smaller_export,
+            media_type='show',
+            data_dict=data_dict,
+            data_lock=data_lock,
+            is_primary=True,
+            server_key='a',
+        )
+        service._process_export_data_parallel(
+            export_data=larger_export,
+            media_type='show',
+            data_dict=data_dict,
+            data_lock=data_lock,
+            is_primary=False,
+            server_key='b',
+        )
+
+        show = data_dict['Sample Show']
+        self.assertEqual(show['file_size'], 250)
+        self.assertEqual(show['season_count'], 1)
+        self.assertEqual(show['episode_count'], 1)
+
     def test_tv_play_stats_do_not_overwrite_export_file_size(self):
         class StubClient:
             @staticmethod
