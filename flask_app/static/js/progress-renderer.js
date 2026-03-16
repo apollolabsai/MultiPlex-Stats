@@ -158,9 +158,9 @@
                     progressText = 'Skipped';
                 } else if (item.status === 'running') {
                     if (total > 0) {
-                        progressText = current.toLocaleString() + ' / ' + total.toLocaleString();
+                        progressText = 'Overall: ' + current.toLocaleString() + ' / ' + total.toLocaleString();
                     } else if (current > 0) {
-                        progressText = current.toLocaleString();
+                        progressText = 'Overall: ' + current.toLocaleString();
                     } else {
                         progressText = 'Working';
                     }
