@@ -121,6 +121,8 @@
                 <tr>
                     <th>Title</th>
                     <th>Plays</th>
+                    <th>Seasons</th>
+                    <th>Episodes</th>
                     <th>Size (GB)</th>
                     <th>Tautulli</th>
                     <th>IMDb</th>
@@ -827,11 +829,13 @@ $(document).ready(function() {
 
         if (currentMediaView === 'tv') {
             var tvRows = tvShowsTable.rows().data().toArray();
-            var tvCsvRows = [['Title', 'Plays', 'Size (GB)', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Added', 'Last Played']];
+            var tvCsvRows = [['Title', 'Plays', 'Seasons', 'Episodes', 'Size (GB)', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Added', 'Last Played']];
             tvRows.forEach(function(row) {
                 tvCsvRows.push([
                     row.title || '',
                     row.play_count == null ? '' : row.play_count,
+                    row.season_count == null ? '' : row.season_count,
+                    row.episode_count == null ? '' : row.episode_count,
                     formatTvSizeForCsv(row),
                     formatRatingForCsv(row),
                     mdbCsv(row.mdb, 'imdb', '', 1),
@@ -1170,6 +1174,18 @@ $(document).ready(function() {
             },
             { data: 'play_count' },
             {
+                data: 'season_count',
+                render: function(data, type) {
+                    return type === 'display' ? Number(data || 0).toLocaleString() : (data || 0);
+                }
+            },
+            {
+                data: 'episode_count',
+                render: function(data, type) {
+                    return type === 'display' ? Number(data || 0).toLocaleString() : (data || 0);
+                }
+            },
+            {
                 data: 'file_size',
                 className: 'nowrap',
                 render: function(data) { return data ? data.toFixed(2) : '-'; }
@@ -1248,16 +1264,18 @@ $(document).ready(function() {
     var TV_COL_DEFS = [
         { idx: 0,  label: 'Title',       required: true },
         { idx: 1,  label: 'Plays' },
-        { idx: 2,  label: 'Size (GB)',    defaultHidden: true },
-        { idx: 3,  label: 'Tautulli',    defaultHidden: true },
-        { idx: 4,  label: 'IMDb' },
-        { idx: 5,  label: 'RT Critic' },
-        { idx: 6,  label: 'RT Audience' },
-        { idx: 7,  label: 'Metacritic' },
-        { idx: 8,  label: 'Letterboxd',  defaultHidden: true },
-        { idx: 9,  label: 'TMDb' },
-        { idx: 10, label: 'Added' },
-        { idx: 11, label: 'Last Played' }
+        { idx: 2,  label: 'Seasons' },
+        { idx: 3,  label: 'Episodes' },
+        { idx: 4,  label: 'Size (GB)',   defaultHidden: true },
+        { idx: 5,  label: 'Tautulli',    defaultHidden: true },
+        { idx: 6,  label: 'IMDb' },
+        { idx: 7,  label: 'RT Critic' },
+        { idx: 8,  label: 'RT Audience' },
+        { idx: 9,  label: 'Metacritic' },
+        { idx: 10, label: 'Letterboxd',  defaultHidden: true },
+        { idx: 11, label: 'TMDb' },
+        { idx: 12, label: 'Added' },
+        { idx: 13, label: 'Last Played' }
     ];
 
     function setupColVisibility(table, barId, colDefs, storageKey) {
@@ -1340,7 +1358,7 @@ $(document).ready(function() {
     });
 
     setupColVisibility(moviesTable, 'movies-col-vis-bar', MOVIES_COL_DEFS, 'mpx_movies_col_vis_v2');
-    setupColVisibility(tvShowsTable, 'tv-col-vis-bar', TV_COL_DEFS, 'mpx_tv_col_vis_v3');
+    setupColVisibility(tvShowsTable, 'tv-col-vis-bar', TV_COL_DEFS, 'mpx_tv_col_vis_v4');
 
     setMediaTableView('movies');
     initImdbChart();

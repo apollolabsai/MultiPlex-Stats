@@ -228,6 +228,8 @@ class CachedMedia(db.Model):
     play_count = db.Column(db.Integer, default=0)  # SUM across servers
     file_size = db.Column(db.BigInteger, default=0)  # SUM across servers (bytes)
     file_size_versions = db.Column(db.String(200), nullable=True)  # e.g., "12.34 | 8.90"
+    season_count = db.Column(db.Integer, default=0)
+    episode_count = db.Column(db.Integer, default=0)
 
     # Movie-specific fields
     video_codec = db.Column(db.String(50), nullable=True)

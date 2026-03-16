@@ -295,6 +295,10 @@ def _ensure_additive_schema_updates():
             statements.append("ALTER TABLE cached_media ADD COLUMN imdb_id VARCHAR(20)")
         if 'tmdb_id' not in media_columns:
             statements.append("ALTER TABLE cached_media ADD COLUMN tmdb_id VARCHAR(20)")
+        if 'season_count' not in media_columns:
+            statements.append("ALTER TABLE cached_media ADD COLUMN season_count INTEGER DEFAULT 0")
+        if 'episode_count' not in media_columns:
+            statements.append("ALTER TABLE cached_media ADD COLUMN episode_count INTEGER DEFAULT 0")
 
     if 'media_sync_status' in inspector.get_table_names():
         mss_columns = {column['name'] for column in inspector.get_columns('media_sync_status')}

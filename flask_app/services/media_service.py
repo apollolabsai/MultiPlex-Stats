@@ -33,6 +33,13 @@ class MediaService:
     def __init__(self):
         self.local_tz = get_local_timezone()
 
+    @staticmethod
+    def _export_step_label(media_type: str, section_name: str, action: str) -> str:
+        """Build explicit progress text for export-driven sync steps."""
+        if media_type == 'show':
+            return f'{action} TV metadata export for {section_name} (size/seasons/episodes)...'
+        return f'{action} export for {section_name}...'
+
     def get_or_create_status(self) -> MediaSyncStatus:
         """Get or create the singleton sync status record."""
         status = MediaSyncStatus.query.first()
@@ -420,21 +427,21 @@ class MediaService:
         Fetch library metadata using export_metadata API (parallel version).
         """
         status = self.get_or_create_status()
+        start_label = self._export_step_label(media_type, section_name, 'Starting')
 
         # Update server step
         if server_key == 'a':
-            status.server_a_step = f'Starting export for {section_name}...'
+            status.server_a_step = start_label
         else:
-            status.server_b_step = f'Starting export for {section_name}...'
+            status.server_b_step = start_label
         db.session.commit()
+        logger.info(
+            'Starting %s export on %s for section %s',
+            media_type,
+            server_name,
+            section_name,
+        )
 
-        # Use minimal custom_fields based on media type
-        # Movies need: title, year (dedup key), addedAt, ratings
-        # TV shows need: title (dedup key), addedAt, ratings - NO episode/season data
-        #
-        # IMPORTANT: For TV shows, use metadata_level=0 (Custom) to avoid pulling
-        # seasons/episodes which are bundled into levels 1+. Only custom_fields
-        # will be exported.
         if media_type == 'movie':
             custom_fields = [
                 'title',
@@ -448,26 +455,17 @@ class MediaService:
                 'guids',
             ]
             metadata_level = 1  # Basic metadata for movies
+            media_info_level = 0
         else:
-            # TV shows - only show-level data, no year needed for dedup
-            # Use metadata_level=0 to avoid seasons/episodes tree
-            custom_fields = [
-                'title',
-                'addedAt',
-                'rating',
-                'ratingImage',
-                'audienceRating',
-                'audienceRatingImage',
-                'guid',
-                'guids',
-            ]
-            metadata_level = 0  # Custom only - avoids seasons/episodes
+            custom_fields = None
+            metadata_level = 2
+            media_info_level = 2
 
         export_response = client.export_metadata(
             section_id=section_id,
             file_format='json',
             metadata_level=metadata_level,
-            media_info_level=0,
+            media_info_level=media_info_level,
             thumb_level=0,
             art_level=0,
             custom_fields=custom_fields
@@ -483,7 +481,7 @@ class MediaService:
 
         # Wait for export to complete
         export_data = self._wait_for_export_parallel(
-            client, section_id, export_id, section_name, server_key
+            client, section_id, export_id, section_name, media_type, server_key
         )
 
         # Process the export data
@@ -498,6 +496,7 @@ class MediaService:
         section_id: int,
         export_id: int,
         section_name: str,
+        media_type: str,
         server_key: str
     ) -> list:
         """
@@ -513,10 +512,11 @@ class MediaService:
 
             # Update server step with elapsed time
             status = self.get_or_create_status()
+            wait_label = self._export_step_label(media_type, section_name, f'Waiting {elapsed}s for')
             if server_key == 'a':
-                status.server_a_step = f'Waiting for export {section_name} ({elapsed}s)...'
+                status.server_a_step = wait_label
             else:
-                status.server_b_step = f'Waiting for export {section_name} ({elapsed}s)...'
+                status.server_b_step = wait_label
             db.session.commit()
 
             # Check export status
@@ -540,11 +540,18 @@ class MediaService:
                         if complete_status == 1:
                             # Download completed export
                             status = self.get_or_create_status()
+                            download_label = self._export_step_label(media_type, section_name, 'Downloading')
                             if server_key == 'a':
-                                status.server_a_step = f'Downloading export for {section_name}...'
+                                status.server_a_step = download_label
                             else:
-                                status.server_b_step = f'Downloading export for {section_name}...'
+                                status.server_b_step = download_label
                             db.session.commit()
+                            logger.info(
+                                'Downloading completed %s export on section %s (export_id=%s)',
+                                media_type,
+                                section_name,
+                                export_id,
+                            )
 
                             download_response = client.download_export(export_id)
                             if download_response:
@@ -594,9 +601,13 @@ class MediaService:
             if media_type == 'movie':
                 year = record.get('year')
                 key = (title, year)
+                season_count = 0
+                episode_count = 0
+                file_size = 0
             else:
                 key = title
                 year = None
+                season_count, episode_count, file_size = self._extract_show_counts_and_size(record)
 
             media_info = record.get('media', [{}])[0] if record.get('media') else {}
 
@@ -610,7 +621,6 @@ class MediaService:
                 except (ValueError, AttributeError):
                     pass
 
-            file_size = 0
             play_count = 0
             last_played = 0
 
@@ -631,6 +641,8 @@ class MediaService:
 
                     existing['file_size'] += file_size
                     existing['play_count'] += play_count
+                    existing['season_count'] = max(existing['season_count'], season_count)
+                    existing['episode_count'] = max(existing['episode_count'], episode_count)
 
                     if added_at:
                         if existing['added_at']:
@@ -681,6 +693,8 @@ class MediaService:
                         'year': year,
                         'file_size': file_size,
                         'play_count': play_count,
+                        'season_count': season_count,
+                        'episode_count': episode_count,
                         'added_at': added_at,
                         'last_played': last_played,
                         'video_codecs': {video_codec} if video_codec else set(),
@@ -704,6 +718,50 @@ class MediaService:
             status.server_b_fetched += records_processed
         status.records_fetched += records_processed
         db.session.commit()
+
+    @staticmethod
+    def _extract_show_counts_and_size(record: dict) -> tuple[int, int, int]:
+        """Derive season count, episode count, and total size from a show export record."""
+        seasons = record.get('seasons') or []
+        if not isinstance(seasons, list):
+            return 0, 0, 0
+
+        season_count = 0
+        episode_count = 0
+        total_size = 0
+
+        for season in seasons:
+            if not isinstance(season, dict):
+                continue
+            season_count += 1
+            episodes = season.get('episodes') or []
+            if not isinstance(episodes, list):
+                continue
+
+            for episode in episodes:
+                if not isinstance(episode, dict):
+                    continue
+                episode_count += 1
+                media_rows = episode.get('media') or []
+                if not isinstance(media_rows, list):
+                    continue
+
+                for media_row in media_rows:
+                    if not isinstance(media_row, dict):
+                        continue
+                    parts = media_row.get('parts') or []
+                    if not isinstance(parts, list):
+                        continue
+
+                    for part in parts:
+                        if not isinstance(part, dict):
+                            continue
+                        try:
+                            total_size += int(part.get('size', 0) or 0)
+                        except (TypeError, ValueError):
+                            continue
+
+        return season_count, episode_count, total_size
 
     def _fetch_library_play_stats_parallel(
         self,
@@ -748,7 +806,6 @@ class MediaService:
                 if key not in data_dict:
                     continue
 
-                file_size = int(item.get('file_size', 0) or 0)
                 play_count = int(item.get('play_count', 0) or 0)
                 last_played = int(item.get('last_played', 0) or 0)
                 video_codec = item.get('video_codec', '') or ''
@@ -756,8 +813,13 @@ class MediaService:
 
                 existing = data_dict[key]
 
-                existing['file_size'] += file_size
                 existing['play_count'] += play_count
+
+                if media_type == 'movie':
+                    file_size = int(item.get('file_size', 0) or 0)
+                    existing['file_size'] += file_size
+                    if file_size:
+                        existing['file_sizes'].add(file_size)
 
                 if last_played:
                     existing['last_played'] = max(existing['last_played'] or 0, last_played)
@@ -766,8 +828,6 @@ class MediaService:
                     existing['video_codecs'].add(video_codec)
                 if video_resolution:
                     existing['video_resolutions'].add(video_resolution)
-                if file_size:
-                    existing['file_sizes'].add(file_size)
 
     @staticmethod
     def _parse_guids(record: dict):
@@ -857,6 +917,8 @@ class MediaService:
                 year=None,
                 file_size=data['file_size'],
                 play_count=data['play_count'],
+                season_count=data.get('season_count', 0),
+                episode_count=data.get('episode_count', 0),
                 added_at=data['added_at'] if data['added_at'] else None,
                 last_played=data['last_played'] if data['last_played'] else None,
                 rating=str(data['rating']) if data.get('rating') else None,
@@ -997,6 +1059,8 @@ class MediaService:
                 'file_size': round(file_size_gb, 2),
                 'last_played': last_played_str,
                 'play_count': show.play_count,
+                'season_count': show.season_count or 0,
+                'episode_count': show.episode_count or 0,
                 'rating': show.rating or '',
                 'rating_image': show.rating_image or '',
                 'audience_rating': show.audience_rating or '',

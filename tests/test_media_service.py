@@ -1,4 +1,5 @@
 import unittest
+import threading
 
 from flask import Flask
 
@@ -42,11 +43,13 @@ class MediaServiceLinkTests(unittest.TestCase):
         db.session.commit()
         return media
 
-    def _add_show(self, title: str):
+    def _add_show(self, title: str, season_count: int = 0, episode_count: int = 0):
         media = CachedMedia(
             media_type='show',
             title=title,
             play_count=0,
+            season_count=season_count,
+            episode_count=episode_count,
         )
         db.session.add(media)
         db.session.commit()
@@ -74,6 +77,101 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.assertEqual(rows[0]['media_id'], show.id)
         self.assertEqual(rows[0]['title'], 'Family Guy')
         self.assertNotIn('history_id', rows[0])
+
+    def test_get_tv_shows_includes_season_and_episode_counts(self):
+        self._add_show('Family Guy', season_count=23, episode_count=432)
+        rows = MediaService().get_tv_shows()
+        self.assertEqual(rows[0]['season_count'], 23)
+        self.assertEqual(rows[0]['episode_count'], 432)
+
+    def test_process_export_data_derives_show_counts_and_size(self):
+        export_data = [{
+            'title': 'Sample Show',
+            'addedAt': '2024-01-01T00:00:00Z',
+            'seasons': [
+                {
+                    'episodes': [
+                        {'media': [{'parts': [{'size': 100}, {'size': 50}]}]},
+                        {'media': [{'parts': [{'size': 25}]}]},
+                    ],
+                },
+                {
+                    'episodes': [
+                        {'media': [{'parts': [{'size': 75}]}]},
+                    ],
+                },
+            ],
+        }]
+
+        data_dict = {}
+        MediaService()._process_export_data_parallel(
+            export_data=export_data,
+            media_type='show',
+            data_dict=data_dict,
+            data_lock=threading.Lock(),
+            is_primary=True,
+            server_key='a',
+        )
+
+        self.assertIn('Sample Show', data_dict)
+        show = data_dict['Sample Show']
+        self.assertEqual(show['season_count'], 2)
+        self.assertEqual(show['episode_count'], 3)
+        self.assertEqual(show['file_size'], 250)
+
+    def test_tv_play_stats_do_not_overwrite_export_file_size(self):
+        class StubClient:
+            @staticmethod
+            def get_library_media_info(section_id, length=25000, refresh=False):
+                return {
+                    'response': {
+                        'data': {
+                            'data': [
+                                {
+                                    'title': 'Sample Show',
+                                    'file_size': 999,
+                                    'play_count': 4,
+                                    'last_played': 12345,
+                                }
+                            ]
+                        }
+                    }
+                }
+
+        data_dict = {
+            'Sample Show': {
+                'title': 'Sample Show',
+                'year': None,
+                'file_size': 250,
+                'play_count': 1,
+                'season_count': 2,
+                'episode_count': 3,
+                'added_at': 0,
+                'last_played': 0,
+                'video_codecs': set(),
+                'video_resolutions': set(),
+                'file_sizes': {250},
+                'rating': None,
+                'rating_image': None,
+                'audience_rating': None,
+                'audience_rating_image': None,
+                'imdb_id': None,
+                'tmdb_id': None,
+            }
+        }
+
+        MediaService()._fetch_library_play_stats_parallel(
+            client=StubClient(),
+            section_id=1,
+            media_type='show',
+            data_dict=data_dict,
+            data_lock=threading.Lock(),
+        )
+
+        show = data_dict['Sample Show']
+        self.assertEqual(show['file_size'], 250)
+        self.assertEqual(show['play_count'], 5)
+        self.assertEqual(show['last_played'], 12345)
 
     def test_get_movies_always_includes_media_id(self):
         movie = self._add_movie('No History Movie', 2024)

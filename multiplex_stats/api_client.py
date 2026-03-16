@@ -329,16 +329,18 @@ class TautulliClient:
         if isinstance(custom_fields, list):
             fields = ','.join(custom_fields)
 
-        return self._make_request(
-            'export_metadata',
-            section_id=section_id,
-            file_format=file_format,
-            metadata_level=metadata_level,
-            media_info_level=media_info_level,
-            thumb_level=thumb_level,
-            art_level=art_level,
-            custom_fields=fields
-        )
+        params: dict[str, Any] = {
+            'section_id': section_id,
+            'file_format': file_format,
+            'metadata_level': metadata_level,
+            'media_info_level': media_info_level,
+            'thumb_level': thumb_level,
+            'art_level': art_level,
+        }
+        if fields:
+            params['custom_fields'] = fields
+
+        return self._make_request('export_metadata', **params)
 
     def get_exports_table(self, section_id: int) -> dict[str, Any]:
         """
