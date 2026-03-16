@@ -116,8 +116,8 @@ class MediaService:
     ) -> str:
         """Build explicit export progress text with item counts and elapsed time."""
         if total_items > 0:
-            return f'{section_name}: {exported_items:,} / {total_items:,} items ({elapsed}s)'
-        return f'{section_name}: waiting for item counts ({elapsed}s)'
+            return f'Current library {section_name}: {exported_items:,} / {total_items:,} items ({elapsed}s)'
+        return f'Current library {section_name}: waiting for item counts ({elapsed}s)'
 
     def get_or_create_status(self) -> MediaSyncStatus:
         """Get or create the singleton sync status record."""
@@ -702,7 +702,8 @@ class MediaService:
             media_info_level = 0
         else:
             custom_fields = None
-            metadata_level = 2
+            # TV exports only need show/season/episode metadata plus part sizes.
+            metadata_level = 1
             media_info_level = 2
 
         export_response = client.export_metadata(

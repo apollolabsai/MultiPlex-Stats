@@ -1,6 +1,7 @@
 import unittest
 import threading
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from flask import Flask
 
@@ -232,7 +233,47 @@ class MediaServiceLinkTests(unittest.TestCase):
 
     def test_export_progress_detail_includes_counts_and_elapsed(self):
         detail = MediaService._export_progress_detail('TV Shows', 800, 2450, 604)
-        self.assertEqual(detail, 'TV Shows: 800 / 2,450 items (604s)')
+        self.assertEqual(detail, 'Current library TV Shows: 800 / 2,450 items (604s)')
+
+    def test_tv_export_uses_reduced_metadata_payload(self):
+        service = MediaService()
+        progress_step_id = service._step_id('a', 'tv-export')
+
+        class StubClient:
+            def __init__(self):
+                self.export_kwargs = None
+
+            def export_metadata(self, **kwargs):
+                self.export_kwargs = kwargs
+                return {'response': {'data': {'export_id': 123}}}
+
+        client = StubClient()
+
+        with patch.object(MediaService, '_wait_for_export_parallel', return_value=[]), patch.object(
+            MediaService,
+            '_process_export_data_parallel',
+            return_value=None,
+        ):
+            service._fetch_library_via_export_parallel(
+                client=client,
+                server_name='Apollo',
+                section_id=2,
+                section_name='TV Shows',
+                media_type='show',
+                movies_data={},
+                tv_data={},
+                data_lock=threading.Lock(),
+                is_primary=True,
+                server_key='a',
+                progress_step_id=progress_step_id,
+                completed_step_items=0,
+                total_step_items=1415,
+                library_item_count=1415,
+            )
+
+        self.assertIsNotNone(client.export_kwargs)
+        self.assertEqual(client.export_kwargs['metadata_level'], 1)
+        self.assertEqual(client.export_kwargs['media_info_level'], 2)
 
     def test_get_movies_always_includes_media_id(self):
         movie = self._add_movie('No History Movie', 2024)
