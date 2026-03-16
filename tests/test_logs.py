@@ -1,6 +1,9 @@
 import itertools
 import os
 import unittest
+from datetime import datetime, timezone
+from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 from flask import Flask
 
@@ -48,6 +51,36 @@ class LogServiceTests(unittest.TestCase):
         entries = log_service.get_logs(since_id=2, limit=2)
 
         self.assertEqual([entry['id'] for entry in entries], [3, 4])
+
+    def test_format_log_timestamp_uses_configured_timezone(self):
+        with patch.object(log_service, 'get_local_timezone', return_value=ZoneInfo('America/Los_Angeles')):
+            timestamp = log_service._format_log_timestamp(
+                datetime(2026, 3, 16, 14, 27, 7, tzinfo=timezone.utc)
+            )
+
+        self.assertEqual(timestamp, '2026-03-16 07:27:07')
+
+    def test_configured_timezone_formatter_uses_configured_timezone(self):
+        record = log_service.logging.LogRecord(
+            name='multiplex.test',
+            level=log_service.logging.INFO,
+            pathname=__file__,
+            lineno=1,
+            msg='hello',
+            args=(),
+            exc_info=None,
+        )
+        record.created = datetime(2026, 3, 16, 14, 27, 7, tzinfo=timezone.utc).timestamp()
+
+        formatter = log_service.ConfiguredTimezoneFormatter(
+            '%(asctime)s [%(levelname)s] %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S',
+        )
+
+        with patch.object(log_service, 'get_local_timezone', return_value=ZoneInfo('America/Los_Angeles')):
+            rendered = formatter.format(record)
+
+        self.assertIn('2026-03-16 07:27:07', rendered)
 
 
 class LogRoutesTests(unittest.TestCase):

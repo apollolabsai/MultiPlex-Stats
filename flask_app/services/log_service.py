@@ -12,6 +12,8 @@ from collections import deque
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 
+from multiplex_stats.timezone_utils import get_local_timezone
+
 # ---------------------------------------------------------------------------
 # Human-readable HTTP status text
 # ---------------------------------------------------------------------------
@@ -114,7 +116,7 @@ class BufferedLogHandler(logging.Handler):
         try:
             entry = {
                 'id': next(_log_id_counter),
-                'timestamp': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S'),
+                'timestamp': _format_log_timestamp(),
                 'level': record.levelname,
                 'logger': record.name,
                 'message': self.format(record),
@@ -124,6 +126,25 @@ class BufferedLogHandler(logging.Handler):
                 _sse_condition.notify_all()
         except Exception:
             self.handleError(record)
+
+
+def _format_log_timestamp(dt: datetime | None = None) -> str:
+    """Format timestamps in the configured local timezone for all log surfaces."""
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(get_local_timezone()).strftime('%Y-%m-%d %H:%M:%S')
+
+
+class ConfiguredTimezoneFormatter(logging.Formatter):
+    """Logging formatter that renders timestamps in the configured app timezone."""
+
+    def formatTime(self, record, datefmt=None):
+        dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
+        if datefmt:
+            return dt.astimezone(get_local_timezone()).strftime(datefmt)
+        return _format_log_timestamp(dt)
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +224,7 @@ def setup_logging(app):
     log_dir = os.path.join(app.instance_path, 'logs')
     os.makedirs(log_dir, exist_ok=True)
 
-    formatter = logging.Formatter(
+    formatter = ConfiguredTimezoneFormatter(
         '%(asctime)s [%(levelname)-8s] %(name)s: %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
