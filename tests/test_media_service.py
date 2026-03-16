@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from flask import Flask
 
+import flask_app.services.media_service as media_service_module
 from flask_app.models import CachedMedia, db
 from flask_app.services.media_service import MediaService
 
@@ -274,6 +275,64 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.assertIsNotNone(client.export_kwargs)
         self.assertEqual(client.export_kwargs['metadata_level'], 1)
         self.assertEqual(client.export_kwargs['media_info_level'], 2)
+
+    def test_failed_tv_export_is_logged_and_marked_failed(self):
+        service = MediaService()
+        service._progress_tracker.reset(
+            service._build_progress_steps(
+                SimpleNamespace(name='Apollo'),
+                SimpleNamespace(name='ApolloSS'),
+            )
+        )
+
+        status = service.get_or_create_status()
+        status.server_b_name = 'ApolloSS'
+        status.server_b_status = 'running'
+        db.session.commit()
+
+        class StubClient:
+            server_config = SimpleNamespace(name='ApolloSS')
+
+            @staticmethod
+            def get_exports_table(section_id):
+                return {
+                    'response': {
+                        'data': {
+                            'data': [
+                                {
+                                    'export_id': 167,
+                                    'complete': -1,
+                                    'exported_items': 1413,
+                                    'total_items': 1419,
+                                }
+                            ]
+                        }
+                    }
+                }
+
+        with patch.object(media_service_module.logger, 'error') as mock_log_error:
+            with self.assertRaises(ValueError) as ctx:
+                service._wait_for_export_parallel(
+                    client=StubClient(),
+                    section_id=1,
+                    export_id=167,
+                    section_name='TV Shows',
+                    media_type='show',
+                    server_key='b',
+                    progress_step_id=service._step_id('b', 'tv-export'),
+                    completed_step_items=0,
+                    total_step_items=1499,
+                    library_item_count=1419,
+                )
+
+        self.assertIn('processed 1,413/1,419 items', str(ctx.exception))
+        failed_step = service._progress_tracker.get_step(service._step_id('b', 'tv-export'))
+        self.assertEqual(failed_step['status'], 'failed')
+        self.assertEqual(failed_step['detail'], 'TV Shows: export failed at 1,413 / 1,419 items')
+
+        status = service.get_or_create_status()
+        self.assertEqual(status.server_b_step, 'TV Shows: export failed at 1,413 / 1,419 items')
+        mock_log_error.assert_called_once()
 
     def test_get_movies_always_includes_media_id(self):
         movie = self._add_movie('No History Movie', 2024)

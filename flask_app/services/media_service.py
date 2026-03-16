@@ -381,6 +381,10 @@ class MediaService:
                 except Exception as e:
                     with errors_lock:
                         errors.append((server_key, str(e)))
+                    logger.exception(
+                        'Media refresh failed on %s; continuing with remaining pipeline steps.',
+                        server_config.name,
+                    )
                     self._progress_tracker.fail_first_running_for_server(
                         server_key,
                         stage=self.STAGE_NAME,
@@ -388,11 +392,14 @@ class MediaService:
                     )
                     # Update server status to failed
                     status = self.get_or_create_status()
+                    failed_step = str(e)
                     if server_key == 'a':
                         status.server_a_status = 'failed'
+                        status.server_a_step = failed_step
                         status.server_a_error = str(e)
                     else:
                         status.server_b_status = 'failed'
+                        status.server_b_step = failed_step
                         status.server_b_error = str(e)
                     db.session.commit()
 
@@ -766,10 +773,23 @@ class MediaService:
             elapsed = int(time.time() - start_time)
 
             if elapsed > self.EXPORT_TIMEOUT:
+                timeout_detail = f'{section_name}: export timed out after {self.EXPORT_TIMEOUT}s'
                 self._progress_tracker.fail(
                     progress_step_id,
                     detail=f'{section_name}: export timed out',
-                    error=f'{section_name}: export timed out after {self.EXPORT_TIMEOUT}s',
+                    error=timeout_detail,
+                )
+                status = self.get_or_create_status()
+                if server_key == 'a':
+                    status.server_a_step = timeout_detail
+                else:
+                    status.server_b_step = timeout_detail
+                db.session.commit()
+                logger.error(
+                    'Export timed out on %s for section %s after %ss.',
+                    client.server_config.name,
+                    section_name,
+                    self.EXPORT_TIMEOUT,
                 )
                 raise ValueError(f"Export timed out for {section_name} after {self.EXPORT_TIMEOUT}s")
 
@@ -817,17 +837,33 @@ class MediaService:
 
                         # complete=-1 means export failed on Tautulli's side
                         if complete_status == -1:
+                            failure_detail = (
+                                f'{section_name}: export failed at '
+                                f'{exported_items:,} / {total_items:,} items'
+                            )
                             self._progress_tracker.fail(
                                 progress_step_id,
-                                detail=f'{section_name}: export failed',
-                                error=(
-                                    f"{section_name}: export failed after "
-                                    f"{exported_items}/{total_items} items"
-                                ),
+                                detail=failure_detail,
+                                error=failure_detail,
+                            )
+                            status = self.get_or_create_status()
+                            if server_key == 'a':
+                                status.server_a_step = failure_detail
+                            else:
+                                status.server_b_step = failure_detail
+                            db.session.commit()
+                            logger.error(
+                                "Tautulli reported export failure on %s for section %s "
+                                "(export_id=%s, processed %s/%s items).",
+                                client.server_config.name,
+                                section_name,
+                                export_id,
+                                exported_items,
+                                total_items,
                             )
                             raise ValueError(
                                 f"Export failed for {section_name} on Tautulli's side "
-                                f"(processed {exported_items}/{total_items} items)"
+                                f"(processed {exported_items:,}/{total_items:,} items)"
                             )
 
                         if complete_status == 1:
