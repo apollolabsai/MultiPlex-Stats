@@ -708,10 +708,24 @@ class MediaService:
             metadata_level = 1  # Basic metadata for movies
             media_info_level = 0
         else:
-            custom_fields = None
-            # TV exports only need show/season/episode metadata plus part sizes.
-            metadata_level = 1
-            media_info_level = 2
+            custom_fields = [
+                'title',
+                'addedAt',
+                'rating',
+                'ratingImage',
+                'audienceRating',
+                'audienceRatingImage',
+                'guid',
+                'guids',
+                'seasons.title',
+                'seasons.episodes.title',
+                'seasons.episodes.media.parts.size',
+                'seasons.episodes.media.parts.sizeHuman',
+            ]
+            # TV exports use explicit custom fields to keep payloads small while
+            # still preserving show IDs, ratings, and per-episode part sizes.
+            metadata_level = 0
+            media_info_level = 0
 
         export_response = client.export_metadata(
             section_id=section_id,

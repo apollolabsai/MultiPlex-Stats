@@ -236,7 +236,7 @@ class MediaServiceLinkTests(unittest.TestCase):
         detail = MediaService._export_progress_detail('TV Shows', 800, 2450, 604)
         self.assertEqual(detail, 'Current library TV Shows: 800 / 2,450 items (604s)')
 
-    def test_tv_export_uses_reduced_metadata_payload(self):
+    def test_tv_export_uses_custom_fields_payload(self):
         service = MediaService()
         progress_step_id = service._step_id('a', 'tv-export')
 
@@ -273,8 +273,25 @@ class MediaServiceLinkTests(unittest.TestCase):
             )
 
         self.assertIsNotNone(client.export_kwargs)
-        self.assertEqual(client.export_kwargs['metadata_level'], 1)
-        self.assertEqual(client.export_kwargs['media_info_level'], 2)
+        self.assertEqual(client.export_kwargs['metadata_level'], 0)
+        self.assertEqual(client.export_kwargs['media_info_level'], 0)
+        self.assertEqual(
+            client.export_kwargs['custom_fields'],
+            [
+                'title',
+                'addedAt',
+                'rating',
+                'ratingImage',
+                'audienceRating',
+                'audienceRatingImage',
+                'guid',
+                'guids',
+                'seasons.title',
+                'seasons.episodes.title',
+                'seasons.episodes.media.parts.size',
+                'seasons.episodes.media.parts.sizeHuman',
+            ],
+        )
 
     def test_failed_tv_export_is_logged_and_marked_failed(self):
         service = MediaService()
