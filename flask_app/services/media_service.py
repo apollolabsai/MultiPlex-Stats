@@ -712,7 +712,6 @@ class MediaService:
                 'title',
                 'addedAt',
                 'rating',
-                'ratingImage',
                 'audienceRating',
                 'audienceRatingImage',
                 'guid',

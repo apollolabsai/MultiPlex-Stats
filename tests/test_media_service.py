@@ -281,7 +281,6 @@ class MediaServiceLinkTests(unittest.TestCase):
                 'title',
                 'addedAt',
                 'rating',
-                'ratingImage',
                 'audienceRating',
                 'audienceRatingImage',
                 'guid',
