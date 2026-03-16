@@ -125,6 +125,61 @@
             .replace(/'/g, '&#39;');
     }
 
+    function formatStepCountValue(item) {
+        var total = Number(item && item.total || 0);
+        var current = Number(item && item.current || 0);
+        if (total > 0) {
+            return current.toLocaleString() + ' / ' + total.toLocaleString();
+        }
+        if (current > 0) {
+            return current.toLocaleString();
+        }
+        return '';
+    }
+
+    function formatSummaryStatusText(item) {
+        var countText = formatStepCountValue(item);
+        var durationText = formatDurationValue(item && item.duration_seconds);
+        var parts = [];
+
+        if (!item) {
+            return '';
+        }
+
+        if (item.status === 'success') {
+            parts.push('Success');
+            if (countText) {
+                parts.push(countText);
+            }
+            if (durationText) {
+                parts.push(durationText);
+            }
+            return parts.join(' ');
+        }
+
+        if (item.status === 'failed') {
+            parts.push('Fail');
+            if (countText) {
+                parts.push(countText);
+            }
+            return parts.join(' ');
+        }
+
+        if (item.status === 'skipped') {
+            return 'Skipped';
+        }
+
+        if (item.status === 'running') {
+            parts.push('Working');
+            if (countText) {
+                parts.push(countText);
+            }
+            return parts.join(' ');
+        }
+
+        return 'Pending';
+    }
+
     function renderPipelineSections(containerId, sections) {
         var container = document.getElementById(containerId);
         if (!container) {
@@ -200,8 +255,52 @@
         container.innerHTML = html;
     }
 
+    function renderPipelineSummarySections(containerId, sections) {
+        var container = document.getElementById(containerId);
+        if (!container) {
+            return;
+        }
+
+        var html = '';
+        (sections || []).forEach(function(section) {
+            var items = section && Array.isArray(section.items) ? section.items : [];
+            if (!items.length) {
+                return;
+            }
+
+            html += '<div class="pipeline-summary-stage">';
+            html += '<div class="pipeline-summary-stage-title">' + escapeHtml(section.title || 'Summary') + '</div>';
+
+            items.forEach(function(item) {
+                var detail = '';
+                if (item.status === 'failed') {
+                    detail = item.error || item.detail || '';
+                } else if (item.status === 'skipped') {
+                    detail = item.detail || '';
+                }
+
+                html += '<div class="pipeline-summary-row ' + escapeHtml(item.status || 'pending') + '">';
+                html += '<div class="pipeline-summary-main">';
+                html += '<span class="pipeline-summary-label">' + escapeHtml(item.label || 'Step') + '</span>';
+                html += '<span class="pipeline-summary-dots"></span>';
+                html += '<span class="pipeline-summary-status">' + escapeHtml(formatSummaryStatusText(item)) + '</span>';
+                html += '</div>';
+
+                if (detail) {
+                    html += '<div class="pipeline-summary-detail">' + escapeHtml(detail) + '</div>';
+                }
+                html += '</div>';
+            });
+
+            html += '</div>';
+        });
+
+        container.innerHTML = html;
+    }
+
     root.formatLastUpdatedValue = formatLastUpdatedValue;
     root.renderServerProgress = renderServerProgress;
     root.renderPipelineSections = renderPipelineSections;
+    root.renderPipelineSummarySections = renderPipelineSummarySections;
     root.formatDurationValue = formatDurationValue;
 })(window);

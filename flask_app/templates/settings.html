@@ -216,6 +216,14 @@
                     <div id="pipeline-progress-list"></div>
                 </div>
 
+                <div class="sync-progress sync-summary-board" id="pipeline-summary-board" style="display: none;">
+                    <div class="progress-header">
+                        <span class="progress-title" id="pipeline-summary-title">Latest Run Summary</span>
+                        <span class="progress-meta" id="pipeline-summary-updated"></span>
+                    </div>
+                    <div id="pipeline-summary-list"></div>
+                </div>
+
                 <button type="button" class="btn btn-primary" id="full-sync-btn" {% if not servers %}disabled{% endif %}>
                     {% if media_sync_status.has_data and history_stats.total_records > 0 %}
                     Refresh All Data
@@ -339,6 +347,8 @@
     var mediaHelpTargetEl = null;
     var MEDIA_RUN_MODE_MEDIA_ONLY = 'media_only';
     var MEDIA_RUN_MODE_FULL_PIPELINE = 'full_pipeline';
+    var PIPELINE_SUMMARY_STORAGE_KEY = 'multiplexSettingsPipelineSummary';
+    var latestPipelineSummary = null;
 
     function getMediaRunMode(status) {
         return (status && status.run_mode) ? String(status.run_mode) : MEDIA_RUN_MODE_MEDIA_ONLY;
@@ -402,6 +412,12 @@
     function cloneItems(items) {
         return (items || []).map(function(item) {
             return Object.assign({}, item);
+        });
+    }
+
+    function startedItems(items) {
+        return cloneItems(items).filter(function(item) {
+            return item && item.status && item.status !== 'pending';
         });
     }
 
@@ -531,6 +547,169 @@
         renderPipelineSections('pipeline-progress-list', sections);
     }
 
+    function summaryTimestampForMode(runMode) {
+        var timestamps = [];
+        if (mediaStatus && mediaStatus.last_sync_date) {
+            timestamps.push(mediaStatus.last_sync_date);
+        }
+        if (runMode === MEDIA_RUN_MODE_FULL_PIPELINE) {
+            if (historyStatus && historyStatus.last_sync_date) {
+                timestamps.push(historyStatus.last_sync_date);
+            }
+            if (lifetimeStatus && lifetimeStatus.last_sync_date) {
+                timestamps.push(lifetimeStatus.last_sync_date);
+            }
+        }
+
+        var latest = null;
+        timestamps.forEach(function(value) {
+            var parsed = new Date(value);
+            if (isNaN(parsed.getTime())) {
+                return;
+            }
+            if (!latest || parsed > latest) {
+                latest = parsed;
+            }
+        });
+        return latest ? latest.toISOString() : null;
+    }
+
+    function buildSummarySections(runMode) {
+        var sections = [];
+        var mediaItems = startedItems(mediaStatus && mediaStatus.pipeline_items);
+
+        if (mediaItems.length) {
+            sections.push({
+                title: runMode === MEDIA_RUN_MODE_FULL_PIPELINE ? 'Step 1: Media Refresh' : 'Media Refresh',
+                items: mediaItems,
+            });
+        }
+
+        if (runMode === MEDIA_RUN_MODE_FULL_PIPELINE) {
+            var historyItems = startedItems(historyStatus && historyStatus.pipeline_items);
+            if (historyItems.length) {
+                sections.push({
+                    title: 'Step 2: Full History Import',
+                    items: historyItems,
+                });
+            }
+
+            var lifetimeItems = startedItems(lifetimeStatus && lifetimeStatus.pipeline_items);
+            if (lifetimeItems.length) {
+                sections.push({
+                    title: 'Step 3: Lifetime Play Count Cache',
+                    items: lifetimeItems,
+                });
+            }
+        }
+
+        return sections;
+    }
+
+    function savePipelineSummary(runMode) {
+        var mode = runMode || getMediaRunMode(mediaStatus);
+        var sections = buildSummarySections(mode);
+        if (!sections.length) {
+            return;
+        }
+
+        latestPipelineSummary = {
+            mode: mode,
+            captured_at: summaryTimestampForMode(mode) || new Date().toISOString(),
+            sections: sections,
+        };
+
+        try {
+            window.localStorage.setItem(
+                PIPELINE_SUMMARY_STORAGE_KEY,
+                JSON.stringify(latestPipelineSummary)
+            );
+        } catch (error) {
+            console.warn('Unable to persist pipeline summary:', error);
+        }
+    }
+
+    function clearPipelineSummary() {
+        latestPipelineSummary = null;
+        try {
+            window.localStorage.removeItem(PIPELINE_SUMMARY_STORAGE_KEY);
+        } catch (error) {
+            console.warn('Unable to clear pipeline summary:', error);
+        }
+    }
+
+    function restorePipelineSummary() {
+        try {
+            var raw = window.localStorage.getItem(PIPELINE_SUMMARY_STORAGE_KEY);
+            if (!raw) {
+                return;
+            }
+            latestPipelineSummary = JSON.parse(raw) || null;
+        } catch (error) {
+            latestPipelineSummary = null;
+            console.warn('Unable to restore pipeline summary:', error);
+        }
+    }
+
+    function seedPipelineSummaryFromCurrentStatuses() {
+        var hasActiveRun = (
+            (mediaStatus && mediaStatus.status === 'running') ||
+            (historyStatus && historyStatus.status === 'running') ||
+            (lifetimeStatus && lifetimeStatus.status === 'running')
+        );
+        if (hasActiveRun) {
+            return;
+        }
+
+        var mode = getMediaRunMode(mediaStatus);
+        var sections = buildSummarySections(mode);
+        if (!sections.length) {
+            return;
+        }
+
+        latestPipelineSummary = {
+            mode: mode,
+            captured_at: summaryTimestampForMode(mode),
+            sections: sections,
+        };
+    }
+
+    function renderPipelineSummary() {
+        var board = document.getElementById('pipeline-summary-board');
+        var title = document.getElementById('pipeline-summary-title');
+        var updated = document.getElementById('pipeline-summary-updated');
+        if (!board || !title || !updated) {
+            return;
+        }
+
+        var hasActiveRun = (
+            pipelineInProgress ||
+            mediaOnlyInProgress ||
+            (mediaStatus && mediaStatus.status === 'running') ||
+            (historyStatus && historyStatus.status === 'running') ||
+            (lifetimeStatus && lifetimeStatus.status === 'running')
+        );
+
+        if (
+            hasActiveRun ||
+            !latestPipelineSummary ||
+            !Array.isArray(latestPipelineSummary.sections) ||
+            !latestPipelineSummary.sections.length
+        ) {
+            board.style.display = 'none';
+            return;
+        }
+
+        board.style.display = 'block';
+        title.textContent = latestPipelineSummary.mode === MEDIA_RUN_MODE_FULL_PIPELINE
+            ? 'Latest Full Pipeline Summary'
+            : 'Latest Media Refresh Summary';
+        updated.textContent = latestPipelineSummary.captured_at
+            ? 'Updated ' + formatLastUpdatedValue(latestPipelineSummary.captured_at)
+            : '';
+        renderPipelineSummarySections('pipeline-summary-list', latestPipelineSummary.sections);
+    }
+
     function failPipeline(message) {
         mediaPollInterval = stopPoll(mediaPollInterval);
         historyPollInterval = stopPoll(historyPollInterval);
@@ -540,6 +719,7 @@
         setActionButtonState(false, getActionButtonLabel());
         setMediaRefreshState(false);
         renderUnifiedPipelineProgress();
+        renderPipelineSummary();
         if (message) {
             alert(message);
         }
@@ -658,6 +838,7 @@
                 pipelineInProgress = true;
             }
             renderUnifiedPipelineProgress();
+            renderPipelineSummary();
             var label = isFullPipelineMediaRun(status) ? 'Step 1/2: Syncing Media...' : 'Refreshing Media Libraries...';
             setActionButtonState(true, label);
             setMediaRefreshState(true);
@@ -685,7 +866,9 @@
             mediaOnlyInProgress = false;
             setActionButtonState(false, getActionButtonLabel());
             setMediaRefreshState(false);
+            savePipelineSummary(MEDIA_RUN_MODE_MEDIA_ONLY);
             renderUnifiedPipelineProgress();
+            renderPipelineSummary();
             if (status.status === 'failed') {
                 alert('Media sync failed: ' + (status.error_message || 'Unknown error'));
             }
@@ -696,22 +879,26 @@
             setActionButtonState(false, getActionButtonLabel());
             setMediaRefreshState(false);
             renderUnifiedPipelineProgress();
+            renderPipelineSummary();
             return;
         }
 
         if (status.status === 'success') {
             renderUnifiedPipelineProgress();
+            renderPipelineSummary();
             startHistorySync();
             return;
         }
 
         if (status.status === 'failed') {
+            savePipelineSummary(MEDIA_RUN_MODE_FULL_PIPELINE);
             renderUnifiedPipelineProgress();
             failPipeline('Media sync failed: ' + (status.error_message || 'Unknown error'));
             return;
         }
 
         renderUnifiedPipelineProgress();
+        renderPipelineSummary();
     }
 
     function updateHistorySyncStatus(status) {
@@ -721,6 +908,7 @@
         if (status.status === 'running') {
             pipelineInProgress = true;
             renderUnifiedPipelineProgress();
+            renderPipelineSummary();
             setActionButtonState(true, 'Step 2/2: Syncing Full History...');
             return;
         }
@@ -734,22 +922,26 @@
         if (!pipelineInProgress) {
             setActionButtonState(false, getActionButtonLabel());
             renderUnifiedPipelineProgress();
+            renderPipelineSummary();
             return;
         }
 
         if (status.status === 'success') {
             renderUnifiedPipelineProgress();
+            renderPipelineSummary();
             startLifetimeSync();
             return;
         }
 
         if (status.status === 'failed') {
+            savePipelineSummary(MEDIA_RUN_MODE_FULL_PIPELINE);
             renderUnifiedPipelineProgress();
             failPipeline('History sync failed: ' + (status.error_message || 'Unknown error'));
             return;
         }
 
         renderUnifiedPipelineProgress();
+        renderPipelineSummary();
     }
 
     function updateLifetimeSyncStatus(status) {
@@ -759,6 +951,7 @@
         if (status.status === 'running') {
             pipelineInProgress = true;
             renderUnifiedPipelineProgress();
+            renderPipelineSummary();
             setActionButtonState(true, 'Finalizing: Rebuilding Lifetime Cache...');
             return;
         }
@@ -772,22 +965,30 @@
         if (!pipelineInProgress) {
             setActionButtonState(false, getActionButtonLabel());
             renderUnifiedPipelineProgress();
+            renderPipelineSummary();
             return;
         }
 
         if (status.status === 'success') {
+            savePipelineSummary(MEDIA_RUN_MODE_FULL_PIPELINE);
+            pipelineInProgress = false;
+            mediaOnlyInProgress = false;
+            setActionButtonState(false, getActionButtonLabel());
+            setMediaRefreshState(false);
             renderUnifiedPipelineProgress();
-            window.location.reload();
+            renderPipelineSummary();
             return;
         }
 
         if (status.status === 'failed') {
+            savePipelineSummary(MEDIA_RUN_MODE_FULL_PIPELINE);
             renderUnifiedPipelineProgress();
             failPipeline('Lifetime cache build failed: ' + (status.error_message || 'Unknown error'));
             return;
         }
 
         renderUnifiedPipelineProgress();
+        renderPipelineSummary();
     }
 
     function pollMediaStatus() {
@@ -885,8 +1086,10 @@
         if (pipelineInProgress) {
             return;
         }
+        clearPipelineSummary();
         pipelineInProgress = true;
         renderUnifiedPipelineProgress();
+        renderPipelineSummary();
         startMediaSync();
     }
 
@@ -894,10 +1097,12 @@
         if (!hasServerConfig || pipelineInProgress || mediaOnlyInProgress) {
             return;
         }
+        clearPipelineSummary();
         mediaOnlyInProgress = true;
         setActionButtonState(true, 'Refreshing Media Libraries...');
         setMediaRefreshState(true);
         renderUnifiedPipelineProgress();
+        renderPipelineSummary();
         fetch('{{ url_for("main.api_media_start_load") }}?mode=' + MEDIA_RUN_MODE_MEDIA_ONLY, { method: 'POST' })
             .then(function(response) {
                 return response.json().then(function(payload) {
@@ -918,6 +1123,7 @@
                 setActionButtonState(false, getActionButtonLabel());
                 setMediaRefreshState(false);
                 renderUnifiedPipelineProgress();
+                renderPipelineSummary();
                 alert(error.message);
             });
     }
@@ -936,6 +1142,7 @@
     formatTimestampElement('last-media-sync-value');
     formatTimestampElement('last-history-sync-value');
     formatTimestampElement('last-lifetime-sync-value');
+    restorePipelineSummary();
 
     if (mediaStatus && mediaStatus.status === 'running') {
         pipelineInProgress = isFullPipelineMediaRun(mediaStatus);
@@ -970,7 +1177,9 @@
 
     setActionButtonState(false, getActionButtonLabel());
     setMediaRefreshState(false);
+    seedPipelineSummaryFromCurrentStatuses();
     renderUnifiedPipelineProgress();
+    renderPipelineSummary();
 })();
 </script>
 
@@ -1042,6 +1251,17 @@
 .sync-pipeline-board {
     background: rgba(18, 18, 18, 0.92);
     border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sync-summary-board {
+    margin-top: 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.progress-meta {
+    color: #9f9f9f;
+    font-size: 0.82em;
 }
 
 .pipeline-stage {
@@ -1192,6 +1412,87 @@
 
 .pipeline-step.failed .pipeline-step-fill {
     background: linear-gradient(90deg, #f44336, #c62828);
+}
+
+.pipeline-summary-stage {
+    margin-top: 14px;
+}
+
+.pipeline-summary-stage:first-child {
+    margin-top: 0;
+}
+
+.pipeline-summary-stage-title {
+    margin-bottom: 8px;
+    color: #f2f2f2;
+    font-size: 0.9em;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
+.pipeline-summary-row {
+    padding: 10px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.pipeline-summary-row:first-of-type {
+    border-top: 0;
+}
+
+.pipeline-summary-main {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+}
+
+.pipeline-summary-label {
+    color: #f2f2f2;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.pipeline-summary-dots {
+    flex: 1 1 auto;
+    border-bottom: 2px dotted rgba(255, 255, 255, 0.16);
+    transform: translateY(-2px);
+}
+
+.pipeline-summary-status {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.pipeline-summary-row.success .pipeline-summary-status {
+    color: #67c96b;
+}
+
+.pipeline-summary-row.failed .pipeline-summary-status {
+    color: #ff7d74;
+}
+
+.pipeline-summary-row.skipped .pipeline-summary-status {
+    color: #a8a8a8;
+}
+
+.pipeline-summary-row.running .pipeline-summary-status,
+.pipeline-summary-row.pending .pipeline-summary-status {
+    color: #f0bb8e;
+}
+
+.pipeline-summary-detail {
+    margin-top: 4px;
+    color: #b6b6b6;
+    font-size: 0.84em;
+    line-height: 1.4;
+}
+
+.pipeline-summary-row.failed .pipeline-summary-detail {
+    color: #ef9a9a;
+}
+
+.pipeline-summary-row.skipped .pipeline-summary-detail {
+    color: #9f9f9f;
 }
 
 .settings-note-card {
@@ -1365,6 +1666,15 @@
 
     .pipeline-step-meta {
         justify-content: flex-start;
+    }
+
+    .pipeline-summary-main {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .pipeline-summary-dots {
+        display: none;
     }
 }
 
