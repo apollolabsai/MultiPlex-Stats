@@ -14,6 +14,7 @@ from flask import current_app
 
 from flask_app.models import db, LifetimeMediaPlayCount, LifetimeStatsSyncStatus, ViewingHistory
 from flask_app.services.config_service import ConfigService
+from flask_app.services.sync_progress import SyncProgressTracker
 from flask_app.services.utils import normalize_title, to_int
 from multiplex_stats.timezone_utils import get_local_timezone
 
@@ -24,9 +25,37 @@ class MediaLifetimeStatsService:
     PROGRESS_UPDATE_INTERVAL = 500
     HISTORY_SCAN_BATCH_SIZE = 2000
     _status_write_lock = threading.Lock()
+    STAGE_NAME = 'lifetime'
+    _progress_tracker = SyncProgressTracker()
 
     def __init__(self):
         self.local_tz = get_local_timezone()
+
+    @classmethod
+    def _step_id(cls, server_key: str | None, step_name: str) -> str:
+        prefix = f'{cls.STAGE_NAME}-{server_key}' if server_key else cls.STAGE_NAME
+        return f'{prefix}-{step_name}'
+
+    @classmethod
+    def _build_progress_steps(cls, server_a_config, server_b_config) -> list[dict]:
+        steps = []
+        for server_key, server_config in (('a', server_a_config), ('b', server_b_config)):
+            if not server_config:
+                continue
+            steps.append({
+                'id': cls._step_id(server_key, 'scan'),
+                'label': f'{server_config.name}: Scan local history for lifetime counts',
+                'stage': cls.STAGE_NAME,
+                'server_key': server_key,
+                'server_name': server_config.name,
+                'unit': 'rows',
+            })
+        steps.append({
+            'id': cls._step_id(None, 'save'),
+            'label': 'Save aggregated lifetime play-count cache',
+            'stage': cls.STAGE_NAME,
+        })
+        return steps
 
     def get_or_create_status(self) -> LifetimeStatsSyncStatus:
         """Get or create the singleton lifetime stats sync status record."""
@@ -81,6 +110,7 @@ class MediaLifetimeStatsService:
             'last_sync_date': last_sync_date,
             'has_data': self.has_lifetime_stats(),
             'servers': servers,
+            'pipeline_items': self._progress_tracker.snapshot(),
         }
 
     def start_sync(self, app=None, trigger: str = 'manual') -> bool:
@@ -119,6 +149,7 @@ class MediaLifetimeStatsService:
         status.server_b_total = None
         status.server_b_error = None
         db.session.commit()
+        self._progress_tracker.reset(self._build_progress_steps(server_a_config, server_b_config))
 
         if app is None:
             app = current_app._get_current_object()
@@ -145,6 +176,15 @@ class MediaLifetimeStatsService:
                 status.status = 'failed'
                 status.completed_at = datetime.utcnow()
                 status.error_message = str(e)
+                self._progress_tracker.fail_first_running_for_server('a', stage=self.STAGE_NAME, error=str(e))
+                self._progress_tracker.fail_first_running_for_server('b', stage=self.STAGE_NAME, error=str(e))
+                step = self._progress_tracker.get_step(self._step_id(None, 'save'))
+                if step and step.get('status') == 'running':
+                    self._progress_tracker.fail(
+                        self._step_id(None, 'save'),
+                        detail=str(e),
+                        error=str(e),
+                    )
             db.session.commit()
 
     def _run_sync_parallel(self, app):
@@ -162,15 +202,34 @@ class MediaLifetimeStatsService:
             with app.app_context():
                 try:
                     self._set_server_status(server_key, 'running', 'Scanning local history...')
+                    self._progress_tracker.start(
+                        self._step_id(server_key, 'scan'),
+                        detail='Scanning local history...',
+                        current=0,
+                    )
                     server_counts = self._scan_server_history(server_config.name, server_key)
                     with counts_lock:
                         for key, value in server_counts.items():
                             counts_by_key[key] = counts_by_key.get(key, 0) + value
                     successful_servers.append(server_key)
                     self._set_server_status(server_key, 'success', 'Complete')
+                    status = self.get_or_create_status()
+                    total = status.server_a_total if server_key == 'a' else status.server_b_total
+                    fetched = status.server_a_fetched if server_key == 'a' else status.server_b_fetched
+                    self._progress_tracker.complete(
+                        self._step_id(server_key, 'scan'),
+                        detail=f'{len(server_counts):,} aggregated titles',
+                        current=fetched,
+                        total=total,
+                    )
                 except Exception as exc:
                     errors.append(f"{server_config.name}: {exc}")
                     self._set_server_status(server_key, 'failed', 'Failed', str(exc))
+                    self._progress_tracker.fail(
+                        self._step_id(server_key, 'scan'),
+                        detail=str(exc),
+                        error=str(exc),
+                    )
 
         threads = []
         thread_a = threading.Thread(target=fetch_server, args=(server_a_config, 'a'))
@@ -194,8 +253,16 @@ class MediaLifetimeStatsService:
         if errors:
             status.error_message = "Partial warnings: " + " | ".join(errors)
         db.session.commit()
+        self._progress_tracker.start(
+            self._step_id(None, 'save'),
+            detail='Saving aggregated lifetime play counts...',
+        )
 
         self._store_counts(counts_by_key)
+        self._progress_tracker.complete(
+            self._step_id(None, 'save'),
+            detail=f'Saved {len(counts_by_key):,} aggregated titles',
+        )
 
     def _scan_server_history(self, server_name: str, server_key: str) -> dict[tuple[str, str, int | None], int]:
         """Scan all local history rows for one server and aggregate play counts by content key."""
@@ -358,6 +425,11 @@ class MediaLifetimeStatsService:
                 status.server_b_total = total
             status.records_total = (status.server_a_total or 0) + (status.server_b_total or 0)
             db.session.commit()
+            self._progress_tracker.update(
+                self._step_id(server_key, 'scan'),
+                status='running',
+                total=total,
+            )
 
     def _update_server_fetched(self, server_key: str, fetched: int) -> None:
         with self._status_write_lock:
@@ -368,6 +440,13 @@ class MediaLifetimeStatsService:
                 status.server_b_fetched = fetched
             status.records_fetched = (status.server_a_fetched or 0) + (status.server_b_fetched or 0)
             db.session.commit()
+            self._progress_tracker.update(
+                self._step_id(server_key, 'scan'),
+                status='running',
+                detail=f'{fetched:,} / {(status.server_a_total if server_key == "a" else status.server_b_total) or 0:,} rows',
+                current=fetched,
+                total=status.server_a_total if server_key == 'a' else status.server_b_total,
+            )
 
     @staticmethod
     def _extract_content_key(row: dict[str, Any]) -> tuple[str, str, int | None] | None:
@@ -387,4 +466,3 @@ class MediaLifetimeStatsService:
             return ('show', show_title, None)
 
         return None
-

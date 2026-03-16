@@ -1,5 +1,6 @@
 import unittest
 import threading
+from types import SimpleNamespace
 
 from flask import Flask
 
@@ -220,6 +221,18 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.assertEqual(show['file_size'], 250)
         self.assertEqual(show['play_count'], 5)
         self.assertEqual(show['last_played'], 12345)
+
+    def test_build_progress_steps_always_include_mdblist_step(self):
+        steps = MediaService._build_progress_steps(
+            SimpleNamespace(name='Server A'),
+            None,
+        )
+        step_ids = [step['id'] for step in steps]
+        self.assertIn('media-mdblist', step_ids)
+
+    def test_export_progress_detail_includes_counts_and_elapsed(self):
+        detail = MediaService._export_progress_detail('TV Shows', 800, 2450, 604)
+        self.assertEqual(detail, 'TV Shows: 800 / 2,450 items (604s)')
 
     def test_get_movies_always_includes_media_id(self):
         movie = self._add_movie('No History Movie', 2024)

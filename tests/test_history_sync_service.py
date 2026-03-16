@@ -109,6 +109,8 @@ class HistorySyncServiceTests(unittest.TestCase):
         self.assertEqual(sync_status['servers'][1]['status'], 'success')
         self.assertEqual(sync_status['servers'][0]['fetched'], 2)
         self.assertEqual(sync_status['servers'][1]['fetched'], 2)
+        self.assertEqual(len(sync_status['pipeline_items']), 2)
+        self.assertTrue(all(item['status'] == 'success' for item in sync_status['pipeline_items']))
 
     def test_backfill_allows_same_raw_row_ids_across_servers(self):
         self._add_server('Server A', 0)

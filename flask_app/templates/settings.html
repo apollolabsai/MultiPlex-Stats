@@ -209,47 +209,11 @@
                     {% endif %}
                 </div>
 
-                <!-- Step 1 Progress: Media Library Sync -->
-                <div class="sync-progress" id="media-sync-progress" {% if media_sync_status.status != 'running' %}style="display: none;"{% endif %}>
+                <div class="sync-progress sync-pipeline-board" id="pipeline-progress-board" {% if media_sync_status.status != 'running' and sync_status.status != 'running' and lifetime_sync_status.status != 'running' %}style="display: none;"{% endif %}>
                     <div class="progress-header">
-                        <span class="progress-title">Step 1 of 2: Media Library Sync</span>
+                        <span class="progress-title" id="pipeline-progress-title">Refresh Progress</span>
                     </div>
-                    <div id="media-server-progress-container"></div>
-                    <div class="progress-stats">
-                        <span id="media-progress-fetched">{{ media_sync_status.records_fetched or 0 }}</span> records fetched
-                    </div>
-                </div>
-
-                <!-- Step 1 Progress: MDBList Ratings -->
-                <div class="sync-progress" id="mdblist-sync-progress" style="display: none;">
-                    <div class="progress-header">
-                        <span class="progress-title">Step 1 of 2: Fetching MDBList Ratings</span>
-                    </div>
-                    <div class="progress-stats">
-                        <span id="mdblist-progress-text">Fetching ratings...</span>
-                    </div>
-                </div>
-
-                <!-- Step 2 Progress -->
-                <div class="sync-progress" id="history-sync-progress" {% if sync_status.status != 'running' %}style="display: none;"{% endif %}>
-                    <div class="progress-header">
-                        <span class="progress-title">Step 2 of 2: Full History Sync</span>
-                    </div>
-                    <div id="history-server-progress-container"></div>
-                    <div class="progress-stats">
-                        <span id="progress-fetched">{{ sync_status.records_fetched or 0 }}</span> / <span id="progress-total">{{ sync_status.records_total or '?' }}</span> records
-                        (<span id="progress-inserted">{{ sync_status.records_inserted or 0 }}</span> new, <span id="progress-skipped">{{ sync_status.records_skipped or 0 }}</span> duplicates)
-                    </div>
-                </div>
-
-                <div class="sync-progress" id="lifetime-sync-progress" {% if lifetime_sync_status.status != 'running' %}style="display: none;"{% endif %}>
-                    <div class="progress-header">
-                        <span class="progress-title">Finalizing: Rebuilding Lifetime Play Count Cache</span>
-                    </div>
-                    <div id="lifetime-server-progress-container"></div>
-                    <div class="progress-stats">
-                        <span id="lifetime-progress-fetched">{{ lifetime_sync_status.records_fetched or 0 }}</span> history rows processed
-                    </div>
+                    <div id="pipeline-progress-list"></div>
                 </div>
 
                 <button type="button" class="btn btn-primary" id="full-sync-btn" {% if not servers %}disabled{% endif %}>
@@ -358,12 +322,18 @@
     var mediaStatus = {{ media_sync_status | tojson }};
     var historyStatus = {{ sync_status | tojson }};
     var lifetimeStatus = {{ lifetime_sync_status | tojson }};
+    var configuredServers = [
+        {% for server in servers %}
+        { key: '{{ 'a' if loop.index0 == 0 else 'b' }}', name: {{ server.name | tojson }} }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
     var mediaPollInterval = null;
     var historyPollInterval = null;
     var lifetimePollInterval = null;
     var pipelineInProgress = false;
     var mediaOnlyInProgress = false;
     var hasServerConfig = {{ 'true' if servers else 'false' }};
+    var hasMdblistConfigured = {{ 'true' if env_mdblist_key_present or stored_mdblist_key_present else 'false' }};
     var mediaHelpTooltipEl = null;
     var mediaHelpHoverTimer = null;
     var mediaHelpTargetEl = null;
@@ -429,6 +399,138 @@
         renderServerProgress(containerId, servers, includeHistoryCounts, settingsProgressClasses);
     }
 
+    function cloneItems(items) {
+        return (items || []).map(function(item) {
+            return Object.assign({}, item);
+        });
+    }
+
+    function buildPendingStageItems(stage) {
+        if (stage === 'media') {
+            var items = [];
+            configuredServers.forEach(function(server) {
+                items.push(
+                    {
+                        id: 'media-' + server.key + '-discover',
+                        label: server.name + ': Discover libraries',
+                        status: 'pending',
+                        detail: '',
+                    },
+                    {
+                        id: 'media-' + server.key + '-movie-export',
+                        label: server.name + ': Export movie metadata',
+                        status: 'pending',
+                        detail: '',
+                    },
+                    {
+                        id: 'media-' + server.key + '-tv-export',
+                        label: server.name + ': Export TV metadata, sizes, seasons, and episodes',
+                        status: 'pending',
+                        detail: '',
+                    },
+                    {
+                        id: 'media-' + server.key + '-play-stats',
+                        label: server.name + ': Fetch play stats',
+                        status: 'pending',
+                        detail: '',
+                    }
+                );
+            });
+            items.push(
+                {
+                    id: 'media-save',
+                    label: 'Save merged media library data',
+                    status: 'pending',
+                    detail: '',
+                },
+                {
+                    id: 'media-mdblist',
+                    label: 'Fetch MDBList ratings',
+                    status: hasMdblistConfigured ? 'pending' : 'skipped',
+                    detail: hasMdblistConfigured ? '' : 'MDBList API key not configured',
+                },
+                {
+                    id: 'media-finalize',
+                    label: 'Finalize media refresh',
+                    status: 'pending',
+                    detail: '',
+                }
+            );
+            return items;
+        }
+        if (stage === 'history') {
+            return configuredServers.map(function(server) {
+                return {
+                    id: 'history-' + server.key + '-fetch',
+                    label: server.name + ': Fetch full viewing history',
+                    status: 'pending',
+                    detail: '',
+                };
+            });
+        }
+        if (stage === 'lifetime') {
+            var items = configuredServers.map(function(server) {
+                return {
+                    id: 'lifetime-' + server.key + '-scan',
+                    label: server.name + ': Scan local history for lifetime counts',
+                    status: 'pending',
+                    detail: '',
+                };
+            });
+            items.push({
+                id: 'lifetime-save',
+                label: 'Save aggregated lifetime play-count cache',
+                status: 'pending',
+                detail: '',
+            });
+            return items;
+        }
+        return [];
+    }
+
+    function renderUnifiedPipelineProgress() {
+        var board = document.getElementById('pipeline-progress-board');
+        var title = document.getElementById('pipeline-progress-title');
+        if (!board || !title) {
+            return;
+        }
+
+        var sections = [];
+        var hasMediaActivity = mediaStatus && (mediaStatus.status === 'running' || mediaOnlyInProgress || pipelineInProgress);
+        var mediaItems = cloneItems(mediaStatus && mediaStatus.pipeline_items);
+
+        if (hasMediaActivity) {
+            sections.push({
+                title: pipelineInProgress ? 'Step 1: Media Refresh' : 'Media Refresh',
+                items: mediaItems.length ? mediaItems : buildPendingStageItems('media'),
+            });
+        }
+
+        if (pipelineInProgress || (historyStatus && historyStatus.status === 'running') || (lifetimeStatus && lifetimeStatus.status === 'running')) {
+            sections.push({
+                title: 'Step 2: Full History Import',
+                items: (historyStatus && historyStatus.pipeline_items && historyStatus.pipeline_items.length)
+                    ? cloneItems(historyStatus.pipeline_items)
+                    : buildPendingStageItems('history'),
+            });
+            sections.push({
+                title: 'Step 3: Lifetime Play Count Cache',
+                items: (lifetimeStatus && lifetimeStatus.pipeline_items && lifetimeStatus.pipeline_items.length)
+                    ? cloneItems(lifetimeStatus.pipeline_items)
+                    : buildPendingStageItems('lifetime'),
+            });
+        }
+
+        if (!sections.length) {
+            board.style.display = 'none';
+            return;
+        }
+
+        board.style.display = 'block';
+        title.textContent = pipelineInProgress ? 'Full Data Pipeline Progress' : 'Media Refresh Progress';
+        renderPipelineSections('pipeline-progress-list', sections);
+    }
+
     function failPipeline(message) {
         mediaPollInterval = stopPoll(mediaPollInterval);
         historyPollInterval = stopPoll(historyPollInterval);
@@ -437,6 +539,7 @@
         mediaOnlyInProgress = false;
         setActionButtonState(false, getActionButtonLabel());
         setMediaRefreshState(false);
+        renderUnifiedPipelineProgress();
         if (message) {
             alert(message);
         }
@@ -547,10 +650,6 @@
 
     function updateMediaSyncStatus(status) {
         mediaStatus = status || {};
-        var progressDiv = document.getElementById('media-sync-progress');
-        var mdblistProgressDiv = document.getElementById('mdblist-sync-progress');
-        var mdblistProgressText = document.getElementById('mdblist-progress-text');
-        var fetchedLabel = document.getElementById('media-progress-fetched');
         var lastSyncLabel = document.getElementById('last-media-sync-value');
 
         if (status.status === 'running') {
@@ -558,28 +657,13 @@
             if (isFullPipelineMediaRun(status)) {
                 pipelineInProgress = true;
             }
-            var isMdblist = status.current_step && status.current_step.indexOf('MDBList') !== -1;
-            progressDiv.style.display = isMdblist ? 'none' : 'block';
-            mdblistProgressDiv.style.display = isMdblist ? 'block' : 'none';
-            if (!isMdblist) {
-                renderSettingsServerProgress('media-server-progress-container', status.servers || [], false);
-                if (fetchedLabel) {
-                    fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
-                }
-            } else if (mdblistProgressText) {
-                var match = status.current_step.match(/\((\d+)\/(\d+)\)/);
-                mdblistProgressText.textContent = match
-                    ? parseInt(match[1]).toLocaleString() + ' / ' + parseInt(match[2]).toLocaleString() + ' items'
-                    : 'Fetching ratings...';
-            }
+            renderUnifiedPipelineProgress();
             var label = isFullPipelineMediaRun(status) ? 'Step 1/2: Syncing Media...' : 'Refreshing Media Libraries...';
             setActionButtonState(true, label);
             setMediaRefreshState(true);
             return;
         }
 
-        progressDiv.style.display = 'none';
-        mdblistProgressDiv.style.display = 'none';
         if (lastSyncLabel) {
             lastSyncLabel.textContent = formatLastUpdatedValue(status.last_sync_date);
         }
@@ -601,6 +685,7 @@
             mediaOnlyInProgress = false;
             setActionButtonState(false, getActionButtonLabel());
             setMediaRefreshState(false);
+            renderUnifiedPipelineProgress();
             if (status.status === 'failed') {
                 alert('Media sync failed: ' + (status.error_message || 'Unknown error'));
             }
@@ -610,42 +695,36 @@
         if (!pipelineInProgress) {
             setActionButtonState(false, getActionButtonLabel());
             setMediaRefreshState(false);
+            renderUnifiedPipelineProgress();
             return;
         }
 
         if (status.status === 'success') {
+            renderUnifiedPipelineProgress();
             startHistorySync();
             return;
         }
 
         if (status.status === 'failed') {
+            renderUnifiedPipelineProgress();
             failPipeline('Media sync failed: ' + (status.error_message || 'Unknown error'));
             return;
         }
+
+        renderUnifiedPipelineProgress();
     }
 
     function updateHistorySyncStatus(status) {
         historyStatus = status || {};
-        var progressDiv = document.getElementById('history-sync-progress');
-        var fetchedLabel = document.getElementById('progress-fetched');
-        var totalLabel = document.getElementById('progress-total');
-        var insertedLabel = document.getElementById('progress-inserted');
-        var skippedLabel = document.getElementById('progress-skipped');
         var lastSyncLabel = document.getElementById('last-history-sync-value');
 
         if (status.status === 'running') {
             pipelineInProgress = true;
-            progressDiv.style.display = 'block';
-            renderSettingsServerProgress('history-server-progress-container', status.servers || [], true);
-            if (fetchedLabel) fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
-            if (totalLabel) totalLabel.textContent = status.records_total ? status.records_total.toLocaleString() : '?';
-            if (insertedLabel) insertedLabel.textContent = (status.records_inserted || 0).toLocaleString();
-            if (skippedLabel) skippedLabel.textContent = (status.records_skipped || 0).toLocaleString();
+            renderUnifiedPipelineProgress();
             setActionButtonState(true, 'Step 2/2: Syncing Full History...');
             return;
         }
 
-        progressDiv.style.display = 'none';
         if (lastSyncLabel) {
             lastSyncLabel.textContent = formatLastUpdatedValue(status.last_sync_date);
         }
@@ -654,38 +733,36 @@
 
         if (!pipelineInProgress) {
             setActionButtonState(false, getActionButtonLabel());
+            renderUnifiedPipelineProgress();
             return;
         }
 
         if (status.status === 'success') {
+            renderUnifiedPipelineProgress();
             startLifetimeSync();
             return;
         }
 
         if (status.status === 'failed') {
+            renderUnifiedPipelineProgress();
             failPipeline('History sync failed: ' + (status.error_message || 'Unknown error'));
             return;
         }
+
+        renderUnifiedPipelineProgress();
     }
 
     function updateLifetimeSyncStatus(status) {
         lifetimeStatus = status || {};
-        var progressDiv = document.getElementById('lifetime-sync-progress');
-        var fetchedLabel = document.getElementById('lifetime-progress-fetched');
         var lastSyncLabel = document.getElementById('last-lifetime-sync-value');
 
         if (status.status === 'running') {
             pipelineInProgress = true;
-            progressDiv.style.display = 'block';
-            renderSettingsServerProgress('lifetime-server-progress-container', status.servers || [], false);
-            if (fetchedLabel) {
-                fetchedLabel.textContent = (status.records_fetched || 0).toLocaleString();
-            }
+            renderUnifiedPipelineProgress();
             setActionButtonState(true, 'Finalizing: Rebuilding Lifetime Cache...');
             return;
         }
 
-        progressDiv.style.display = 'none';
         if (lastSyncLabel) {
             lastSyncLabel.textContent = formatLastUpdatedValue(status.last_sync_date);
         }
@@ -694,18 +771,23 @@
 
         if (!pipelineInProgress) {
             setActionButtonState(false, getActionButtonLabel());
+            renderUnifiedPipelineProgress();
             return;
         }
 
         if (status.status === 'success') {
+            renderUnifiedPipelineProgress();
             window.location.reload();
             return;
         }
 
         if (status.status === 'failed') {
+            renderUnifiedPipelineProgress();
             failPipeline('Lifetime cache build failed: ' + (status.error_message || 'Unknown error'));
             return;
         }
+
+        renderUnifiedPipelineProgress();
     }
 
     function pollMediaStatus() {
@@ -804,6 +886,7 @@
             return;
         }
         pipelineInProgress = true;
+        renderUnifiedPipelineProgress();
         startMediaSync();
     }
 
@@ -814,6 +897,7 @@
         mediaOnlyInProgress = true;
         setActionButtonState(true, 'Refreshing Media Libraries...');
         setMediaRefreshState(true);
+        renderUnifiedPipelineProgress();
         fetch('{{ url_for("main.api_media_start_load") }}?mode=' + MEDIA_RUN_MODE_MEDIA_ONLY, { method: 'POST' })
             .then(function(response) {
                 return response.json().then(function(payload) {
@@ -833,6 +917,7 @@
                 mediaOnlyInProgress = false;
                 setActionButtonState(false, getActionButtonLabel());
                 setMediaRefreshState(false);
+                renderUnifiedPipelineProgress();
                 alert(error.message);
             });
     }
@@ -885,6 +970,7 @@
 
     setActionButtonState(false, getActionButtonLabel());
     setMediaRefreshState(false);
+    renderUnifiedPipelineProgress();
 })();
 </script>
 
@@ -951,6 +1037,161 @@
     background: rgba(241, 138, 61, 0.1);
     border: 1px solid rgba(241, 138, 61, 0.3);
     border-radius: 8px;
+}
+
+.sync-pipeline-board {
+    background: rgba(18, 18, 18, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pipeline-stage {
+    margin-top: 16px;
+}
+
+.pipeline-stage:first-child {
+    margin-top: 0;
+}
+
+.pipeline-stage-title {
+    margin-bottom: 10px;
+    color: #f2f2f2;
+    font-size: 0.92em;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
+.pipeline-step-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.pipeline-step {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+    gap: 16px;
+    align-items: center;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.pipeline-step.pending,
+.pipeline-step.skipped {
+    border-color: rgba(255, 255, 255, 0.04);
+}
+
+.pipeline-step.running {
+    border-color: rgba(241, 138, 61, 0.28);
+    background: rgba(241, 138, 61, 0.08);
+}
+
+.pipeline-step.success {
+    border-color: rgba(76, 175, 80, 0.24);
+    background: rgba(76, 175, 80, 0.09);
+}
+
+.pipeline-step.failed {
+    border-color: rgba(244, 67, 54, 0.24);
+    background: rgba(244, 67, 54, 0.09);
+}
+
+.pipeline-step-copy {
+    min-width: 0;
+}
+
+.pipeline-step-label {
+    color: #f2f2f2;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.pipeline-step.pending .pipeline-step-label,
+.pipeline-step.skipped .pipeline-step-label {
+    color: #b0b0b0;
+}
+
+.pipeline-step-detail {
+    margin-top: 4px;
+    color: #9f9f9f;
+    font-size: 0.84em;
+    min-height: 1.2em;
+}
+
+.pipeline-step.running .pipeline-step-detail {
+    color: #f0bb8e;
+}
+
+.pipeline-step.success .pipeline-step-detail {
+    color: #9fd5a1;
+}
+
+.pipeline-step.failed .pipeline-step-detail {
+    color: #ef9a9a;
+}
+
+.pipeline-step-side {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pipeline-step-meta {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    color: #cfcfcf;
+    font-size: 0.82em;
+    white-space: nowrap;
+}
+
+.pipeline-step.pending .pipeline-step-meta,
+.pipeline-step.skipped .pipeline-step-meta {
+    color: #8b8b8b;
+}
+
+.pipeline-step.success .pipeline-step-meta {
+    color: #7ac67e;
+}
+
+.pipeline-step.failed .pipeline-step-meta {
+    color: #ef9a9a;
+}
+
+.pipeline-step-icon {
+    display: inline-flex;
+    width: 16px;
+    justify-content: center;
+    font-weight: 700;
+}
+
+.pipeline-step-bar {
+    height: 7px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.pipeline-step-fill {
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    transition: width 0.25s ease;
+    background: rgba(180, 180, 180, 0.25);
+}
+
+.pipeline-step.running .pipeline-step-fill {
+    background: linear-gradient(90deg, #f18a3d, #ed542c);
+}
+
+.pipeline-step.success .pipeline-step-fill {
+    background: linear-gradient(90deg, #4caf50, #2e7d32);
+}
+
+.pipeline-step.failed .pipeline-step-fill {
+    background: linear-gradient(90deg, #f44336, #c62828);
 }
 
 .settings-note-card {
@@ -1115,6 +1356,16 @@
     text-align: center;
     color: #aaa;
     font-size: 0.9em;
+}
+
+@media (max-width: 900px) {
+    .pipeline-step {
+        grid-template-columns: 1fr;
+    }
+
+    .pipeline-step-meta {
+        justify-content: flex-start;
+    }
 }
 
 .form-note {

@@ -98,6 +98,110 @@
         container.innerHTML = html;
     }
 
+    function formatDurationValue(seconds) {
+        if (seconds == null || isNaN(seconds)) {
+            return '';
+        }
+        var total = Math.max(0, Math.round(Number(seconds)));
+        if (total < 60) {
+            return total + 's';
+        }
+        var mins = Math.floor(total / 60);
+        var secs = total % 60;
+        if (mins < 60) {
+            return mins + 'm ' + String(secs).padStart(2, '0') + 's';
+        }
+        var hours = Math.floor(mins / 60);
+        mins = mins % 60;
+        return hours + 'h ' + String(mins).padStart(2, '0') + 'm';
+    }
+
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function renderPipelineSections(containerId, sections) {
+        var container = document.getElementById(containerId);
+        if (!container) {
+            return;
+        }
+
+        var html = '';
+        (sections || []).forEach(function(section) {
+            var items = section && Array.isArray(section.items) ? section.items : [];
+            if (!items.length) {
+                return;
+            }
+            html += '<div class="pipeline-stage">';
+            html += '<div class="pipeline-stage-title">' + escapeHtml(section.title || 'Progress') + '</div>';
+            html += '<div class="pipeline-step-list">';
+
+            items.forEach(function(item) {
+                var total = Number(item.total || 0);
+                var current = Number(item.current || 0);
+                var percent = 0;
+                if (total > 0) {
+                    percent = Math.min(100, (current / total) * 100);
+                } else if (item.status === 'success') {
+                    percent = 100;
+                }
+
+                var progressText = '';
+                if (item.status === 'success') {
+                    progressText = formatDurationValue(item.duration_seconds);
+                } else if (item.status === 'skipped') {
+                    progressText = 'Skipped';
+                } else if (item.status === 'running') {
+                    if (total > 0) {
+                        progressText = current.toLocaleString() + ' / ' + total.toLocaleString();
+                    } else if (current > 0) {
+                        progressText = current.toLocaleString();
+                    } else {
+                        progressText = 'Working';
+                    }
+                } else if (item.status === 'failed') {
+                    progressText = 'Failed';
+                } else {
+                    progressText = 'Pending';
+                }
+
+                var iconHtml = '';
+                if (item.status === 'success') {
+                    iconHtml = '<span class="pipeline-step-icon success">&#10003;</span>';
+                } else if (item.status === 'failed') {
+                    iconHtml = '<span class="pipeline-step-icon failed">&#10005;</span>';
+                } else if (item.status === 'skipped') {
+                    iconHtml = '<span class="pipeline-step-icon pending">&#8211;</span>';
+                } else if (item.status === 'pending') {
+                    iconHtml = '<span class="pipeline-step-icon pending">&#8226;</span>';
+                }
+
+                html += '<div class="pipeline-step ' + escapeHtml(item.status || 'pending') + '">';
+                html += '<div class="pipeline-step-copy">';
+                html += '<div class="pipeline-step-label">' + escapeHtml(item.label || 'Step') + '</div>';
+                html += '<div class="pipeline-step-detail">' + escapeHtml(item.detail || '') + '</div>';
+                html += '</div>';
+                html += '<div class="pipeline-step-side">';
+                html += '<div class="pipeline-step-meta">' + escapeHtml(progressText) + iconHtml + '</div>';
+                html += '<div class="pipeline-step-bar"><div class="pipeline-step-fill" style="width:' + percent + '%;"></div></div>';
+                html += '</div>';
+                html += '</div>';
+            });
+
+            html += '</div>';
+            html += '</div>';
+        });
+
+        container.innerHTML = html;
+    }
+
     root.formatLastUpdatedValue = formatLastUpdatedValue;
     root.renderServerProgress = renderServerProgress;
+    root.renderPipelineSections = renderPipelineSections;
+    root.formatDurationValue = formatDurationValue;
 })(window);

@@ -9,6 +9,7 @@ from flask import current_app
 
 from flask_app.models import db, ViewingHistory, HistorySyncStatus
 from flask_app.services.config_service import ConfigService
+from flask_app.services.sync_progress import SyncProgressTracker
 from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
 
@@ -20,9 +21,31 @@ class HistorySyncService:
     ROW_ID_NAMESPACE_MULTIPLIER = 1_000_000_000
     _status_write_lock = threading.Lock()
     _server_progress = {}
+    STAGE_NAME = 'history'
+    _progress_tracker = SyncProgressTracker()
 
     def __init__(self):
         self.local_tz = get_local_timezone()
+
+    @classmethod
+    def _step_id(cls, server_key: str) -> str:
+        return f'{cls.STAGE_NAME}-{server_key}-fetch'
+
+    @classmethod
+    def _build_progress_steps(cls, server_a_config, server_b_config) -> list[dict]:
+        steps = []
+        for server_key, server_config in (('a', server_a_config), ('b', server_b_config)):
+            if not server_config:
+                continue
+            steps.append({
+                'id': cls._step_id(server_key),
+                'label': f'{server_config.name}: Fetch full viewing history',
+                'stage': cls.STAGE_NAME,
+                'server_key': server_key,
+                'server_name': server_config.name,
+                'unit': 'records',
+            })
+        return steps
 
     def get_or_create_status(self) -> HistorySyncStatus:
         """Get or create the singleton sync status record."""
@@ -56,6 +79,7 @@ class HistorySyncService:
             'last_sync_record_count': status.last_sync_record_count,
             'total_records_in_db': ViewingHistory.query.count(),
             'servers': self._get_server_progress_list(),
+            'pipeline_items': self._progress_tracker.snapshot(),
         }
 
     @classmethod
@@ -125,6 +149,7 @@ class HistorySyncService:
         db.session.commit()
         with self._status_write_lock:
             self._reset_server_progress(server_a_config, server_b_config)
+        self._progress_tracker.reset(self._build_progress_steps(server_a_config, server_b_config))
 
         # Truncate existing history for fresh start
         ViewingHistory.query.delete()
@@ -177,6 +202,7 @@ class HistorySyncService:
         db.session.commit()
         with self._status_write_lock:
             self._reset_server_progress(server_a_config, server_b_config)
+        self._progress_tracker.reset(self._build_progress_steps(server_a_config, server_b_config))
 
         ViewingHistory.query.delete()
         db.session.commit()
@@ -228,6 +254,7 @@ class HistorySyncService:
         db.session.commit()
         with self._status_write_lock:
             self._reset_server_progress(server_a_config, server_b_config)
+        self._progress_tracker.reset(self._build_progress_steps(server_a_config, server_b_config))
 
         ViewingHistory.query.delete()
         db.session.commit()
@@ -275,6 +302,7 @@ class HistorySyncService:
         db.session.commit()
         with self._status_write_lock:
             self._reset_server_progress(server_a_config, server_b_config)
+        self._progress_tracker.reset(self._build_progress_steps(server_a_config, server_b_config))
 
         ViewingHistory.query.delete()
         db.session.commit()
@@ -346,6 +374,7 @@ class HistorySyncService:
         db.session.commit()
         with self._status_write_lock:
             self._reset_server_progress(server_a_config, server_b_config)
+        self._progress_tracker.reset(self._build_progress_steps(server_a_config, server_b_config))
 
         try:
             self._run_sync(after_str, is_backfill=False)
@@ -395,12 +424,32 @@ class HistorySyncService:
                         if server_state is not None:
                             server_state['status'] = 'running'
                             server_state['step'] = 'Fetching history...'
+                    self._progress_tracker.start(
+                        self._step_id(server_key),
+                        detail='Fetching history...',
+                        current=0,
+                    )
                     self._sync_server(server_config, after_date, server_order, server_key)
                     with self._status_write_lock:
                         server_state = self._server_progress.get(server_key)
                         if server_state is not None:
                             server_state['status'] = 'success'
                             server_state['step'] = 'Complete'
+                    server_state = self._server_progress.get(server_key)
+                    inserted = server_state.get('inserted', 0) if server_state else 0
+                    skipped = server_state.get('skipped', 0) if server_state else 0
+                    fetched = server_state.get('fetched', 0) if server_state else 0
+                    total = server_state.get('total') if server_state else None
+                    self._progress_tracker.complete(
+                        self._step_id(server_key),
+                        detail=(
+                            f"{inserted:,} new, {skipped:,} duplicates"
+                            if fetched
+                            else 'No history records found'
+                        ),
+                        current=fetched,
+                        total=total,
+                    )
                 except Exception as exc:
                     db.session.rollback()
                     with self._status_write_lock:
@@ -409,6 +458,11 @@ class HistorySyncService:
                             server_state['status'] = 'failed'
                             server_state['step'] = 'Failed'
                             server_state['error'] = str(exc)
+                    self._progress_tracker.fail(
+                        self._step_id(server_key),
+                        detail=str(exc),
+                        error=str(exc),
+                    )
                     with errors_lock:
                         errors.append(f"{server_config.name}: {exc}")
                 finally:
@@ -469,6 +523,13 @@ class HistorySyncService:
                     if server_state is not None:
                         server_state['total'] = total_records
                         server_state['step'] = 'Fetching history...'
+                    self._progress_tracker.update(
+                        self._step_id(server_key),
+                        status='running',
+                        detail='Fetching history...',
+                        current=0,
+                        total=total_records,
+                    )
                     db.session.commit()
 
             if not records:
@@ -497,6 +558,16 @@ class HistorySyncService:
                     server_state['inserted'] += page_inserted
                     server_state['skipped'] += page_skipped
                     server_state['step'] = 'Processing rows...'
+                    self._progress_tracker.update(
+                        self._step_id(server_key),
+                        status='running',
+                        detail=(
+                            f"{server_state['inserted']:,} new, "
+                            f"{server_state['skipped']:,} duplicates"
+                        ),
+                        current=server_state['fetched'],
+                        total=server_state.get('total'),
+                    )
                 db.session.commit()
 
             # Check if we've fetched all records

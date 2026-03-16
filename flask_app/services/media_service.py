@@ -18,6 +18,7 @@ logger = logging.getLogger('multiplex.media')
 
 from flask_app.models import db, MediaSyncStatus, CachedMedia, MediaRating
 from flask_app.services.config_service import ConfigService
+from flask_app.services.sync_progress import SyncProgressTracker
 from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
 
@@ -29,9 +30,75 @@ class MediaService:
     EXPORT_TIMEOUT = 1500      # max seconds to wait for export (25 minutes)
     RUN_MODE_MEDIA_ONLY = 'media_only'
     RUN_MODE_FULL_PIPELINE = 'full_pipeline'
+    STAGE_NAME = 'media'
+    _progress_tracker = SyncProgressTracker()
 
     def __init__(self):
         self.local_tz = get_local_timezone()
+
+    @classmethod
+    def _step_id(cls, server_key: str | None, step_name: str) -> str:
+        prefix = f'{cls.STAGE_NAME}-{server_key}' if server_key else cls.STAGE_NAME
+        return f'{prefix}-{step_name}'
+
+    @classmethod
+    def _build_progress_steps(cls, server_a_config, server_b_config) -> list[dict]:
+        steps = []
+        for server_key, server_config in (('a', server_a_config), ('b', server_b_config)):
+            if not server_config:
+                continue
+            server_label = server_config.name
+            steps.extend([
+                {
+                    'id': cls._step_id(server_key, 'discover'),
+                    'label': f'{server_label}: Discover libraries',
+                    'stage': cls.STAGE_NAME,
+                    'server_key': server_key,
+                    'server_name': server_label,
+                },
+                {
+                    'id': cls._step_id(server_key, 'movie-export'),
+                    'label': f'{server_label}: Export movie metadata',
+                    'stage': cls.STAGE_NAME,
+                    'server_key': server_key,
+                    'server_name': server_label,
+                    'unit': 'items',
+                },
+                {
+                    'id': cls._step_id(server_key, 'tv-export'),
+                    'label': f'{server_label}: Export TV metadata, sizes, seasons, and episodes',
+                    'stage': cls.STAGE_NAME,
+                    'server_key': server_key,
+                    'server_name': server_label,
+                    'unit': 'items',
+                },
+                {
+                    'id': cls._step_id(server_key, 'play-stats'),
+                    'label': f'{server_label}: Fetch play stats',
+                    'stage': cls.STAGE_NAME,
+                    'server_key': server_key,
+                    'server_name': server_label,
+                    'unit': 'libraries',
+                },
+            ])
+
+        steps.append({
+            'id': cls._step_id(None, 'save'),
+            'label': 'Save merged media library data',
+            'stage': cls.STAGE_NAME,
+        })
+        steps.append({
+            'id': cls._step_id(None, 'mdblist'),
+            'label': 'Fetch MDBList ratings',
+            'stage': cls.STAGE_NAME,
+            'unit': 'items',
+        })
+        steps.append({
+            'id': cls._step_id(None, 'finalize'),
+            'label': 'Finalize media refresh',
+            'stage': cls.STAGE_NAME,
+        })
+        return steps
 
     @staticmethod
     def _export_step_label(media_type: str, section_name: str, action: str) -> str:
@@ -39,6 +106,18 @@ class MediaService:
         if media_type == 'show':
             return f'{action} TV metadata export for {section_name} (size/seasons/episodes)...'
         return f'{action} export for {section_name}...'
+
+    @staticmethod
+    def _export_progress_detail(
+        section_name: str,
+        exported_items: int,
+        total_items: int,
+        elapsed: int,
+    ) -> str:
+        """Build explicit export progress text with item counts and elapsed time."""
+        if total_items > 0:
+            return f'{section_name}: {exported_items:,} / {total_items:,} items ({elapsed}s)'
+        return f'{section_name}: waiting for item counts ({elapsed}s)'
 
     def get_or_create_status(self) -> MediaSyncStatus:
         """Get or create the singleton sync status record."""
@@ -98,6 +177,7 @@ class MediaService:
             'last_sync_date': last_sync_date,
             'has_data': self.has_media_data(),
             'servers': servers,
+            'pipeline_items': self._progress_tracker.snapshot(),
         }
 
     def has_media_data(self) -> bool:
@@ -121,6 +201,11 @@ class MediaService:
 
         # Get server configs to populate names
         server_a_config, server_b_config = ConfigService.get_server_configs()
+        include_mdblist = bool(
+            ConfigService.get_effective_mdblist_api_key(
+                current_app.config.get('MDBLIST_API_KEY', '')
+            )
+        )
 
         # Reset status for new load
         status.status = 'running'
@@ -151,6 +236,13 @@ class MediaService:
         status.server_b_error = None
 
         db.session.commit()
+        self._progress_tracker.reset(self._build_progress_steps(server_a_config, server_b_config))
+        if not include_mdblist:
+            self._progress_tracker.update(
+                self._step_id(None, 'mdblist'),
+                status='skipped',
+                detail='MDBList API key not configured',
+            )
 
         # Clear existing media data
         CachedMedia.query.delete()
@@ -175,6 +267,8 @@ class MediaService:
                 # Enrich with MDBList ratings if API key is configured.
                 self._run_mdblist_enrichment(app)
 
+                self._progress_tracker.start(self._step_id(None, 'finalize'), detail='Wrapping up media refresh...')
+
                 status = self.get_or_create_status()
                 status.status = 'success'
                 status.completed_at = datetime.utcnow()
@@ -182,11 +276,28 @@ class MediaService:
                 status.current_step = 'Complete'
                 status.movies_count = CachedMedia.query.filter_by(media_type='movie').count()
                 status.tv_shows_count = CachedMedia.query.filter_by(media_type='show').count()
+                self._progress_tracker.complete(
+                    self._step_id(None, 'finalize'),
+                    detail=(
+                        f"Stored {status.movies_count or 0:,} movies and "
+                        f"{status.tv_shows_count or 0:,} TV shows"
+                    ),
+                )
             except Exception as e:
                 status = self.get_or_create_status()
                 status.status = 'failed'
                 status.completed_at = datetime.utcnow()
                 status.error_message = str(e)
+                self._progress_tracker.fail_first_running_for_server('a', stage=self.STAGE_NAME, error=str(e))
+                self._progress_tracker.fail_first_running_for_server('b', stage=self.STAGE_NAME, error=str(e))
+                for step_name in ('save', 'mdblist', 'finalize'):
+                    step = self._progress_tracker.get_step(self._step_id(None, step_name))
+                    if step and step.get('status') == 'running':
+                        self._progress_tracker.fail(
+                            self._step_id(None, step_name),
+                            detail=str(e),
+                            error=str(e),
+                        )
 
             db.session.commit()
 
@@ -204,11 +315,23 @@ class MediaService:
         status = self.get_or_create_status()
         status.current_step = 'Fetching MDBList ratings...'
         db.session.commit()
+        self._progress_tracker.start(
+            self._step_id(None, 'mdblist'),
+            detail='Fetching MDBList ratings...',
+            current=0,
+        )
 
         def _progress(fetched, total):
             s = self.get_or_create_status()
             s.current_step = f'Fetching MDBList ratings ({fetched}/{total})...'
             db.session.commit()
+            self._progress_tracker.update(
+                self._step_id(None, 'mdblist'),
+                status='running',
+                detail=f'{fetched:,} / {total:,} items',
+                current=fetched,
+                total=total,
+            )
 
         enrichment = MDBListService(api_key).enrich_media_ratings(progress_callback=_progress)
 
@@ -222,6 +345,13 @@ class MediaService:
             s.mdblist_warning = warning
             db.session.commit()
             logger.warning("MDBList: %s", warning)
+
+        self._progress_tracker.complete(
+            self._step_id(None, 'mdblist'),
+            detail=f"{enrichment['ratings_stored']:,} ratings stored",
+            current=enrichment.get('total', 0),
+            total=enrichment.get('total', 0),
+        )
 
     def _run_media_sync_parallel(self, app):
         """Run the actual media sync operation with parallel server fetching."""
@@ -251,6 +381,11 @@ class MediaService:
                 except Exception as e:
                     with errors_lock:
                         errors.append((server_key, str(e)))
+                    self._progress_tracker.fail_first_running_for_server(
+                        server_key,
+                        stage=self.STAGE_NAME,
+                        error=str(e),
+                    )
                     # Update server status to failed
                     status = self.get_or_create_status()
                     if server_key == 'a':
@@ -299,7 +434,15 @@ class MediaService:
         status = self.get_or_create_status()
         status.current_step = 'Saving media data...'
         db.session.commit()
+        self._progress_tracker.start(
+            self._step_id(None, 'save'),
+            detail='Saving merged media library data...',
+        )
         self._save_aggregated_media(movies_data, tv_data)
+        self._progress_tracker.complete(
+            self._step_id(None, 'save'),
+            detail=f'Saved {len(movies_data):,} movies and {len(tv_data):,} TV shows',
+        )
 
         status.current_step = 'Finalizing...'
         db.session.commit()
@@ -326,6 +469,10 @@ class MediaService:
             server_key: 'a' or 'b' for status updates
         """
         status = self.get_or_create_status()
+        discover_step_id = self._step_id(server_key, 'discover')
+        movie_export_step_id = self._step_id(server_key, 'movie-export')
+        tv_export_step_id = self._step_id(server_key, 'tv-export')
+        play_stats_step_id = self._step_id(server_key, 'play-stats')
 
         # Update server status to running
         if server_key == 'a':
@@ -335,6 +482,7 @@ class MediaService:
             status.server_b_status = 'running'
             status.server_b_step = 'Connecting...'
         db.session.commit()
+        self._progress_tracker.start(discover_step_id, detail='Connecting to Tautulli...')
 
         client = TautulliClient(server_config)
 
@@ -368,18 +516,75 @@ class MediaService:
         else:
             status.server_b_total = server_total
         db.session.commit()
+        self._progress_tracker.complete(
+            discover_step_id,
+            detail=(
+                f"{len(movie_libraries)} movie libraries, "
+                f"{len(tv_libraries)} TV libraries"
+            ),
+        )
 
         # Process each library via export_metadata (for ratings)
+        movie_total_items = sum(lib['count'] for lib in movie_libraries)
+        completed_movie_items = 0
+        if movie_libraries:
+            self._progress_tracker.start(
+                movie_export_step_id,
+                detail=f'Queued {len(movie_libraries)} movie libraries',
+                current=0,
+                total=movie_total_items,
+            )
+        else:
+            self._progress_tracker.complete(movie_export_step_id, detail='No movie libraries found')
+
         for lib in movie_libraries:
             self._fetch_library_via_export_parallel(
                 client, server_config.name, lib['id'], lib['name'],
-                'movie', movies_data, tv_data, data_lock, is_primary, server_key
+                'movie', movies_data, tv_data, data_lock, is_primary, server_key,
+                movie_export_step_id,
+                completed_movie_items,
+                movie_total_items,
+                lib['count'],
             )
+            completed_movie_items += lib['count']
+
+        if movie_libraries:
+            self._progress_tracker.complete(
+                movie_export_step_id,
+                detail=f'Exported {len(movie_libraries)} movie libraries',
+                current=movie_total_items,
+                total=movie_total_items,
+            )
+
+        tv_total_items = sum(lib['count'] for lib in tv_libraries)
+        completed_tv_items = 0
+        if tv_libraries:
+            self._progress_tracker.start(
+                tv_export_step_id,
+                detail=f'Queued {len(tv_libraries)} TV libraries',
+                current=0,
+                total=tv_total_items,
+            )
+        else:
+            self._progress_tracker.complete(tv_export_step_id, detail='No TV libraries found')
 
         for lib in tv_libraries:
             self._fetch_library_via_export_parallel(
                 client, server_config.name, lib['id'], lib['name'],
-                'show', movies_data, tv_data, data_lock, is_primary, server_key
+                'show', movies_data, tv_data, data_lock, is_primary, server_key,
+                tv_export_step_id,
+                completed_tv_items,
+                tv_total_items,
+                lib['count'],
+            )
+            completed_tv_items += lib['count']
+
+        if tv_libraries:
+            self._progress_tracker.complete(
+                tv_export_step_id,
+                detail=f'Exported {len(tv_libraries)} TV libraries',
+                current=tv_total_items,
+                total=tv_total_items,
             )
 
         # Fetch play stats from get_library_media_info
@@ -389,15 +594,50 @@ class MediaService:
         else:
             status.server_b_step = 'Fetching play stats...'
         db.session.commit()
+        total_play_stats_libraries = len(movie_libraries) + len(tv_libraries)
+        if total_play_stats_libraries > 0:
+            self._progress_tracker.start(
+                play_stats_step_id,
+                detail='Fetching play stats...',
+                current=0,
+                total=total_play_stats_libraries,
+            )
+        else:
+            self._progress_tracker.complete(play_stats_step_id, detail='No libraries for play stats')
 
+        play_stats_completed = 0
         for lib in movie_libraries:
             self._fetch_library_play_stats_parallel(
                 client, lib['id'], 'movie', movies_data, data_lock
+            )
+            play_stats_completed += 1
+            self._progress_tracker.update(
+                play_stats_step_id,
+                status='running',
+                detail=f'Processed {play_stats_completed:,} / {total_play_stats_libraries:,} libraries',
+                current=play_stats_completed,
+                total=total_play_stats_libraries,
             )
 
         for lib in tv_libraries:
             self._fetch_library_play_stats_parallel(
                 client, lib['id'], 'show', tv_data, data_lock
+            )
+            play_stats_completed += 1
+            self._progress_tracker.update(
+                play_stats_step_id,
+                status='running',
+                detail=f'Processed {play_stats_completed:,} / {total_play_stats_libraries:,} libraries',
+                current=play_stats_completed,
+                total=total_play_stats_libraries,
+            )
+
+        if total_play_stats_libraries > 0:
+            self._progress_tracker.complete(
+                play_stats_step_id,
+                detail=f'Fetched play stats for {total_play_stats_libraries:,} libraries',
+                current=total_play_stats_libraries,
+                total=total_play_stats_libraries,
             )
 
         # Mark server as complete
@@ -421,7 +661,11 @@ class MediaService:
         tv_data: dict,
         data_lock: threading.Lock,
         is_primary: bool,
-        server_key: str
+        server_key: str,
+        progress_step_id: str,
+        completed_step_items: int,
+        total_step_items: int,
+        library_item_count: int,
     ):
         """
         Fetch library metadata using export_metadata API (parallel version).
@@ -481,7 +725,16 @@ class MediaService:
 
         # Wait for export to complete
         export_data = self._wait_for_export_parallel(
-            client, section_id, export_id, section_name, media_type, server_key
+            client,
+            section_id,
+            export_id,
+            section_name,
+            media_type,
+            server_key,
+            progress_step_id,
+            completed_step_items,
+            total_step_items,
+            library_item_count,
         )
 
         # Process the export data
@@ -497,7 +750,11 @@ class MediaService:
         export_id: int,
         section_name: str,
         media_type: str,
-        server_key: str
+        server_key: str,
+        progress_step_id: str,
+        completed_step_items: int,
+        total_step_items: int,
+        library_item_count: int,
     ) -> list:
         """
         Poll for export completion and download when ready (parallel version).
@@ -508,6 +765,11 @@ class MediaService:
             elapsed = int(time.time() - start_time)
 
             if elapsed > self.EXPORT_TIMEOUT:
+                self._progress_tracker.fail(
+                    progress_step_id,
+                    detail=f'{section_name}: export timed out',
+                    error=f'{section_name}: export timed out after {self.EXPORT_TIMEOUT}s',
+                )
                 raise ValueError(f"Export timed out for {section_name} after {self.EXPORT_TIMEOUT}s")
 
             # Update server step with elapsed time
@@ -527,11 +789,41 @@ class MediaService:
                 for export in exports:
                     if export.get('export_id') == export_id:
                         complete_status = export.get('complete')
+                        exported_items = int(export.get('exported_items', 0) or 0)
+                        total_items = int(export.get('total_items', 0) or 0) or library_item_count
+                        progress_detail = self._export_progress_detail(
+                            section_name,
+                            exported_items,
+                            total_items,
+                            elapsed,
+                        )
+                        aggregate_current = min(
+                            completed_step_items + exported_items,
+                            total_step_items or completed_step_items + total_items,
+                        )
+                        self._progress_tracker.update(
+                            progress_step_id,
+                            status='running',
+                            detail=progress_detail,
+                            current=aggregate_current,
+                            total=total_step_items or completed_step_items + total_items,
+                        )
+                        if server_key == 'a':
+                            status.server_a_step = progress_detail
+                        else:
+                            status.server_b_step = progress_detail
+                        db.session.commit()
 
                         # complete=-1 means export failed on Tautulli's side
                         if complete_status == -1:
-                            exported_items = export.get('exported_items', 0)
-                            total_items = export.get('total_items', 0)
+                            self._progress_tracker.fail(
+                                progress_step_id,
+                                detail=f'{section_name}: export failed',
+                                error=(
+                                    f"{section_name}: export failed after "
+                                    f"{exported_items}/{total_items} items"
+                                ),
+                            )
                             raise ValueError(
                                 f"Export failed for {section_name} on Tautulli's side "
                                 f"(processed {exported_items}/{total_items} items)"
@@ -546,6 +838,13 @@ class MediaService:
                             else:
                                 status.server_b_step = download_label
                             db.session.commit()
+                            self._progress_tracker.update(
+                                progress_step_id,
+                                status='running',
+                                detail=f'Downloading {section_name}...',
+                                current=min(completed_step_items + total_items, total_step_items or completed_step_items + total_items),
+                                total=total_step_items or completed_step_items + total_items,
+                            )
                             logger.info(
                                 'Downloading completed %s export on section %s (export_id=%s)',
                                 media_type,
