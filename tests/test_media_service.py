@@ -122,6 +122,28 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.assertEqual(show['episode_count'], 3)
         self.assertEqual(show['file_size'], 250)
 
+    def test_process_export_data_reads_top_level_show_counters(self):
+        export_data = [{
+            'title': 'Counter Show',
+            'seasonCount': 5,
+            'leafCount': 62,
+        }]
+
+        data_dict = {}
+        MediaService()._process_export_data_parallel(
+            export_data=export_data,
+            media_type='show',
+            data_dict=data_dict,
+            data_lock=threading.Lock(),
+            is_primary=True,
+            server_key='a',
+        )
+
+        show = data_dict['Counter Show']
+        self.assertEqual(show['season_count'], 5)
+        self.assertEqual(show['episode_count'], 62)
+        self.assertEqual(show['file_size'], 0)
+
     def test_process_export_data_keeps_largest_show_size_across_servers(self):
         service = MediaService()
         data_dict = {}
@@ -305,7 +327,7 @@ class MediaServiceLinkTests(unittest.TestCase):
         db.session.commit()
 
         class StubClient:
-            server_config = SimpleNamespace(name='ApolloSS')
+            config = SimpleNamespace(name='ApolloSS')
 
             @staticmethod
             def get_exports_table(section_id):

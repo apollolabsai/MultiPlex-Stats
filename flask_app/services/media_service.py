@@ -32,6 +32,28 @@ class MediaService:
     RUN_MODE_FULL_PIPELINE = 'full_pipeline'
     STAGE_NAME = 'media'
     _progress_tracker = SyncProgressTracker()
+    MOVIE_EXPORT_CUSTOM_FIELDS = [
+        'title',
+        'year',
+        'addedAt',
+        'rating',
+        'ratingImage',
+        'audienceRating',
+        'audienceRatingImage',
+        'guid',
+        'guids',
+    ]
+    TV_EXPORT_CUSTOM_FIELDS = [
+        'title',
+        'addedAt',
+        'rating',
+        'audienceRating',
+        'audienceRatingImage',
+        'guid',
+        'guids',
+        'seasons.episodes.media.parts.size',
+        'seasons.episodes.media.parts.sizeHuman',
+    ]
 
     def __init__(self):
         self.local_tz = get_local_timezone()
@@ -106,6 +128,11 @@ class MediaService:
         if media_type == 'show':
             return f'{action} TV metadata export for {section_name} (size/seasons/episodes)...'
         return f'{action} export for {section_name}...'
+
+    @staticmethod
+    def _client_server_name(client: TautulliClient) -> str:
+        """Return the configured server name for log messages."""
+        return getattr(getattr(client, 'config', None), 'name', None) or 'Tautulli'
 
     @staticmethod
     def _export_progress_detail(
@@ -694,33 +721,11 @@ class MediaService:
         )
 
         if media_type == 'movie':
-            custom_fields = [
-                'title',
-                'year',
-                'addedAt',
-                'rating',
-                'ratingImage',
-                'audienceRating',
-                'audienceRatingImage',
-                'guid',
-                'guids',
-            ]
+            custom_fields = self.MOVIE_EXPORT_CUSTOM_FIELDS
             metadata_level = 1  # Basic metadata for movies
             media_info_level = 0
         else:
-            custom_fields = [
-                'title',
-                'addedAt',
-                'rating',
-                'audienceRating',
-                'audienceRatingImage',
-                'guid',
-                'guids',
-                'seasons.episodes.media.parts.size',
-                'seasons.episodes.media.parts.sizeHuman',
-            ]
-            # TV exports use explicit custom fields to keep payloads small while
-            # still preserving show IDs, ratings, and per-episode part sizes.
+            custom_fields = self.TV_EXPORT_CUSTOM_FIELDS
             metadata_level = 0
             media_info_level = 0
 
@@ -798,7 +803,7 @@ class MediaService:
                 db.session.commit()
                 logger.error(
                     'Export timed out on %s for section %s after %ss.',
-                    client.server_config.name,
+                    self._client_server_name(client),
                     section_name,
                     self.EXPORT_TIMEOUT,
                 )
@@ -866,7 +871,7 @@ class MediaService:
                             logger.error(
                                 "Tautulli reported export failure on %s for section %s "
                                 "(export_id=%s, processed %s/%s items).",
-                                client.server_config.name,
+                                self._client_server_name(client),
                                 section_name,
                                 export_id,
                                 exported_items,
@@ -1069,18 +1074,48 @@ class MediaService:
     @staticmethod
     def _extract_show_counts_and_size(record: dict) -> tuple[int, int, int]:
         """Derive season count, episode count, and total size from a show export record."""
+        def to_int(value) -> int | None:
+            try:
+                if value in (None, ''):
+                    return None
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        season_count = (
+            to_int(record.get('seasonCount'))
+            or to_int(record.get('season_count'))
+            or to_int(record.get('seasonsCount'))
+            or to_int(record.get('childCount'))
+            or to_int(record.get('childrenCount'))
+            or to_int(record.get('children_count'))
+            or to_int(record.get('child_count'))
+            or 0
+        )
+        episode_count = (
+            to_int(record.get('leafCount'))
+            or to_int(record.get('leaf_count'))
+            or to_int(record.get('grandchildCount'))
+            or to_int(record.get('grandchildrenCount'))
+            or to_int(record.get('grandchild_count'))
+            or to_int(record.get('grandchildren_count'))
+            or to_int(record.get('episodeCount'))
+            or to_int(record.get('episode_count'))
+            or to_int(record.get('episodesCount'))
+            or 0
+        )
         seasons = record.get('seasons') or []
         if not isinstance(seasons, list):
-            return 0, 0, 0
+            return season_count, episode_count, 0
 
-        season_count = 0
-        episode_count = 0
+        nested_season_count = 0
+        nested_episode_count = 0
         total_size = 0
 
         for season in seasons:
             if not isinstance(season, dict):
                 continue
-            season_count += 1
+            nested_season_count += 1
             episodes = season.get('episodes') or []
             if not isinstance(episodes, list):
                 continue
@@ -1088,7 +1123,7 @@ class MediaService:
             for episode in episodes:
                 if not isinstance(episode, dict):
                     continue
-                episode_count += 1
+                nested_episode_count += 1
                 media_rows = episode.get('media') or []
                 if not isinstance(media_rows, list):
                     continue
@@ -1108,6 +1143,10 @@ class MediaService:
                         except (TypeError, ValueError):
                             continue
 
+        if nested_season_count:
+            season_count = max(season_count, nested_season_count)
+        if nested_episode_count:
+            episode_count = max(episode_count, nested_episode_count)
         return season_count, episode_count, total_size
 
     def _fetch_library_play_stats_parallel(
