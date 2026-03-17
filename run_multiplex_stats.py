@@ -11,7 +11,7 @@ Then open your browser to: http://127.0.0.1:8487
 from flask_app import create_app
 import os
 
-app = create_app()
+app = create_app(os.getenv('FLASK_ENV'))
 
 if __name__ == '__main__':
     # Get port from environment variable or use default
@@ -24,4 +24,4 @@ if __name__ == '__main__':
     print(f"🌐 Open browser to: http://127.0.0.1:{port}")
     print("\n💡 Press CTRL+C to stop the server\n")
 
-    app.run(debug=True, host='0.0.0.0', port=port)
+    app.run(debug=app.debug, host='0.0.0.0', port=port)

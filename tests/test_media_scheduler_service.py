@@ -13,22 +13,22 @@ from flask_app.services.media_scheduler_service import (
 
 class MediaSchedulerServiceTests(unittest.TestCase):
     def test_seconds_until_next_run_before_daily_window(self):
-        now = datetime(2026, 3, 15, 0, 30, tzinfo=ZoneInfo('America/Los_Angeles'))
+        now = datetime(2026, 3, 15, 4, 30, tzinfo=ZoneInfo('America/Los_Angeles'))
 
-        seconds, next_run = _seconds_until_next_run(now, hour=1, minute=0)
+        seconds, next_run = _seconds_until_next_run(now, hour=5, minute=0)
 
         self.assertEqual(int(seconds), 1800)
-        self.assertEqual(next_run.hour, 1)
+        self.assertEqual(next_run.hour, 5)
         self.assertEqual(next_run.minute, 0)
         self.assertEqual(next_run.date(), now.date())
 
     def test_seconds_until_next_run_after_daily_window(self):
-        now = datetime(2026, 3, 15, 1, 30, tzinfo=ZoneInfo('America/Los_Angeles'))
+        now = datetime(2026, 3, 15, 5, 30, tzinfo=ZoneInfo('America/Los_Angeles'))
 
-        seconds, next_run = _seconds_until_next_run(now, hour=1, minute=0)
+        seconds, next_run = _seconds_until_next_run(now, hour=5, minute=0)
 
         self.assertEqual(int(seconds), 84600)
-        self.assertEqual(next_run.hour, 1)
+        self.assertEqual(next_run.hour, 5)
         self.assertEqual(next_run.minute, 0)
         self.assertEqual(next_run.day, 16)
 

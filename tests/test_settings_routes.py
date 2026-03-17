@@ -126,5 +126,5 @@ class SettingsRoutesTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('Refresh the media from your libraries to load poster image URLs and fetch ratings from MDBList', html)
-        self.assertIn('This job is run automatically at 1am local time daily.', html)
+        self.assertIn('This job is run automatically at 5am local time daily.', html)
         self.assertIn('}, 210);', html)

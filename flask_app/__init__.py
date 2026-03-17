@@ -11,7 +11,7 @@ from flask import Flask, request
 from multiplex_stats.timezone_utils import get_local_timezone
 
 
-def create_app(config_name='development'):
+def create_app(config_name=None):
     """Create and configure the Flask application."""
     app = Flask(__name__, instance_relative_config=True)
 
@@ -109,6 +109,10 @@ def create_app(config_name='development'):
         return tile_url
 
     # Load configuration
+    if config_name is None:
+        config_name = os.environ.get('FLASK_ENV', 'development')
+    config_name = str(config_name).strip().lower()
+
     if config_name == 'production':
         app.config.from_object('flask_app.config.ProductionConfig')
     else:
@@ -191,7 +195,7 @@ def create_app(config_name='development'):
         _cleanup_orphaned_cache(app)
 
     from flask_app.services.media_scheduler_service import start_auto_media_sync_scheduler
-    start_auto_media_sync_scheduler(app, hour=1, minute=0)
+    start_auto_media_sync_scheduler(app, hour=5, minute=0)
 
     return app
 
