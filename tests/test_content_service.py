@@ -228,6 +228,8 @@ class ContentServiceChartTests(unittest.TestCase):
         cached = self._add_cached_media(
             title='Family Guy',
             media_type='show',
+            season_count=22,
+            episode_count=425,
             file_size=123456789012,
         )
 
@@ -251,20 +253,66 @@ class ContentServiceChartTests(unittest.TestCase):
 
         self.assertIsNotNone(details)
         self.assertEqual(details['metadata']['total_size_display'], '115.0 GB')
+        self.assertEqual(details['metadata']['season_count'], 22)
+        self.assertEqual(details['metadata']['episode_count'], 425)
         self.assertEqual(details['mdb_ratings'], [])
 
     def test_content_details_for_media_adds_total_size_from_cached_show(self):
         media = self._add_cached_media(
             title='Modern Family',
             media_type='show',
+            season_count=11,
+            episode_count=250,
             file_size=9876543210,
         )
 
-        with patch.object(ContentService, '_get_metadata_for_media', return_value={'summary': 'ok'}):
+        with patch.object(
+            ContentService,
+            '_get_metadata_for_media',
+            return_value={'summary': 'ok', 'season_count': 12, 'episode_count': 251},
+        ):
             details = ContentService().get_content_details_for_media(media.id)
 
         self.assertIsNotNone(details)
         self.assertEqual(details['metadata']['total_size_display'], '9.2 GB')
+        self.assertEqual(details['metadata']['season_count'], 11)
+        self.assertEqual(details['metadata']['episode_count'], 250)
+
+    def test_content_details_prefers_cached_show_counts_over_live_metadata(self):
+        self._add_server('Server A', 0)
+        self._add_cached_media(
+            title='Modern Family',
+            media_type='show',
+            season_count=11,
+            episode_count=250,
+            file_size=9876543210,
+        )
+
+        clicked = self._add_history(
+            row_id=102,
+            server_name='Server A',
+            server_order=0,
+            media_type='episode',
+            title='Pilot',
+            full_title='Modern Family - Pilot',
+            grandparent_title='Modern Family',
+            rating_key=3202,
+            grandparent_rating_key=9202,
+            user='alice',
+            started=1700000000,
+            date_played=date(2024, 2, 1),
+        )
+
+        with patch.object(
+            ContentService,
+            '_get_metadata_for_record',
+            return_value={'summary': 'ok', 'season_count': 12, 'episode_count': 251},
+        ):
+            details = ContentService().get_content_details(clicked.id)
+
+        self.assertIsNotNone(details)
+        self.assertEqual(details['metadata']['season_count'], 11)
+        self.assertEqual(details['metadata']['episode_count'], 250)
 
     def test_get_metadata_for_tv_uses_children_fallback_for_counts(self):
         self._add_server('Server A', 0)

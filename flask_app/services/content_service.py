@@ -84,8 +84,8 @@ class ContentService:
         cached_media = self._find_cached_media(
             content_title, record.year if is_movie else None, content_kind
         )
-        if cached_media and cached_media.file_size:
-            metadata['total_size_display'] = self._format_file_size(cached_media.file_size)
+        if cached_media:
+            self._apply_cached_show_totals(metadata, cached_media, is_movie)
         mdb_ratings = self._get_mdb_ratings(cached_media.id) if cached_media else []
 
         return {
@@ -149,8 +149,7 @@ class ContentService:
 
         if not metadata.get('summary'):
             metadata['summary'] = 'No summary available.'
-        if media.file_size:
-            metadata['total_size_display'] = self._format_file_size(media.file_size)
+        self._apply_cached_show_totals(metadata, media, is_movie)
 
         lifetime_stats = self._get_lifetime_content_stats(
             record=source_record,
@@ -496,6 +495,24 @@ class ContentService:
             metadata['total_size_display'] = self._format_file_size(media.file_size)
 
         return metadata
+
+    @staticmethod
+    def _apply_cached_show_totals(
+        metadata: dict[str, Any],
+        media: CachedMedia,
+        is_movie: bool,
+    ) -> None:
+        """Prefer cached library totals for show-level banner stats."""
+        if media.file_size:
+            metadata['total_size_display'] = ContentService._format_file_size(media.file_size)
+
+        if is_movie:
+            return
+
+        if media.season_count:
+            metadata['season_count'] = media.season_count
+        if media.episode_count:
+            metadata['episode_count'] = media.episode_count
 
     @staticmethod
     def _extract_show_structure_counts(metadata: dict[str, Any]) -> tuple[int | None, int | None]:
