@@ -85,6 +85,10 @@
                     <span class="hero-stat-number">{{ "{:,}".format(metadata.episode_count) if metadata.episode_count is not none and metadata.episode_count != '' else "Unknown" }}</span>
                     <span class="hero-stat-label">Episodes</span>
                 </div>
+                <div class="hero-stat">
+                    <span class="hero-stat-number">{{ metadata.total_size_display or "Unknown" }}</span>
+                    <span class="hero-stat-label">Total Size</span>
+                </div>
                 {% endif %}
             </div>
             {% if mdb_ratings %}

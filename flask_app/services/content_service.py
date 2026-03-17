@@ -84,6 +84,8 @@ class ContentService:
         cached_media = self._find_cached_media(
             content_title, record.year if is_movie else None, content_kind
         )
+        if cached_media and cached_media.file_size:
+            metadata['total_size_display'] = self._format_file_size(cached_media.file_size)
         mdb_ratings = self._get_mdb_ratings(cached_media.id) if cached_media else []
 
         return {
@@ -147,6 +149,8 @@ class ContentService:
 
         if not metadata.get('summary'):
             metadata['summary'] = 'No summary available.'
+        if media.file_size:
+            metadata['total_size_display'] = self._format_file_size(media.file_size)
 
         lifetime_stats = self._get_lifetime_content_stats(
             record=source_record,
@@ -291,6 +295,7 @@ class ContentService:
             'video_codec': '',
             'resolution': '',
             'audio': '',
+            'total_size_display': '',
         }
 
         server = ServerConfig.query.filter_by(name=record.server_name, is_active=True).first()
@@ -347,9 +352,9 @@ class ContentService:
                 child_seasons, child_episodes = self._extract_show_structure_counts_from_children(
                     children_response
                 )
-                if not metadata.get('season_count') and child_seasons is not None:
+                if child_seasons is not None:
                     metadata['season_count'] = child_seasons
-                if not metadata.get('episode_count') and child_episodes is not None:
+                if child_episodes is not None:
                     metadata['episode_count'] = child_episodes
             except Exception:
                 pass
@@ -427,6 +432,7 @@ class ContentService:
                 'video_codec': '',
                 'resolution': '',
                 'audio': '',
+                'total_size_display': '',
             }
 
             active_servers = (
@@ -486,6 +492,8 @@ class ContentService:
                 metadata.get('audience_rating'),
                 metadata.get('audience_rating_image'),
             )
+        if not metadata.get('total_size_display') and media.file_size:
+            metadata['total_size_display'] = self._format_file_size(media.file_size)
 
         return metadata
 
@@ -561,6 +569,10 @@ class ContentService:
             season_rows = rows
             if row_types and 'season' in row_types:
                 season_rows = [row for row in rows if str(row.get('media_type') or '').strip().lower() == 'season']
+            season_rows = [
+                row for row in season_rows
+                if str(row.get('title') or '').strip().lower() != 'all episodes'
+            ]
             season_count = len(season_rows)
 
             episode_total = 0
@@ -647,6 +659,28 @@ class ContentService:
             hour_label = 'hr' if hours == 1 else 'hrs'
             return f"{hours} {hour_label} {minutes} mins"
         return f"{minutes} mins"
+
+    @staticmethod
+    def _format_file_size(size_bytes: Any) -> str:
+        if size_bytes in (None, '', 0, '0'):
+            return ''
+
+        try:
+            value = float(size_bytes)
+        except (ValueError, TypeError):
+            return ''
+
+        if value <= 0:
+            return ''
+
+        units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+        unit_index = 0
+        while value >= 1024 and unit_index < len(units) - 1:
+            value /= 1024
+            unit_index += 1
+
+        decimals = 0 if unit_index == 0 else 1
+        return f"{value:.{decimals}f} {units[unit_index]}"
 
     @staticmethod
     def _format_audio(audio_codec: str, audio_channels: Any) -> str:

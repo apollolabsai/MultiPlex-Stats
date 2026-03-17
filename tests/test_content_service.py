@@ -223,6 +223,49 @@ class ContentServiceChartTests(unittest.TestCase):
         self.assertEqual(details['total_plays'], 25)
         self.assertEqual(details['unique_users'], 2)
 
+    def test_content_details_adds_total_size_from_cached_show(self):
+        self._add_server('Server A', 0)
+        cached = self._add_cached_media(
+            title='Family Guy',
+            media_type='show',
+            file_size=123456789012,
+        )
+
+        clicked = self._add_history(
+            row_id=101,
+            server_name='Server A',
+            server_order=0,
+            media_type='episode',
+            title='Pilot',
+            full_title='Family Guy - Pilot',
+            grandparent_title='Family Guy',
+            rating_key=3201,
+            grandparent_rating_key=9201,
+            user='alice',
+            started=1700000000,
+            date_played=date(2024, 2, 1),
+        )
+
+        with patch.object(ContentService, '_get_metadata_for_record', return_value={'summary': 'ok'}):
+            details = ContentService().get_content_details(clicked.id)
+
+        self.assertIsNotNone(details)
+        self.assertEqual(details['metadata']['total_size_display'], '115.0 GB')
+        self.assertEqual(details['mdb_ratings'], [])
+
+    def test_content_details_for_media_adds_total_size_from_cached_show(self):
+        media = self._add_cached_media(
+            title='Modern Family',
+            media_type='show',
+            file_size=9876543210,
+        )
+
+        with patch.object(ContentService, '_get_metadata_for_media', return_value={'summary': 'ok'}):
+            details = ContentService().get_content_details_for_media(media.id)
+
+        self.assertIsNotNone(details)
+        self.assertEqual(details['metadata']['total_size_display'], '9.2 GB')
+
     def test_get_metadata_for_tv_uses_children_fallback_for_counts(self):
         self._add_server('Server A', 0)
 
@@ -303,6 +346,81 @@ class ContentServiceChartTests(unittest.TestCase):
 
         self.assertEqual(metadata['season_count'], 18)
         self.assertEqual(metadata['episode_count'], 297)
+
+    def test_get_metadata_for_tv_children_override_metadata_season_count(self):
+        self._add_server('Server A', 0)
+
+        record = self._add_history(
+            row_id=16,
+            server_name='Server A',
+            server_order=0,
+            media_type='episode',
+            title='Pilot',
+            full_title='Modern Family - Pilot',
+            grandparent_title='Modern Family',
+            rating_key=3102,
+            grandparent_rating_key=9102,
+            started=1700000000,
+            date_played=date(2024, 2, 1),
+        )
+
+        client = MagicMock()
+        client.get_metadata.return_value = {
+            'response': {
+                'result': 'success',
+                'data': {
+                    'summary': 'sitcom',
+                    'children_count': 12,
+                    'children_type': 'season',
+                },
+            }
+        }
+        client.get_children_metadata.return_value = {
+            'response': {
+                'result': 'success',
+                'data': [
+                    {'media_type': 'season', 'children_count': 24, 'title': 'Season 1'},
+                    {'media_type': 'season', 'children_count': 24, 'title': 'Season 2'},
+                    {'media_type': 'season', 'children_count': 24, 'title': 'Season 3'},
+                    {'media_type': 'season', 'children_count': 24, 'title': 'Season 4'},
+                    {'media_type': 'season', 'children_count': 24, 'title': 'Season 5'},
+                    {'media_type': 'season', 'children_count': 24, 'title': 'Season 6'},
+                    {'media_type': 'season', 'children_count': 24, 'title': 'Season 7'},
+                    {'media_type': 'season', 'children_count': 24, 'title': 'Season 8'},
+                    {'media_type': 'season', 'children_count': 24, 'title': 'Season 9'},
+                    {'media_type': 'season', 'children_count': 24, 'title': 'Season 10'},
+                    {'media_type': 'season', 'children_count': 24, 'title': 'Season 11'},
+                ],
+            }
+        }
+
+        with patch('flask_app.services.content_service.TautulliClient', return_value=client):
+            metadata = ContentService()._get_metadata_for_record(record, is_movie=False)
+
+        self.assertEqual(metadata['season_count'], 11)
+        self.assertEqual(metadata['episode_count'], 264)
+
+    def test_extract_show_structure_counts_from_children_ignores_all_episodes_row(self):
+        response = {
+            'response': {
+                'result': 'success',
+                'data': [
+                    {'media_type': 'season', 'children_count': 250, 'title': 'All episodes'},
+                    {'media_type': 'season', 'children_count': 24, 'title': 'Season 1'},
+                    {'media_type': 'season', 'children_count': 24, 'title': 'Season 2'},
+                ],
+            }
+        }
+
+        season_count, episode_count = ContentService._extract_show_structure_counts_from_children(response)
+
+        self.assertEqual(season_count, 2)
+        self.assertEqual(episode_count, 48)
+
+    def test_format_file_size(self):
+        self.assertEqual(ContentService._format_file_size(1536), '1.5 KB')
+        self.assertEqual(ContentService._format_file_size(123456789012), '115.0 GB')
+        self.assertEqual(ContentService._format_file_size(0), '')
 
     def test_tv_user_chart_uses_local_user_counts(self):
         self._add_server('Server A', 0)
