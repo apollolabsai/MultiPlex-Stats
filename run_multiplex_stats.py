@@ -14,8 +14,20 @@ import os
 app = create_app(os.getenv('FLASK_ENV'))
 
 if __name__ == '__main__':
+    from flask_app.services.media_scheduler_service import (
+        configure_auto_media_sync,
+        get_auto_media_sync_schedule,
+    )
+
     # Get port from environment variable or use default
     port = int(os.getenv('PORT', 8487))
+    scheduler_hour, scheduler_minute = get_auto_media_sync_schedule()
+    configure_auto_media_sync(
+        app,
+        hour=scheduler_hour,
+        minute=scheduler_minute,
+        startup_source='flask_dev_server',
+    )
 
     print("\n" + "="*60)
     print("🚀 MultiPlex Stats Web Interface")

@@ -31,6 +31,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY multiplex_stats/ ./multiplex_stats/
 COPY flask_app/ ./flask_app/
 COPY run_multiplex_stats.py .
+COPY gunicorn.conf.py .
 COPY entrypoint.sh /entrypoint.sh
 
 # Ensure copied source files remain readable after dropping privileges.

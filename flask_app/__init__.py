@@ -194,9 +194,6 @@ def create_app(config_name=None):
         _initialize_default_settings()
         _cleanup_orphaned_cache(app)
 
-    from flask_app.services.media_scheduler_service import start_auto_media_sync_scheduler
-    start_auto_media_sync_scheduler(app, hour=5, minute=0)
-
     return app
 
 

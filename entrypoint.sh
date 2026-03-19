@@ -35,4 +35,5 @@ exec gosu $PUID:$PGID gunicorn \
     --timeout 120 \
     --access-logfile - \
     --log-level warning \
+    --config "/app/gunicorn.conf.py" \
     "run_multiplex_stats:app"
