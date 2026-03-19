@@ -176,14 +176,23 @@ def maybe_run_startup_media_sync_catchup(
     return started, reason
 
 
-def start_auto_media_sync_scheduler(app: Flask, hour: int = 1, minute: int = 0) -> tuple[bool, str]:
+def start_auto_media_sync_scheduler(
+    app: Flask,
+    hour: int = 1,
+    minute: int = 0,
+    startup_source: str = 'startup',
+) -> tuple[bool, str]:
     """Start the automatic media sync scheduler once per process."""
     global _scheduler_thread
 
     if app.config.get('TESTING'):
         return False, 'testing'
 
-    if app.debug and os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+    if (
+        startup_source == 'flask_dev_server'
+        and app.debug
+        and os.environ.get('WERKZEUG_RUN_MAIN') != 'true'
+    ):
         return False, 'werkzeug_parent'
 
     with _scheduler_lock:
@@ -216,7 +225,12 @@ def configure_auto_media_sync(
         getattr(local_tz, 'key', 'local'),
     )
 
-    started, start_reason = start_auto_media_sync_scheduler(app, hour=hour, minute=minute)
+    started, start_reason = start_auto_media_sync_scheduler(
+        app,
+        hour=hour,
+        minute=minute,
+        startup_source=startup_source,
+    )
     if started:
         logger.info('Auto media sync scheduler thread launched from %s.', startup_source)
     elif start_reason == 'already_running':

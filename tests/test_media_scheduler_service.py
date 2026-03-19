@@ -10,10 +10,15 @@ from flask_app.services.media_scheduler_service import (
     _run_scheduled_media_sync_once,
     _should_run_startup_catchup,
     _seconds_until_next_run,
+    start_auto_media_sync_scheduler,
 )
 
 
 class MediaSchedulerServiceTests(unittest.TestCase):
+    def tearDown(self):
+        import flask_app.services.media_scheduler_service as scheduler_service
+        scheduler_service._scheduler_thread = None
+
     def test_get_auto_media_sync_schedule_defaults_to_5am(self):
         with patch.dict('os.environ', {}, clear=True):
             self.assertEqual(get_auto_media_sync_schedule(), (5, 0))
@@ -59,6 +64,42 @@ class MediaSchedulerServiceTests(unittest.TestCase):
 
         self.assertTrue(should_run)
         self.assertEqual(reason, 'missed_window')
+
+    @patch('flask_app.services.media_scheduler_service.threading.Thread')
+    def test_start_scheduler_allows_gunicorn_worker_when_debug_enabled(self, mock_thread):
+        thread = mock_thread.return_value
+        thread.is_alive.return_value = False
+        app = Flask(__name__)
+        app.debug = True
+
+        with patch.dict('os.environ', {}, clear=True):
+            started, reason = start_auto_media_sync_scheduler(
+                app,
+                hour=5,
+                minute=0,
+                startup_source='gunicorn_worker',
+            )
+
+        self.assertTrue(started)
+        self.assertEqual(reason, 'started')
+        mock_thread.assert_called_once()
+
+    @patch('flask_app.services.media_scheduler_service.threading.Thread')
+    def test_start_scheduler_blocks_werkzeug_parent_in_dev_server_mode(self, mock_thread):
+        app = Flask(__name__)
+        app.debug = True
+
+        with patch.dict('os.environ', {}, clear=True):
+            started, reason = start_auto_media_sync_scheduler(
+                app,
+                hour=5,
+                minute=0,
+                startup_source='flask_dev_server',
+            )
+
+        self.assertFalse(started)
+        self.assertEqual(reason, 'werkzeug_parent')
+        mock_thread.assert_not_called()
 
     def test_seconds_until_next_run_before_daily_window(self):
         now = datetime(2026, 3, 15, 4, 30, tzinfo=ZoneInfo('America/Los_Angeles'))
