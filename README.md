@@ -1,6 +1,6 @@
 # MultiPlex Stats
 
-A web application for combining and visualizing statistics from multiple Tautulli/Plex servers in one unified dashboard.
+A web application for combining and visualizing statistics from multiple Tautulli/Plex servers in one unified dashboard. Also extremely beneficial with those who have "just" one plex server. 
 
 ![MultiPlex Stats Dashboard](images/Dashboard.png)
 ![MultiPlex Stats Dashboard](images/ViewingHistory.png)
