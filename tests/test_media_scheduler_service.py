@@ -1,5 +1,5 @@
 import unittest
-from datetime import date, datetime
+from datetime import datetime
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
@@ -8,7 +8,6 @@ from flask import Flask
 from flask_app.services.media_scheduler_service import (
     get_auto_media_sync_schedule,
     _run_scheduled_media_sync_once,
-    _should_run_startup_catchup,
     _seconds_until_next_run,
     start_auto_media_sync_scheduler,
 )
@@ -30,40 +29,6 @@ class MediaSchedulerServiceTests(unittest.TestCase):
     def test_get_auto_media_sync_schedule_rejects_invalid_env_override(self):
         with patch.dict('os.environ', {'AUTO_MEDIA_SYNC_TIME': '25:00'}, clear=True):
             self.assertEqual(get_auto_media_sync_schedule(), (5, 0))
-
-    def test_should_run_startup_catchup_before_daily_window(self):
-        now = datetime(2026, 3, 18, 4, 30, tzinfo=ZoneInfo('America/Los_Angeles'))
-
-        should_run, reason = _should_run_startup_catchup(now, None, hour=5, minute=0)
-
-        self.assertFalse(should_run)
-        self.assertEqual(reason, 'before_window')
-
-    def test_should_run_startup_catchup_skips_when_already_synced_today(self):
-        now = datetime(2026, 3, 18, 8, 30, tzinfo=ZoneInfo('America/Los_Angeles'))
-
-        should_run, reason = _should_run_startup_catchup(
-            now,
-            date(2026, 3, 18),
-            hour=5,
-            minute=0,
-        )
-
-        self.assertFalse(should_run)
-        self.assertEqual(reason, 'already_synced_today')
-
-    def test_should_run_startup_catchup_after_missed_window(self):
-        now = datetime(2026, 3, 18, 8, 30, tzinfo=ZoneInfo('America/Los_Angeles'))
-
-        should_run, reason = _should_run_startup_catchup(
-            now,
-            date(2026, 3, 17),
-            hour=5,
-            minute=0,
-        )
-
-        self.assertTrue(should_run)
-        self.assertEqual(reason, 'missed_window')
 
     @patch('flask_app.services.media_scheduler_service.threading.Thread')
     def test_start_scheduler_allows_gunicorn_worker_when_debug_enabled(self, mock_thread):

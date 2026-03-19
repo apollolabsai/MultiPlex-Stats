@@ -7,7 +7,7 @@ import logging
 import os
 import threading
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from flask import Flask
 
@@ -56,21 +56,6 @@ def _seconds_until_next_run(now_local: datetime, hour: int = 1, minute: int = 0)
     if now_local >= next_run:
         next_run += timedelta(days=1)
     return max((next_run - now_local).total_seconds(), 0.0), next_run
-
-
-def _should_run_startup_catchup(
-    now_local: datetime,
-    last_sync_local_date: date | None,
-    hour: int = 1,
-    minute: int = 0,
-) -> tuple[bool, str]:
-    """Return whether startup should catch up a missed daily run."""
-    scheduled_today = now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if now_local < scheduled_today:
-        return False, 'before_window'
-    if last_sync_local_date == now_local.date():
-        return False, 'already_synced_today'
-    return True, 'missed_window'
 
 
 def _is_any_sync_running() -> bool:
@@ -123,59 +108,6 @@ def _scheduler_loop(app: Flask, hour: int = 1, minute: int = 0) -> None:
             time.sleep(5)
 
 
-def maybe_run_startup_media_sync_catchup(
-    app: Flask,
-    hour: int = 1,
-    minute: int = 0,
-    startup_source: str = 'startup',
-) -> tuple[bool, str]:
-    """Run one catch-up sync at startup if today's scheduled window was missed."""
-    local_tz = get_local_timezone()
-    now_local = datetime.now(local_tz)
-
-    with app.app_context():
-        status = MediaService().get_or_create_status()
-        last_sync_local_date = None
-        if status.last_sync_date:
-            last_sync_local_date = (
-                status.last_sync_date
-                .replace(tzinfo=timezone.utc)
-                .astimezone(local_tz)
-                .date()
-            )
-
-    should_run, reason = _should_run_startup_catchup(
-        now_local,
-        last_sync_local_date,
-        hour=hour,
-        minute=minute,
-    )
-    if not should_run:
-        logger.info(
-            'Auto media sync startup catch-up not needed on %s (%s).',
-            startup_source,
-            reason,
-        )
-        return False, reason
-
-    logger.info(
-        'Auto media sync startup catch-up attempting on %s after missing the %02d:%02d window.',
-        startup_source,
-        hour,
-        minute,
-    )
-    started, reason = _run_scheduled_media_sync_once(app)
-    if started:
-        logger.info('Auto media sync startup catch-up started on %s.', startup_source)
-    else:
-        logger.info(
-            'Auto media sync startup catch-up did not start on %s (%s).',
-            startup_source,
-            reason,
-        )
-    return started, reason
-
-
 def start_auto_media_sync_scheduler(
     app: Flask,
     hour: int = 1,
@@ -215,7 +147,7 @@ def configure_auto_media_sync(
     minute: int = 0,
     startup_source: str = 'startup',
 ) -> tuple[str, str]:
-    """Start the scheduler and run startup catch-up with explicit logging."""
+    """Start the scheduler with explicit logging."""
     local_tz = get_local_timezone()
     logger.info(
         'Configuring auto media sync from %s for %02d:%02d %s.',
@@ -243,10 +175,4 @@ def configure_auto_media_sync(
         )
         return start_reason, 'scheduler_not_running'
 
-    _, catchup_reason = maybe_run_startup_media_sync_catchup(
-        app,
-        hour=hour,
-        minute=minute,
-        startup_source=startup_source,
-    )
-    return start_reason, catchup_reason
+    return start_reason, 'scheduled_only'
