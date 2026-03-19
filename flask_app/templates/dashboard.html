@@ -138,6 +138,8 @@
             {% include 'partials/current_activity.html' %}
         </div>
     </div>
+    {% set server_a_label = servers[0].name if servers and servers|length > 0 else 'Server A' %}
+    {% set server_b_label = servers[1].name if servers and servers|length > 1 else 'Server B' %}
     <div class="current-activity-map-card">
         <div class="current-activity-map-header">
             <div class="current-activity-map-heading">
@@ -146,11 +148,11 @@
                 <div class="current-activity-map-legend" aria-label="Map legend">
                     <span class="current-activity-map-legend-item">
                         <span class="current-activity-map-legend-dot server-a"></span>
-                        Server A
+                        {{ server_a_label }}
                     </span>
                     <span class="current-activity-map-legend-item">
                         <span class="current-activity-map-legend-dot server-b"></span>
-                        Server B
+                        {{ server_b_label }}
                     </span>
                     <span class="current-activity-map-legend-item">
                         <span class="current-activity-map-legend-dot mixed"></span>
