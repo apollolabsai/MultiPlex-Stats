@@ -1,8 +1,9 @@
 import unittest
+from datetime import datetime
 
 from flask import Flask
 
-from flask_app.models import LifetimeMediaPlayCount, ViewingHistory, db
+from flask_app.models import LifetimeMediaPlayCount, LifetimeStatsSyncStatus, ViewingHistory, db
 from flask_app.services.media_lifetime_stats_service import MediaLifetimeStatsService
 
 
@@ -25,6 +26,7 @@ class MediaLifetimeStatsServiceTests(unittest.TestCase):
         self.ctx = self.app.app_context()
         self.ctx.push()
         LifetimeMediaPlayCount.query.delete()
+        LifetimeStatsSyncStatus.query.delete()
         ViewingHistory.query.delete()
         db.session.commit()
 
@@ -87,6 +89,22 @@ class MediaLifetimeStatsServiceTests(unittest.TestCase):
 
         self.assertEqual(movie_key, ('movie', 'inception', 2010))
         self.assertEqual(show_key, ('show', 'family guy', None))
+
+    def test_get_sync_status_recovers_stale_running_lifetime_sync(self):
+        db.session.add(LifetimeStatsSyncStatus(
+            status='running',
+            started_at=datetime(2000, 1, 1),
+            current_step='Saving aggregated lifetime play counts...',
+            server_a_name='Apollo',
+            server_a_status='running',
+        ))
+        db.session.commit()
+
+        status = MediaLifetimeStatsService().get_sync_status()
+
+        self.assertEqual(status['status'], 'failed')
+        self.assertIn('Recovered stale lifetime sync', status['error_message'])
+        self.assertEqual(status['pipeline_items'], [])
 
     def test_scan_server_history_uses_local_viewing_history_rows(self):
         db.session.add(ViewingHistory(

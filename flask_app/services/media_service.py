@@ -19,6 +19,7 @@ logger = logging.getLogger('multiplex.media')
 from flask_app.models import db, MediaSyncStatus, CachedMedia, MediaRating
 from flask_app.services.config_service import ConfigService
 from flask_app.services.sync_progress import SyncProgressTracker
+from flask_app.services.sync_recovery import is_recoverable_stale_run
 from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
 
@@ -153,6 +154,37 @@ class MediaService:
             status = MediaSyncStatus()
             db.session.add(status)
             db.session.commit()
+        return self._recover_stale_status(status)
+
+    def _recover_stale_status(self, status: MediaSyncStatus) -> MediaSyncStatus:
+        """Mark stale running rows failed after a process restart."""
+        progress_items = self._progress_tracker.snapshot()
+        if not is_recoverable_stale_run(status.status, status.started_at, progress_items):
+            return status
+
+        logger.warning(
+            'Recovering stale media sync left running from %s.',
+            status.started_at,
+        )
+        status.status = 'failed'
+        status.completed_at = datetime.utcnow()
+        status.current_step = 'Recovered stale media refresh after process restart.'
+        status.error_message = (
+            'Recovered stale media refresh after process restart. '
+            'Start a new media refresh to rebuild the cache.'
+        )
+
+        if status.server_a_status == 'running':
+            status.server_a_status = 'failed'
+            status.server_a_step = 'Recovered stale media refresh after process restart.'
+            status.server_a_error = 'Recovered stale media refresh after process restart.'
+        if status.server_b_status == 'running':
+            status.server_b_status = 'failed'
+            status.server_b_step = 'Recovered stale media refresh after process restart.'
+            status.server_b_error = 'Recovered stale media refresh after process restart.'
+
+        self._progress_tracker.reset([])
+        db.session.commit()
         return status
 
     def get_sync_status(self) -> dict:

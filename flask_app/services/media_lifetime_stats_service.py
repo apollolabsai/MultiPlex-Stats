@@ -15,6 +15,7 @@ from flask import current_app
 from flask_app.models import db, LifetimeMediaPlayCount, LifetimeStatsSyncStatus, ViewingHistory
 from flask_app.services.config_service import ConfigService
 from flask_app.services.sync_progress import SyncProgressTracker
+from flask_app.services.sync_recovery import is_recoverable_stale_run
 from flask_app.services.utils import normalize_title, to_int
 from multiplex_stats.timezone_utils import get_local_timezone
 
@@ -64,6 +65,33 @@ class MediaLifetimeStatsService:
             status = LifetimeStatsSyncStatus()
             db.session.add(status)
             db.session.commit()
+        return self._recover_stale_status(status)
+
+    def _recover_stale_status(self, status: LifetimeStatsSyncStatus) -> LifetimeStatsSyncStatus:
+        """Mark stale running rows failed after a process restart."""
+        progress_items = self._progress_tracker.snapshot()
+        if not is_recoverable_stale_run(status.status, status.started_at, progress_items):
+            return status
+
+        status.status = 'failed'
+        status.completed_at = datetime.utcnow()
+        status.current_step = 'Recovered stale lifetime sync after process restart.'
+        status.error_message = (
+            'Recovered stale lifetime sync after process restart. '
+            'Start a new lifetime rebuild if needed.'
+        )
+
+        if status.server_a_status == 'running':
+            status.server_a_status = 'failed'
+            status.server_a_step = 'Recovered stale lifetime sync after process restart.'
+            status.server_a_error = 'Recovered stale lifetime sync after process restart.'
+        if status.server_b_status == 'running':
+            status.server_b_status = 'failed'
+            status.server_b_step = 'Recovered stale lifetime sync after process restart.'
+            status.server_b_error = 'Recovered stale lifetime sync after process restart.'
+
+        self._progress_tracker.reset([])
+        db.session.commit()
         return status
 
     def has_lifetime_stats(self) -> bool:

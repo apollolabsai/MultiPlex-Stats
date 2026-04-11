@@ -6,7 +6,7 @@ from unittest.mock import patch
 from flask import Flask
 
 import flask_app.services.media_service as media_service_module
-from flask_app.models import CachedMedia, db
+from flask_app.models import CachedMedia, MediaSyncStatus, db
 from flask_app.services.media_service import MediaService
 
 
@@ -29,6 +29,7 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.ctx = self.app.app_context()
         self.ctx.push()
         CachedMedia.query.delete()
+        MediaSyncStatus.query.delete()
         db.session.commit()
 
     def tearDown(self):
@@ -374,3 +375,24 @@ class MediaServiceLinkTests(unittest.TestCase):
         movie = self._add_movie('No History Movie', 2024)
         rows = MediaService().get_movies()
         self.assertEqual(rows[0]['media_id'], movie.id)
+
+    def test_get_sync_status_recovers_stale_running_media_sync(self):
+        db.session.add(MediaSyncStatus(
+            status='running',
+            started_at=media_service_module.datetime(2000, 1, 1),
+            current_step='Fetching from servers...',
+            server_a_name='Apollo',
+            server_a_status='running',
+            server_a_step='Discovering libraries...',
+        ))
+        db.session.commit()
+
+        status = MediaService().get_sync_status()
+
+        self.assertEqual(status['status'], 'failed')
+        self.assertIn('Recovered stale media refresh', status['error_message'])
+        self.assertEqual(status['pipeline_items'], [])
+
+        refreshed = MediaSyncStatus.query.first()
+        self.assertEqual(refreshed.status, 'failed')
+        self.assertEqual(refreshed.server_a_status, 'failed')

@@ -10,6 +10,7 @@ from flask import current_app
 from flask_app.models import db, ViewingHistory, HistorySyncStatus
 from flask_app.services.config_service import ConfigService
 from flask_app.services.sync_progress import SyncProgressTracker
+from flask_app.services.sync_recovery import is_recoverable_stale_run
 from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
 
@@ -54,6 +55,24 @@ class HistorySyncService:
             status = HistorySyncStatus()
             db.session.add(status)
             db.session.commit()
+        return self._recover_stale_status(status)
+
+    def _recover_stale_status(self, status: HistorySyncStatus) -> HistorySyncStatus:
+        """Mark stale running rows failed after a process restart."""
+        progress_items = self._progress_tracker.snapshot()
+        if not is_recoverable_stale_run(status.status, status.started_at, progress_items):
+            return status
+
+        status.status = 'failed'
+        status.completed_at = datetime.utcnow()
+        status.current_server = None
+        status.error_message = (
+            'Recovered stale history sync after process restart. '
+            'Start a new history sync to continue importing.'
+        )
+        self._server_progress = {}
+        self._progress_tracker.reset([])
+        db.session.commit()
         return status
 
     def get_sync_status(self) -> dict:

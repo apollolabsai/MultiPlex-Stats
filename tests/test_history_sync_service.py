@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 from unittest.mock import patch
 
 from flask import Flask
@@ -176,3 +177,17 @@ class HistorySyncServiceTests(unittest.TestCase):
         self.assertTrue(fake_client.after_values)
         self.assertIsNone(fake_client.after_values[0])
         self.assertEqual(ViewingHistory.query.count(), 1)
+
+    def test_get_sync_status_recovers_stale_running_history_sync(self):
+        db.session.add(HistorySyncStatus(
+            status='running',
+            started_at=datetime(2000, 1, 1),
+            current_server='Apollo',
+        ))
+        db.session.commit()
+
+        status = HistorySyncService().get_sync_status()
+
+        self.assertEqual(status['status'], 'failed')
+        self.assertIn('Recovered stale history sync', status['error_message'])
+        self.assertEqual(status['pipeline_items'], [])
