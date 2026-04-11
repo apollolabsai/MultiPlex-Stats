@@ -18,6 +18,11 @@ logger = logging.getLogger(__name__)
 
 _MAX_RETRIES = 3
 _RETRY_BACKOFF_BASE = 1  # seconds
+_DEFAULT_REQUEST_TIMEOUT = (5, 30)  # (connect, read)
+_COMMAND_TIMEOUTS: dict[str, tuple[int, int]] = {
+    'get_history': (5, 90),
+    'download_export': (5, 120),
+}
 
 # Human-readable descriptions for each Tautulli API command
 _CMD_LABELS: dict[str, str] = {
@@ -77,12 +82,13 @@ class TautulliClient:
 
         label = _CMD_LABELS.get(command, command)
         server_name = getattr(self.config, 'name', None) or 'Tautulli'
+        timeout = _COMMAND_TIMEOUTS.get(command, _DEFAULT_REQUEST_TIMEOUT)
 
         last_exc: Exception | None = None
         for attempt in range(_MAX_RETRIES):
             try:
                 start = time.monotonic()
-                response = requests.get(url, verify=self.verify_ssl, timeout=30)
+                response = requests.get(url, verify=self.verify_ssl, timeout=timeout)
                 elapsed_ms = (time.monotonic() - start) * 1000
                 response.raise_for_status()
                 logger.info(
