@@ -4,8 +4,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from flask import Flask
+import pandas as pd
 
-from flask_app.models import CachedMedia, ViewingHistory, db
+from flask_app.models import CachedMedia, ServerConfig, ViewingHistory, db
 from flask_app.services.analytics_service import AnalyticsService
 
 
@@ -28,6 +29,7 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
         self.ctx = self.app.app_context()
         self.ctx.push()
         CachedMedia.query.delete()
+        ServerConfig.query.delete()
         ViewingHistory.query.delete()
         db.session.commit()
 
@@ -204,6 +206,36 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
         self.assertEqual(resolved, newer.id)
         self.assertNotEqual(resolved, older.id)
 
+    def test_build_movie_poster_cards_use_local_image_proxy_urls(self):
+        db.session.add(ServerConfig(
+            name='ApolloSS',
+            ip_address='192.168.1.214:8181',
+            api_key='test-key',
+            is_active=True,
+        ))
+        self._add_history(
+            row_id=9001,
+            server_name='ApolloSS',
+            media_type='movie',
+            title='GOAT',
+            full_title='GOAT',
+            year=2025,
+            thumb='/library/metadata/152385/thumb/1775672025',
+            rating_key=152385,
+            started=100,
+        )
+
+        cards = AnalyticsService()._build_movie_poster_cards(pd.DataFrame([
+            {'full_title': 'GOAT', 'count': 19},
+        ]))
+
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]['title'], 'GOAT')
+        self.assertTrue(cards[0]['poster_url'].startswith('/api/image-proxy?'))
+        self.assertIn('server=ApolloSS', cards[0]['poster_url'])
+        self.assertIn('rating_key=152385', cards[0]['poster_url'])
+        self.assertNotIn('/pms_image_proxy', cards[0]['poster_url'])
+
     def test_parse_session_includes_geo_coordinates_and_location_label(self):
         session = {
             'ip_address': '8.8.8.8',
@@ -329,6 +361,51 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
         self.assertEqual(user['server_b_plays'], 7)
         self.assertEqual(user['first_play'], 100)
         self.assertEqual(user['last_play'], 206)
+
+    @patch('flask_app.services.analytics_service.ConfigService.get_server_configs')
+    @patch('multiplex_stats.TautulliClient')
+    def test_get_all_users_builds_local_proxy_user_thumb_urls(
+        self,
+        mock_client_cls,
+        mock_get_server_configs,
+    ):
+        server_a = SimpleNamespace(name='Apollo', ip_address='192.168.1.228:8181')
+        mock_get_server_configs.return_value = (server_a, None)
+
+        class FakeClient:
+            def __init__(self, config):
+                self.name = config.name
+
+            def get_users(self):
+                return {
+                    'response': {
+                        'data': [{
+                            'user_id': 42,
+                            'username': 'pdti7',
+                            'friendly_name': 'PDTI',
+                            'email': 'pdti7@example.com',
+                            'user_thumb': '/library/metadata/42/thumb/99',
+                            'shared_libraries': ['Movies'],
+                            'is_active': 1,
+                        }]
+                    }
+                }
+
+            def get_library_user_stats(self, section_id):
+                return {'response': {'data': []}}
+
+            def get_libraries(self):
+                return {'response': {'data': [{'section_id': 1}]}}
+
+        mock_client_cls.side_effect = lambda config: FakeClient(config)
+
+        users = AnalyticsService().get_all_users()
+
+        self.assertEqual(len(users), 1)
+        self.assertEqual(
+            users[0]['user_thumb'],
+            '/api/image-proxy?server=Apollo&img=%2Flibrary%2Fmetadata%2F42%2Fthumb%2F99&width=40&height=40&fallback=poster',
+        )
 
     @patch('flask_app.services.analytics_service.ConfigService.get_server_configs')
     @patch('flask_app.services.analytics_service.AnalyticsService._find_user_directory_entry')

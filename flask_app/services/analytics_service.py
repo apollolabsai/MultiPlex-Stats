@@ -8,7 +8,6 @@ import json
 import re
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlencode
 import pandas as pd
 
 logger = logging.getLogger('multiplex.analytics')
@@ -30,6 +29,7 @@ from multiplex_stats.visualization import (
 from flask_app.services.config_service import ConfigService
 from flask_app.services.geolocation_service import GeolocationService
 from flask_app.services.history_sync_service import HistorySyncService
+from flask_app.services.image_proxy_service import ImageProxyService
 from flask_app.services.utils import normalize_title, to_int
 from flask_app.models import CachedMedia, LifetimeMediaPlayCount, ServerConfig, ViewingHistory, db
 
@@ -553,8 +553,13 @@ class AnalyticsService:
                     user_id = user.get('user_id')
                     user_thumb = user.get('user_thumb', '')
                     if user_id and user_thumb:
-                        # Build full URL for user thumbnail using pms_image_proxy
-                        thumb_url = f"{server_a_config.ip_address}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
+                        thumb_url = ImageProxyService.build_url(
+                            server_name=server_a_config.name,
+                            image_path=user_thumb,
+                            width=40,
+                            height=40,
+                            fallback='poster',
+                        )
                         user_thumb_map[str(user_id)] = thumb_url
         except Exception as e:
             logger.error("Error fetching users from %s: %s", server_a_config.name, e)
@@ -571,8 +576,13 @@ class AnalyticsService:
                         user_id = user.get('user_id')
                         user_thumb = user.get('user_thumb', '')
                         if user_id and user_thumb:
-                            # Build full URL for user thumbnail using pms_image_proxy
-                            thumb_url = f"{server_b_config.ip_address}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
+                            thumb_url = ImageProxyService.build_url(
+                                server_name=server_b_config.name,
+                                image_path=user_thumb,
+                                width=40,
+                                height=40,
+                                fallback='poster',
+                            )
                             user_thumb_map[str(user_id)] = thumb_url
             except Exception as e:
                 logger.error("Error fetching users from %s: %s", server_b_config.name, e)
@@ -641,17 +651,14 @@ class AnalyticsService:
             if not server:
                 continue
 
-            protocol = 'https' if server.use_ssl else 'http'
-            params: dict[str, Any] = {
-                'img': thumb,
-                'width': 220,
-                'height': 330,
-                'fallback': 'poster',
-            }
-            if rating_key is not None:
-                params['rating_key'] = rating_key
-
-            poster_url = f"{protocol}://{server.ip_address}/pms_image_proxy?{urlencode(params)}"
+            poster_url = ImageProxyService.build_url(
+                server_name=server.name,
+                image_path=thumb,
+                width=220,
+                height=330,
+                fallback='poster',
+                rating_key=rating_key,
+            )
             posters.append({
                 'title': title,
                 'poster_url': poster_url,
@@ -791,17 +798,14 @@ class AnalyticsService:
             if not server:
                 continue
 
-            protocol = 'https' if server.use_ssl else 'http'
-            params: dict[str, Any] = {
-                'img': thumb,
-                'width': 220,
-                'height': 330,
-                'fallback': 'poster',
-            }
-            if rating_key is not None:
-                params['rating_key'] = rating_key
-
-            poster_url = f"{protocol}://{server.ip_address}/pms_image_proxy?{urlencode(params)}"
+            poster_url = ImageProxyService.build_url(
+                server_name=server.name,
+                image_path=thumb,
+                width=220,
+                height=330,
+                fallback='poster',
+                rating_key=rating_key,
+            )
             resolved_by_key[key] = {
                 'title': title,
                 'poster_url': poster_url,
@@ -1245,20 +1249,18 @@ class AnalyticsService:
             if record and record.thumb:
                 server = server_map.get((record.server_name or '').strip())
                 if server:
-                    protocol = 'https' if server.use_ssl else 'http'
-                    params: Dict[str, Any] = {
-                        'img': record.thumb,
-                        'width': 220,
-                        'height': 330,
-                        'fallback': 'poster',
-                    }
                     if is_movie:
                         rating_key = to_int(record.rating_key)
                     else:
                         rating_key = to_int(record.grandparent_rating_key) or to_int(record.rating_key)
-                    if rating_key is not None:
-                        params['rating_key'] = rating_key
-                    poster_url = f"{protocol}://{server.ip_address}/pms_image_proxy?{urlencode(params)}"
+                    poster_url = ImageProxyService.build_url(
+                        server_name=server.name,
+                        image_path=record.thumb,
+                        width=220,
+                        height=330,
+                        fallback='poster',
+                        rating_key=rating_key,
+                    )
 
             cards.append({
                 'rank': index,
@@ -1400,7 +1402,14 @@ class AnalyticsService:
         rating_key = session.get('rating_key', '')
         poster_url = ''
         if poster_thumb and rating_key:
-            poster_url = f"{server_config.ip_address}/pms_image_proxy?img={poster_thumb}&rating_key={rating_key}&width=150&height=225&fallback=poster"
+            poster_url = ImageProxyService.build_url(
+                server_name=server_config.name,
+                image_path=poster_thumb,
+                width=150,
+                height=225,
+                fallback='poster',
+                rating_key=rating_key,
+            )
 
         full_title = session.get('full_title', session.get('title', 'Unknown'))
         grandparent_title = session.get('grandparent_title', '')
@@ -1851,7 +1860,7 @@ class AnalyticsService:
             return None
 
         user_thumb = str((directory_entry or {}).get('user_thumb') or '').strip()
-        if user_thumb and not user_thumb.startswith(('http://', 'https://')):
+        if user_thumb and not user_thumb.startswith(('http://', 'https://', '/')):
             user_thumb = f"http://{user_thumb}"
 
         return {
@@ -1919,7 +1928,7 @@ class AnalyticsService:
             friendly_text = str(friendly_name or '').strip()
             return friendly_text.lower()
 
-        def fetch_server_data(server_config, server_ip: str, plays_key: str):
+        def fetch_server_data(server_config, plays_key: str):
             """Fetch users from a single server (thread-safe)."""
             users: Dict[str, Dict[str, Any]] = {}  # user_key -> user_data
             library_counts: Dict[str, int] = {}  # user_key -> library count
@@ -1987,7 +1996,13 @@ class AnalyticsService:
                         user_thumb = user.get('user_thumb', '')
                         thumb_url = ''
                         if user_thumb:
-                            thumb_url = f"{server_ip}/pms_image_proxy?img={user_thumb}&width=40&height=40&fallback=poster"
+                            thumb_url = ImageProxyService.build_url(
+                                server_name=server_config.name,
+                                image_path=user_thumb,
+                                width=40,
+                                height=40,
+                                fallback='poster',
+                            )
                         active_flag = to_int(user.get('is_active'))
 
                         ensure_user_entry(
@@ -2005,9 +2020,9 @@ class AnalyticsService:
             return users, library_counts, plays_key
 
         # Build task list and run in parallel
-        tasks = [(server_a_config, server_a_config.ip_address, server_a_key)]
+        tasks = [(server_a_config, server_a_key)]
         if server_b_config:
-            tasks.append((server_b_config, server_b_config.ip_address, server_b_key))
+            tasks.append((server_b_config, server_b_key))
 
         with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
             results = list(executor.map(lambda t: fetch_server_data(*t), tasks))

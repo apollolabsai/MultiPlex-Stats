@@ -39,6 +39,40 @@ class ApiClientTimeoutTests(unittest.TestCase):
 
         self.assertEqual(mock_get.call_args.kwargs['timeout'], (5, 30))
 
+    @patch('multiplex_stats.api_client.requests.get')
+    def test_pms_image_proxy_returns_content_and_content_type(self, mock_get):
+        response = Mock()
+        response.status_code = 200
+        response.content = b'image-bytes'
+        response.headers = {'Content-Type': 'image/png'}
+        response.raise_for_status.return_value = None
+        mock_get.return_value = response
+
+        image_bytes, content_type = self.client.pms_image_proxy(
+            img='/library/metadata/123/thumb/456',
+            width=220,
+            height=330,
+            fallback='poster',
+            rating_key=123,
+        )
+
+        self.assertEqual(image_bytes, b'image-bytes')
+        self.assertEqual(content_type, 'image/png')
+        self.assertEqual(mock_get.call_args.args[0], self.client.base_url)
+        self.assertEqual(
+            mock_get.call_args.kwargs['params'],
+            {
+                'apikey': 'abc123',
+                'cmd': 'pms_image_proxy',
+                'img': '/library/metadata/123/thumb/456',
+                'width': 220,
+                'height': 330,
+                'fallback': 'poster',
+                'rating_key': 123,
+            },
+        )
+        self.assertEqual(mock_get.call_args.kwargs['timeout'], (5, 30))
+
 
 if __name__ == '__main__':
     unittest.main()

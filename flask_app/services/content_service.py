@@ -5,11 +5,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import urlencode
-
 from sqlalchemy import func, or_
 
 from flask_app.models import CachedMedia, LifetimeMediaPlayCount, MediaRating, ServerConfig, ViewingHistory
+from flask_app.services.image_proxy_service import ImageProxyService
 from flask_app.services.utils import normalize_title, to_int
 from multiplex_stats.api_client import TautulliClient
 from multiplex_stats.timezone_utils import get_local_timezone
@@ -375,12 +374,10 @@ class ContentService:
             audio_channels = media_info.get('audio_channels') or media_info.get('audioChannels') or ''
             metadata['audio'] = self._format_audio(audio_codec, audio_channels)
 
-        protocol = 'https' if server.use_ssl else 'http'
         thumb = data.get('thumb') or record.thumb
         art = data.get('art') or ''
         metadata['poster_url'] = self._build_proxy_url(
-            protocol=protocol,
-            server_address=server.ip_address,
+            server_name=server.name,
             image_path=thumb,
             rating_key=rating_key,
             width=400,
@@ -388,8 +385,7 @@ class ContentService:
             fallback='poster',
         )
         metadata['banner_url'] = self._build_proxy_url(
-            protocol=protocol,
-            server_address=server.ip_address,
+            server_name=server.name,
             image_path=art,
             rating_key=rating_key,
             width=1600,
@@ -804,25 +800,21 @@ class ContentService:
 
     @staticmethod
     def _build_proxy_url(
-        protocol: str,
-        server_address: str,
+        server_name: str,
         image_path: str | None,
         rating_key: int | None,
         width: int,
         height: int,
         fallback: str,
     ) -> str:
-        if not image_path:
-            return ''
-        params = {
-            'img': image_path,
-            'width': width,
-            'height': height,
-            'fallback': fallback,
-        }
-        if rating_key:
-            params['rating_key'] = rating_key
-        return f"{protocol}://{server_address}/pms_image_proxy?{urlencode(params)}"
+        return ImageProxyService.build_url(
+            server_name=server_name,
+            image_path=image_path,
+            width=width,
+            height=height,
+            fallback=fallback,
+            rating_key=rating_key,
+        )
 
     def _build_plays_by_year_chart(self, plays: list[ViewingHistory], title: str) -> dict[str, Any]:
         configured_servers = (

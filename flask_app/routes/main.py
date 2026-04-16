@@ -4,7 +4,7 @@ Main application routes for dashboard and analytics execution.
 import logging
 import json
 from datetime import datetime, timezone
-from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, abort
+from flask import Blueprint, Response, render_template, redirect, url_for, flash, request, jsonify, abort
 
 logger = logging.getLogger('multiplex.routes.main')
 from flask_app.models import db, AnalyticsRun, ViewingHistory
@@ -13,6 +13,7 @@ from flask_app.services.media_service import MediaService
 from flask_app.services.media_lifetime_stats_service import MediaLifetimeStatsService
 from flask_app.services.content_service import ContentService
 from flask_app.services.config_service import ConfigService
+from flask_app.services.image_proxy_service import ImageProxyService
 from multiplex_stats.timezone_utils import get_local_timezone
 
 main_bp = Blueprint('main', __name__)
@@ -599,6 +600,43 @@ def api_dashboard_top_posters():
         return jsonify({'posters': posters})
     except Exception as e:
         return jsonify({'error': str(e), 'posters': []}), 500
+
+
+@main_bp.route('/api/image-proxy')
+def api_image_proxy():
+    """Serve authenticated Tautulli image proxy responses through the app."""
+    server_name = (request.args.get('server') or '').strip()
+    image_path = (request.args.get('img') or '').strip()
+    if not server_name or not image_path:
+        return jsonify({'error': 'Missing required image proxy parameters.'}), 400
+
+    width = request.args.get('width', default=220, type=int)
+    height = request.args.get('height', default=330, type=int)
+    if not width or width < 1 or not height or height < 1:
+        return jsonify({'error': 'Invalid image dimensions.'}), 400
+
+    fallback = (request.args.get('fallback') or 'poster').strip() or 'poster'
+    rating_key = request.args.get('rating_key', type=int)
+
+    try:
+        image_bytes, content_type = ImageProxyService.fetch_image(
+            server_name=server_name,
+            image_path=image_path,
+            width=width,
+            height=height,
+            fallback=fallback,
+            rating_key=rating_key,
+        )
+        response = Response(image_bytes, mimetype=content_type or 'application/octet-stream')
+        response.headers['Cache-Control'] = 'public, max-age=3600'
+        return response
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except LookupError as exc:
+        return jsonify({'error': str(exc)}), 404
+    except Exception as exc:
+        logger.error("Image proxy error for %s: %s", server_name, exc)
+        return jsonify({'error': 'Unable to fetch image from Tautulli.'}), 502
 
 
 @main_bp.route('/api/media/start-load', methods=['POST'])

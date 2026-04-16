@@ -142,6 +142,36 @@ class MainRoutesTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(payload['error'], 'Invalid media sync mode.')
 
+    @patch('flask_app.routes.main.ImageProxyService.fetch_image')
+    def test_api_image_proxy_returns_image_bytes(self, mock_fetch_image):
+        mock_fetch_image.return_value = (b'poster-bytes', 'image/png')
+
+        response = self.client.get(
+            '/api/image-proxy?server=ApolloSS'
+            '&img=%2Flibrary%2Fmetadata%2F152385%2Fthumb%2F1775672025'
+            '&width=220&height=330&fallback=poster&rating_key=152385'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, b'poster-bytes')
+        self.assertEqual(response.mimetype, 'image/png')
+        self.assertEqual(response.headers.get('Cache-Control'), 'public, max-age=3600')
+        mock_fetch_image.assert_called_once_with(
+            server_name='ApolloSS',
+            image_path='/library/metadata/152385/thumb/1775672025',
+            width=220,
+            height=330,
+            fallback='poster',
+            rating_key=152385,
+        )
+
+    def test_api_image_proxy_rejects_missing_params(self):
+        response = self.client.get('/api/image-proxy')
+        payload = response.get_json()
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(payload['error'], 'Missing required image proxy parameters.')
+
     @patch('flask_app.routes.main.ConfigService.get_analytics_settings')
     @patch('flask_app.routes.main.AnalyticsService.get_monthly_chart_json')
     @patch('flask_app.routes.main.AnalyticsService.get_user_detail')

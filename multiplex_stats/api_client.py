@@ -455,8 +455,9 @@ class TautulliClient:
         img: str,
         width: int = 300,
         height: int = 300,
-        fallback: str = 'poster'
-    ) -> bytes:
+        fallback: str = 'poster',
+        rating_key: Optional[int] = None,
+    ) -> tuple[bytes, str]:
         """
         Get an image from the Plex Media Server via Tautulli proxy.
 
@@ -465,20 +466,34 @@ class TautulliClient:
             width: Desired width (default 300)
             height: Desired height (default 300)
             fallback: Fallback image type if not found
+            rating_key: Optional Plex rating key for poster lookups
 
         Returns:
-            Raw image bytes
+            Tuple of raw image bytes and the upstream content type
         """
-        url = f"{self.base_url}?apikey={self.api_key}&cmd=pms_image_proxy"
-        url += f"&img={img}&width={width}&height={height}&fallback={fallback}"
+        params: dict[str, Any] = {
+            'apikey': self.api_key,
+            'cmd': 'pms_image_proxy',
+            'img': img,
+            'width': width,
+            'height': height,
+            'fallback': fallback,
+        }
+        if rating_key is not None:
+            params['rating_key'] = rating_key
 
         server_name = getattr(self.config, 'name', None) or 'Tautulli'
         start = time.monotonic()
-        response = requests.get(url, verify=self.verify_ssl, timeout=30)
+        response = requests.get(
+            self.base_url,
+            params=params,
+            verify=self.verify_ssl,
+            timeout=_DEFAULT_REQUEST_TIMEOUT,
+        )
         elapsed_ms = (time.monotonic() - start) * 1000
         response.raise_for_status()
         logger.info(
             'Tautulli [%s] Fetch poster image -> %s (%.0fms)',
             server_name, response.status_code, elapsed_ms,
         )
-        return response.content
+        return response.content, response.headers.get('Content-Type', 'application/octet-stream')
