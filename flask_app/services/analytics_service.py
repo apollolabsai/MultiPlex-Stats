@@ -1328,6 +1328,19 @@ class AnalyticsService:
                         fallback='poster',
                         rating_key=poster_rating_key,
                     )
+                else:
+                    logger.warning(
+                        "POSTER-DIAG [%s]: server '%s' not in active server map (available: %s)",
+                        display_title, poster_server_name, list(server_map.keys()),
+                    )
+            else:
+                source = 'history_df' if history_match else ('db' if record else 'none')
+                logger.warning(
+                    "POSTER-DIAG [%s]: no poster data — source=%s, server='%s', thumb='%s', "
+                    "history_match=%s, db_record=%s",
+                    display_title, source, poster_server_name, poster_thumb,
+                    bool(history_match), bool(record),
+                )
 
             cards.append({
                 'rank': index,

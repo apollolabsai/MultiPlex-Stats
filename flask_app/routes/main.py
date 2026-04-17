@@ -631,11 +631,16 @@ def api_image_proxy():
         response.headers['Cache-Control'] = 'public, max-age=3600'
         return response
     except ValueError as exc:
+        logger.warning("POSTER-DIAG proxy 400: server=%s, img=%s, rating_key=%s — %s",
+                        server_name, image_path, rating_key, exc)
         return jsonify({'error': str(exc)}), 400
     except LookupError as exc:
+        logger.warning("POSTER-DIAG proxy 404: server=%s, img=%s, rating_key=%s — %s",
+                        server_name, image_path, rating_key, exc)
         return jsonify({'error': str(exc)}), 404
     except Exception as exc:
-        logger.error("Image proxy error for %s: %s", server_name, exc)
+        logger.error("POSTER-DIAG proxy 502: server=%s, img=%s, rating_key=%s — %s",
+                      server_name, image_path, rating_key, exc)
         return jsonify({'error': 'Unable to fetch image from Tautulli.'}), 502
 
 
