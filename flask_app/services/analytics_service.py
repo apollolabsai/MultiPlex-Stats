@@ -1367,6 +1367,124 @@ class AnalyticsService:
     ) -> List[Dict[str, Any]]:
         return self._build_poster_cards(df_tv, 'tv', history_df=history_df)
 
+    def refresh_cached_poster_cards(self) -> bool:
+        """Re-resolve empty poster URLs in the latest cached charts JSON."""
+        from flask_app.models import AnalyticsRun
+
+        last_run = (
+            AnalyticsRun.query
+            .filter_by(status='success')
+            .order_by(AnalyticsRun.completed_at.desc())
+            .first()
+        )
+        if not last_run:
+            return False
+
+        cache_path = os.path.join(self.cache_dir, f'run_{last_run.id}_charts.json')
+        if not os.path.exists(cache_path):
+            return False
+
+        with open(cache_path, 'r') as f:
+            cached = json.load(f)
+
+        updated = False
+        for chart_key, media_kind in (('movies', 'movie'), ('tv', 'tv')):
+            chart = cached.get(chart_key)
+            if not isinstance(chart, dict):
+                continue
+            cards = chart.get('poster_cards')
+            if not isinstance(cards, list):
+                continue
+
+            empty_cards = [c for c in cards if not c.get('poster_url')]
+            if not empty_cards:
+                continue
+
+            if self._resolve_empty_poster_urls(empty_cards, media_kind):
+                updated = True
+
+        if updated:
+            with open(cache_path, 'w') as f:
+                json.dump(cached, f)
+            logger.info("Refreshed poster card cache for run %d", last_run.id)
+
+        return updated
+
+    def _resolve_empty_poster_urls(
+        self, cards: List[Dict[str, Any]], media_kind: str
+    ) -> bool:
+        """Attempt to fill in poster URLs for cards missing them."""
+        is_movie = media_kind == 'movie'
+
+        servers = ServerConfig.query.filter(ServerConfig.is_active.is_(True)).all()
+        server_map = {
+            (server.name or '').strip(): server
+            for server in servers
+            if server.name and server.ip_address
+        }
+
+        any_resolved = False
+        for card in cards:
+            full_title = str(card.get('full_title') or card.get('title') or '').strip()
+            if not full_title:
+                continue
+
+            if is_movie:
+                parsed_title, parsed_year = self._split_movie_title_year(full_title)
+                normalized_candidates = {normalize_title(full_title), normalize_title(parsed_title)}
+                normalized_candidates.discard('')
+
+                title_filters = []
+                for normalized in normalized_candidates:
+                    title_filters.append(func.lower(ViewingHistory.full_title) == normalized)
+                    title_filters.append(func.lower(ViewingHistory.title) == normalized)
+
+                query = ViewingHistory.query.filter(func.lower(ViewingHistory.media_type) == 'movie')
+                if title_filters:
+                    query = query.filter(or_(*title_filters))
+                if parsed_year is not None:
+                    query = query.filter(
+                        or_(ViewingHistory.year == parsed_year, ViewingHistory.year.is_(None))
+                    )
+            else:
+                normalized_title = normalize_title(full_title)
+                if not normalized_title:
+                    continue
+                query = (
+                    ViewingHistory.query
+                    .filter(func.lower(ViewingHistory.media_type).in_(['episode', 'tv', 'show']))
+                    .filter(func.lower(ViewingHistory.grandparent_title) == normalized_title)
+                )
+
+            record = query.order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc()).first()
+            if not record or not record.thumb:
+                continue
+
+            server_name = str(record.server_name or '').strip()
+            server = server_map.get(server_name)
+            if not server:
+                continue
+
+            if is_movie:
+                rating_key = to_int(record.rating_key)
+            else:
+                rating_key = to_int(record.grandparent_rating_key) or to_int(record.rating_key)
+
+            poster_url = ImageProxyService.build_url(
+                server_name=server.name,
+                image_path=str(record.thumb or '').strip(),
+                width=220,
+                height=330,
+                fallback='poster',
+                rating_key=rating_key,
+            )
+            if poster_url:
+                card['poster_url'] = poster_url
+                any_resolved = True
+                logger.info("POSTER-DIAG resolved [%s] → %s", full_title, poster_url)
+
+        return any_resolved
+
     def _resolve_history_id_for_stream(
         self,
         server_name: str,

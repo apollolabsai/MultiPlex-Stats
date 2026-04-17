@@ -184,6 +184,12 @@ class HistorySyncService:
             status.completed_at = datetime.utcnow()
             status.last_sync_date = datetime.utcnow()
             status.last_sync_record_count = ViewingHistory.query.count()
+
+            try:
+                from flask_app.services.analytics_service import AnalyticsService
+                AnalyticsService().refresh_cached_poster_cards()
+            except Exception:
+                pass
         except Exception as e:
             status.status = 'failed'
             status.completed_at = datetime.utcnow()
@@ -232,6 +238,12 @@ class HistorySyncService:
             status.completed_at = datetime.utcnow()
             status.last_sync_date = datetime.utcnow()
             status.last_sync_record_count = ViewingHistory.query.count()
+
+            try:
+                from flask_app.services.analytics_service import AnalyticsService
+                AnalyticsService().refresh_cached_poster_cards()
+            except Exception:
+                pass
         except Exception as e:
             status.status = 'failed'
             status.completed_at = datetime.utcnow()
@@ -344,6 +356,12 @@ class HistorySyncService:
                 status.completed_at = datetime.utcnow()
                 status.last_sync_date = datetime.utcnow()
                 status.last_sync_record_count = ViewingHistory.query.count()
+
+                try:
+                    from flask_app.services.analytics_service import AnalyticsService
+                    AnalyticsService().refresh_cached_poster_cards()
+                except Exception:
+                    pass
             except Exception as exc:
                 status.status = 'failed'
                 status.completed_at = datetime.utcnow()
@@ -401,6 +419,12 @@ class HistorySyncService:
             status.completed_at = datetime.utcnow()
             status.last_sync_date = datetime.utcnow()
             status.last_sync_record_count = ViewingHistory.query.count()
+
+            try:
+                from flask_app.services.analytics_service import AnalyticsService
+                AnalyticsService().refresh_cached_poster_cards()
+            except Exception:
+                pass
         except Exception as e:
             status.status = 'failed'
             status.completed_at = datetime.utcnow()
