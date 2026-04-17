@@ -236,6 +236,38 @@ class AnalyticsServiceCurrentActivityLinkTests(unittest.TestCase):
         self.assertIn('rating_key=152385', cards[0]['poster_url'])
         self.assertNotIn('/pms_image_proxy', cards[0]['poster_url'])
 
+    def test_build_movie_poster_cards_use_live_history_when_local_history_is_empty(self):
+        db.session.add(ServerConfig(
+            name='ApolloSS',
+            ip_address='192.168.1.214:8181',
+            api_key='test-key',
+            is_active=True,
+        ))
+        db.session.commit()
+
+        df_movies = pd.DataFrame([
+            {'full_title': 'GOAT', 'count': 19},
+        ])
+        history_df = pd.DataFrame([
+            {
+                'Server': 'ApolloSS',
+                'media_type': 'movie',
+                'full_title': 'GOAT',
+                'title': 'GOAT',
+                'year': 2025,
+                'thumb': '/library/metadata/152385/thumb/1775672025',
+                'rating_key': 152385,
+            }
+        ])
+
+        cards = AnalyticsService()._build_movie_poster_cards(df_movies, history_df=history_df)
+
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]['title'], 'GOAT')
+        self.assertTrue(cards[0]['poster_url'].startswith('/api/image-proxy?'))
+        self.assertIn('server=ApolloSS', cards[0]['poster_url'])
+        self.assertIn('rating_key=152385', cards[0]['poster_url'])
+
     def test_parse_session_includes_geo_coordinates_and_location_label(self):
         session = {
             'ip_address': '8.8.8.8',

@@ -1099,6 +1099,99 @@ $(document).ready(function() {
         return '';
     }
 
+    var POSTER_LOAD_CONCURRENCY = 3;
+    var POSTER_LOAD_RETRY_LIMIT = 1;
+    var POSTER_LOAD_RETRY_DELAY_MS = 900;
+    var posterLoadQueue = [];
+    var posterLoadInFlight = 0;
+
+    function addPosterPlaceholder(imageWrap) {
+        if (!imageWrap || imageWrap.querySelector('.movie-poster-placeholder')) {
+            return;
+        }
+        var placeholder = document.createElement('div');
+        placeholder.className = 'movie-poster-placeholder';
+        placeholder.textContent = 'No Poster';
+        imageWrap.appendChild(placeholder);
+    }
+
+    function handlePosterLoadComplete(image, succeeded) {
+        var imageWrap = image ? image.parentElement : null;
+        if (!imageWrap) {
+            return;
+        }
+        if (succeeded) {
+            image.removeAttribute('data-src');
+            image.setAttribute('data-loaded', 'true');
+            var placeholder = imageWrap.querySelector('.movie-poster-placeholder');
+            if (placeholder) {
+                placeholder.remove();
+            }
+            return;
+        }
+
+        if (image.parentElement) {
+            image.remove();
+        }
+        addPosterPlaceholder(imageWrap);
+    }
+
+    function pumpPosterLoadQueue() {
+        while (posterLoadInFlight < POSTER_LOAD_CONCURRENCY && posterLoadQueue.length) {
+            var image = posterLoadQueue.shift();
+            if (!image || image.getAttribute('data-loaded') === 'true' || image.getAttribute('data-loading') === 'true') {
+                continue;
+            }
+
+            var src = image.getAttribute('data-src');
+            if (!src) {
+                continue;
+            }
+
+            posterLoadInFlight += 1;
+            image.setAttribute('data-loading', 'true');
+            image.onload = function() {
+                posterLoadInFlight -= 1;
+                this.removeAttribute('data-loading');
+                handlePosterLoadComplete(this, true);
+                pumpPosterLoadQueue();
+            };
+            image.onerror = function() {
+                posterLoadInFlight -= 1;
+                this.removeAttribute('data-loading');
+                var retryCount = parseInt(this.getAttribute('data-retry-count') || '0', 10);
+                if (retryCount < POSTER_LOAD_RETRY_LIMIT) {
+                    this.setAttribute('data-retry-count', String(retryCount + 1));
+                    var failedImage = this;
+                    window.setTimeout(function() {
+                        posterLoadQueue.push(failedImage);
+                        pumpPosterLoadQueue();
+                    }, POSTER_LOAD_RETRY_DELAY_MS);
+                } else {
+                    handlePosterLoadComplete(this, false);
+                    pumpPosterLoadQueue();
+                }
+            };
+            image.src = src;
+        }
+    }
+
+    function queuePosterRailImages(scope) {
+        if (!scope) {
+            return;
+        }
+        scope.querySelectorAll('img.movie-poster-image[data-src]').forEach(function(image) {
+            if (image.getAttribute('data-loaded') === 'true' || image.getAttribute('data-loading') === 'true') {
+                return;
+            }
+            if (posterLoadQueue.indexOf(image) !== -1) {
+                return;
+            }
+            posterLoadQueue.push(image);
+        });
+        pumpPosterLoadQueue();
+    }
+
     function createMoviePosterCard(card) {
         var title = (card && (card.title || card.full_title)) ? String(card.title || card.full_title) : 'Unknown';
         var plays = card && card.plays ? Number(card.plays) : 0;
@@ -1123,15 +1216,13 @@ $(document).ready(function() {
         if (card && card.poster_url) {
             var image = document.createElement('img');
             image.className = 'movie-poster-image';
-            image.src = String(card.poster_url);
             image.alt = title + ' poster';
             image.loading = 'lazy';
+            image.decoding = 'async';
+            image.setAttribute('data-src', String(card.poster_url));
             imageWrap.appendChild(image);
         } else {
-            var placeholder = document.createElement('div');
-            placeholder.className = 'movie-poster-placeholder';
-            placeholder.textContent = 'No Poster';
-            imageWrap.appendChild(placeholder);
+            addPosterPlaceholder(imageWrap);
         }
 
         if (rank > 0) {
@@ -1196,6 +1287,8 @@ $(document).ready(function() {
             });
             rail.appendChild(row);
         });
+
+        queuePosterRailImages(rail);
     }
 
     function renderMoviePosterRail(cards) {

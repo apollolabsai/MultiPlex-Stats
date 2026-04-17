@@ -129,10 +129,10 @@ class AnalyticsService:
             )
 
         movie_chart = get_movie_chart_data(df_movies, settings.history_days)
-        movie_chart['poster_cards'] = self._build_movie_poster_cards(df_movies)
+        movie_chart['poster_cards'] = self._build_movie_poster_cards(df_movies, history_df=df_history)
 
         tv_chart = get_tv_chart_data(df_tv, settings.history_days)
-        tv_chart['poster_cards'] = self._build_tv_poster_cards(df_tv)
+        tv_chart['poster_cards'] = self._build_tv_poster_cards(df_tv, history_df=df_history)
 
         charts_json = {
             'daily': get_daily_chart_data(df_daily, server_a_config.name, server_b_config.name if server_b_config else None),
@@ -439,7 +439,7 @@ class AnalyticsService:
 
         df_movies = aggregate_movie_stats(df_history, top_n=movie_count)
         chart_data = get_movie_chart_data(df_movies, history_days)
-        movie_poster_cards = self._build_movie_poster_cards(df_movies)
+        movie_poster_cards = self._build_movie_poster_cards(df_movies, history_df=df_history)
 
         return {
             'chart_data': chart_data,
@@ -480,7 +480,7 @@ class AnalyticsService:
 
         df_tv = aggregate_tv_stats(df_history, top_n=tv_count)
         chart_data = get_tv_chart_data(df_tv, history_days)
-        tv_poster_cards = self._build_tv_poster_cards(df_tv)
+        tv_poster_cards = self._build_tv_poster_cards(df_tv, history_df=df_history)
 
         return {
             'chart_data': chart_data,
@@ -1171,7 +1171,12 @@ class AnalyticsService:
         year = to_int(match.group('year'))
         return title, year
 
-    def _build_poster_cards(self, df: pd.DataFrame, media_kind: str) -> List[Dict[str, Any]]:
+    def _build_poster_cards(
+        self,
+        df: pd.DataFrame,
+        media_kind: str,
+        history_df: pd.DataFrame | None = None,
+    ) -> List[Dict[str, Any]]:
         """
         Build ordered poster card metadata for dashboard display.
 
@@ -1210,7 +1215,50 @@ class AnalyticsService:
 
             plays = to_int(getattr(row, 'count', 0)) or 0
 
-            # --- find a ViewingHistory record for the poster thumbnail ---
+            # --- find a history record for the poster thumbnail ---
+            history_match: dict[str, Any] | None = None
+            if history_df is not None and not history_df.empty:
+                if is_movie:
+                    normalized_candidates = {normalize_title(full_title), normalize_title(parsed_title)}
+                    normalized_candidates = {item for item in normalized_candidates if item}
+                    movie_rows = history_df[history_df['media_type'] == 'movie']
+                    if parsed_year is not None and 'year' in movie_rows.columns:
+                        year_mask = movie_rows['year'].isna() | (movie_rows['year'] == parsed_year)
+                        movie_rows = movie_rows[year_mask]
+
+                    for history_row in movie_rows.to_dict('records'):
+                        candidate_titles = {
+                            normalize_title(history_row.get('full_title')),
+                            normalize_title(history_row.get('title')),
+                        }
+                        candidate_titles.discard('')
+                        if normalized_candidates & candidate_titles:
+                            thumb = str(history_row.get('thumb') or '').strip()
+                            rating_key = to_int(history_row.get('rating_key'))
+                            if thumb and rating_key is not None:
+                                history_match = history_row
+                                break
+                            if thumb and history_match is None:
+                                history_match = history_row
+                else:
+                    normalized_title = normalize_title(full_title)
+                    if normalized_title:
+                        tv_rows = history_df[history_df['media_type'] == 'TV']
+                        for history_row in tv_rows.to_dict('records'):
+                            if normalize_title(history_row.get('grandparent_title')) != normalized_title:
+                                continue
+                            thumb = str(history_row.get('thumb') or '').strip()
+                            rating_key = (
+                                to_int(history_row.get('grandparent_rating_key'))
+                                or to_int(history_row.get('rating_key'))
+                            )
+                            if thumb and rating_key is not None:
+                                history_match = history_row
+                                break
+                            if thumb and history_match is None:
+                                history_match = history_row
+
+            record = None
             if is_movie:
                 normalized_candidates = {normalize_title(full_title), normalize_title(parsed_title)}
                 normalized_candidates = {item for item in normalized_candidates if item}
@@ -1236,7 +1284,8 @@ class AnalyticsService:
                     .filter(func.lower(ViewingHistory.grandparent_title) == normalized_title)
                 )
 
-            record = query.order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc()).first()
+            if history_match is None:
+                record = query.order_by(ViewingHistory.started.desc(), ViewingHistory.id.desc()).first()
 
             media_id = self._resolve_media_id_for_stream(
                 media_type='movie' if is_movie else 'episode',
@@ -1246,20 +1295,38 @@ class AnalyticsService:
             )
 
             poster_url = ''
-            if record and record.thumb:
-                server = server_map.get((record.server_name or '').strip())
+            poster_server_name = ''
+            poster_thumb = ''
+            poster_rating_key = None
+
+            if history_match:
+                poster_server_name = str(history_match.get('Server') or '').strip()
+                poster_thumb = str(history_match.get('thumb') or '').strip()
+                if is_movie:
+                    poster_rating_key = to_int(history_match.get('rating_key'))
+                else:
+                    poster_rating_key = (
+                        to_int(history_match.get('grandparent_rating_key'))
+                        or to_int(history_match.get('rating_key'))
+                    )
+            elif record and record.thumb:
+                poster_server_name = str(record.server_name or '').strip()
+                poster_thumb = str(record.thumb or '').strip()
+                if is_movie:
+                    poster_rating_key = to_int(record.rating_key)
+                else:
+                    poster_rating_key = to_int(record.grandparent_rating_key) or to_int(record.rating_key)
+
+            if poster_server_name and poster_thumb:
+                server = server_map.get(poster_server_name)
                 if server:
-                    if is_movie:
-                        rating_key = to_int(record.rating_key)
-                    else:
-                        rating_key = to_int(record.grandparent_rating_key) or to_int(record.rating_key)
                     poster_url = ImageProxyService.build_url(
                         server_name=server.name,
-                        image_path=record.thumb,
+                        image_path=poster_thumb,
                         width=220,
                         height=330,
                         fallback='poster',
-                        rating_key=rating_key,
+                        rating_key=poster_rating_key,
                     )
 
             cards.append({
@@ -1273,11 +1340,19 @@ class AnalyticsService:
 
         return cards
 
-    def _build_movie_poster_cards(self, df_movies: pd.DataFrame) -> List[Dict[str, Any]]:
-        return self._build_poster_cards(df_movies, 'movie')
+    def _build_movie_poster_cards(
+        self,
+        df_movies: pd.DataFrame,
+        history_df: pd.DataFrame | None = None,
+    ) -> List[Dict[str, Any]]:
+        return self._build_poster_cards(df_movies, 'movie', history_df=history_df)
 
-    def _build_tv_poster_cards(self, df_tv: pd.DataFrame) -> List[Dict[str, Any]]:
-        return self._build_poster_cards(df_tv, 'tv')
+    def _build_tv_poster_cards(
+        self,
+        df_tv: pd.DataFrame,
+        history_df: pd.DataFrame | None = None,
+    ) -> List[Dict[str, Any]]:
+        return self._build_poster_cards(df_tv, 'tv', history_df=history_df)
 
     def _resolve_history_id_for_stream(
         self,
