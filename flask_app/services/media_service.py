@@ -29,6 +29,8 @@ class MediaService:
 
     EXPORT_POLL_INTERVAL = 2   # seconds between export status checks
     EXPORT_TIMEOUT = 1500      # max seconds to wait for export (25 minutes)
+    EXPORT_MAX_ATTEMPTS = 3    # initial attempt + 2 retries
+    EXPORT_RETRY_DELAY = 5     # seconds between export retries
     RUN_MODE_MEDIA_ONLY = 'media_only'
     RUN_MODE_FULL_PIPELINE = 'full_pipeline'
     STAGE_NAME = 'media'
@@ -303,10 +305,6 @@ class MediaService:
                 detail='MDBList API key not configured',
             )
 
-        # Clear existing media data
-        CachedMedia.query.delete()
-        db.session.commit()
-
         # Run sync in background thread
         if app is None:
             app = current_app._get_current_object()
@@ -347,6 +345,8 @@ class MediaService:
                 status.status = 'failed'
                 status.completed_at = datetime.utcnow()
                 status.error_message = str(e)
+                status.movies_count = CachedMedia.query.filter_by(media_type='movie').count()
+                status.tv_shows_count = CachedMedia.query.filter_by(media_type='show').count()
                 self._progress_tracker.fail_first_running_for_server('a', stage=self.STAGE_NAME, error=str(e))
                 self._progress_tracker.fail_first_running_for_server('b', stage=self.STAGE_NAME, error=str(e))
                 for step_name in ('save', 'mdblist', 'finalize'):
@@ -489,12 +489,16 @@ class MediaService:
         for thread in threads:
             thread.join()
 
-        # Check if any critical errors occurred
+        # Do not replace cached media with a partial dataset.
         if errors:
-            # If Server A failed, that's critical
-            for server_key, error_msg in errors:
-                if server_key == 'a':
-                    raise ValueError(f"Server A failed: {error_msg}")
+            error_summary = '; '.join(
+                f"Server {server_key.upper()} failed: {error_msg}"
+                for server_key, error_msg in errors
+            )
+            raise ValueError(
+                "Media refresh incomplete; keeping previous cached media. "
+                f"{error_summary}"
+            )
 
         # Save aggregated data to database
         status = self.get_or_create_status()
@@ -736,20 +740,120 @@ class MediaService:
         """
         Fetch library metadata using export_metadata API (parallel version).
         """
-        status = self.get_or_create_status()
         start_label = self._export_step_label(media_type, section_name, 'Starting')
+        last_error: Exception | None = None
+
+        for attempt in range(1, self.EXPORT_MAX_ATTEMPTS + 1):
+            try:
+                export_data = self._start_and_wait_for_library_export(
+                    client=client,
+                    server_name=server_name,
+                    section_id=section_id,
+                    section_name=section_name,
+                    media_type=media_type,
+                    server_key=server_key,
+                    progress_step_id=progress_step_id,
+                    completed_step_items=completed_step_items,
+                    total_step_items=total_step_items,
+                    library_item_count=library_item_count,
+                    start_label=start_label,
+                    attempt=attempt,
+                    mark_failed=attempt >= self.EXPORT_MAX_ATTEMPTS,
+                )
+
+                data_dict = movies_data if media_type == 'movie' else tv_data
+                self._process_export_data_parallel(
+                    export_data, media_type, data_dict, data_lock, is_primary, server_key
+                )
+                if attempt > 1:
+                    logger.info(
+                        'Export retry succeeded on %s for section %s (attempt %s/%s).',
+                        server_name,
+                        section_name,
+                        attempt,
+                        self.EXPORT_MAX_ATTEMPTS,
+                    )
+                return
+            except Exception as exc:
+                last_error = exc
+                if attempt >= self.EXPORT_MAX_ATTEMPTS:
+                    failed_step = self._progress_tracker.get_step(progress_step_id)
+                    if not failed_step or failed_step.get('status') != 'failed':
+                        self._progress_tracker.fail(
+                            progress_step_id,
+                            detail=str(exc),
+                            error=str(exc),
+                        )
+                    raise
+
+                retry_detail = (
+                    f'{section_name}: export attempt {attempt} failed; '
+                    f'retrying {attempt + 1} / {self.EXPORT_MAX_ATTEMPTS}'
+                )
+                self._progress_tracker.start(
+                    progress_step_id,
+                    detail=retry_detail,
+                    current=completed_step_items,
+                    total=total_step_items,
+                )
+                status = self.get_or_create_status()
+                if server_key == 'a':
+                    status.server_a_step = retry_detail
+                else:
+                    status.server_b_step = retry_detail
+                db.session.commit()
+                logger.warning(
+                    'Export attempt %s/%s failed on %s for section %s; retrying in %ss: %s',
+                    attempt,
+                    self.EXPORT_MAX_ATTEMPTS,
+                    server_name,
+                    section_name,
+                    self.EXPORT_RETRY_DELAY,
+                    exc,
+                )
+                time.sleep(self.EXPORT_RETRY_DELAY)
+
+        if last_error:
+            raise last_error
+
+    def _start_and_wait_for_library_export(
+        self,
+        client: TautulliClient,
+        server_name: str,
+        section_id: int,
+        section_name: str,
+        media_type: str,
+        server_key: str,
+        progress_step_id: str,
+        completed_step_items: int,
+        total_step_items: int,
+        library_item_count: int,
+        start_label: str,
+        attempt: int,
+        mark_failed: bool,
+    ) -> list:
+        """Start a Tautulli export and wait for the finished export data."""
+        status = self.get_or_create_status()
+        attempt_suffix = (
+            f' (attempt {attempt} / {self.EXPORT_MAX_ATTEMPTS})'
+            if self.EXPORT_MAX_ATTEMPTS > 1
+            else ''
+        )
+        display_start_label = f'{start_label}{attempt_suffix}'
 
         # Update server step
         if server_key == 'a':
-            status.server_a_step = start_label
+            status.server_a_step = display_start_label
         else:
-            status.server_b_step = start_label
+            status.server_b_step = display_start_label
         db.session.commit()
         logger.info(
-            'Starting %s export on %s for section %s',
+            'Starting %s export on %s for section %s (attempt %s/%s)',
             media_type,
             server_name,
             section_name,
+            attempt,
+            self.EXPORT_MAX_ATTEMPTS,
         )
 
         if media_type == 'movie':
@@ -791,13 +895,10 @@ class MediaService:
             completed_step_items,
             total_step_items,
             library_item_count,
+            mark_failed=mark_failed,
         )
 
-        # Process the export data
-        data_dict = movies_data if media_type == 'movie' else tv_data
-        self._process_export_data_parallel(
-            export_data, media_type, data_dict, data_lock, is_primary, server_key
-        )
+        return export_data
 
     def _wait_for_export_parallel(
         self,
@@ -811,6 +912,7 @@ class MediaService:
         completed_step_items: int,
         total_step_items: int,
         library_item_count: int,
+        mark_failed: bool = True,
     ) -> list:
         """
         Poll for export completion and download when ready (parallel version).
@@ -822,11 +924,12 @@ class MediaService:
 
             if elapsed > self.EXPORT_TIMEOUT:
                 timeout_detail = f'{section_name}: export timed out after {self.EXPORT_TIMEOUT}s'
-                self._progress_tracker.fail(
-                    progress_step_id,
-                    detail=f'{section_name}: export timed out',
-                    error=timeout_detail,
-                )
+                if mark_failed:
+                    self._progress_tracker.fail(
+                        progress_step_id,
+                        detail=f'{section_name}: export timed out',
+                        error=timeout_detail,
+                    )
                 status = self.get_or_create_status()
                 if server_key == 'a':
                     status.server_a_step = timeout_detail
@@ -889,11 +992,12 @@ class MediaService:
                                 f'{section_name}: export failed at '
                                 f'{exported_items:,} / {total_items:,} items'
                             )
-                            self._progress_tracker.fail(
-                                progress_step_id,
-                                detail=failure_detail,
-                                error=failure_detail,
-                            )
+                            if mark_failed:
+                                self._progress_tracker.fail(
+                                    progress_step_id,
+                                    detail=failure_detail,
+                                    error=failure_detail,
+                                )
                             status = self.get_or_create_status()
                             if server_key == 'a':
                                 status.server_a_step = failure_detail
@@ -1283,6 +1387,9 @@ class MediaService:
 
     def _save_aggregated_media(self, movies_data: dict, tv_data: dict):
         """Save aggregated media data to the database."""
+        if not movies_data and not tv_data:
+            raise ValueError("Media refresh returned no media; keeping previous cached media.")
+
         resolution_order = {
             '4k': 0, '2160p': 0, '1080p': 1, '1080': 1,
             '720p': 2, '720': 2, '480p': 3, '480': 3, 'sd': 4
@@ -1301,54 +1408,61 @@ class MediaService:
             sorted_sizes = sorted(sizes, reverse=True)
             return ' | '.join(f"{size / (1024 ** 3):.2f}" for size in sorted_sizes)
 
-        # Save movies
-        for key, data in movies_data.items():
-            video_codec = ' | '.join(sorted(data['video_codecs'])) if data['video_codecs'] else ''
-            video_resolution = sort_resolutions(data['video_resolutions']) if data['video_resolutions'] else ''
-            file_size_versions = format_size_versions(data.get('file_sizes', set()))
+        try:
+            MediaRating.query.delete()
+            CachedMedia.query.delete()
 
-            media = CachedMedia(
-                media_type='movie',
-                title=data['title'],
-                year=data['year'],
-                file_size=data['file_size'],
-                file_size_versions=file_size_versions,
-                play_count=data['play_count'],
-                added_at=data['added_at'] if data['added_at'] else None,
-                last_played=data['last_played'] if data['last_played'] else None,
-                video_codec=video_codec,
-                video_resolution=video_resolution,
-                rating=str(data['rating']) if data.get('rating') else None,
-                rating_image=data.get('rating_image'),
-                audience_rating=str(data['audience_rating']) if data.get('audience_rating') else None,
-                audience_rating_image=data.get('audience_rating_image'),
-                imdb_id=data.get('imdb_id'),
-                tmdb_id=data.get('tmdb_id'),
-            )
-            db.session.add(media)
+            # Save movies
+            for key, data in movies_data.items():
+                video_codec = ' | '.join(sorted(data['video_codecs'])) if data['video_codecs'] else ''
+                video_resolution = sort_resolutions(data['video_resolutions']) if data['video_resolutions'] else ''
+                file_size_versions = format_size_versions(data.get('file_sizes', set()))
 
-        # Save TV shows
-        for key, data in tv_data.items():
-            media = CachedMedia(
-                media_type='show',
-                title=data['title'],
-                year=None,
-                file_size=data['file_size'],
-                play_count=data['play_count'],
-                season_count=data.get('season_count', 0),
-                episode_count=data.get('episode_count', 0),
-                added_at=data['added_at'] if data['added_at'] else None,
-                last_played=data['last_played'] if data['last_played'] else None,
-                rating=str(data['rating']) if data.get('rating') else None,
-                rating_image=data.get('rating_image'),
-                audience_rating=str(data['audience_rating']) if data.get('audience_rating') else None,
-                audience_rating_image=data.get('audience_rating_image'),
-                imdb_id=data.get('imdb_id'),
-                tmdb_id=data.get('tmdb_id'),
-            )
-            db.session.add(media)
+                media = CachedMedia(
+                    media_type='movie',
+                    title=data['title'],
+                    year=data['year'],
+                    file_size=data['file_size'],
+                    file_size_versions=file_size_versions,
+                    play_count=data['play_count'],
+                    added_at=data['added_at'] if data['added_at'] else None,
+                    last_played=data['last_played'] if data['last_played'] else None,
+                    video_codec=video_codec,
+                    video_resolution=video_resolution,
+                    rating=str(data['rating']) if data.get('rating') else None,
+                    rating_image=data.get('rating_image'),
+                    audience_rating=str(data['audience_rating']) if data.get('audience_rating') else None,
+                    audience_rating_image=data.get('audience_rating_image'),
+                    imdb_id=data.get('imdb_id'),
+                    tmdb_id=data.get('tmdb_id'),
+                )
+                db.session.add(media)
 
-        db.session.commit()
+            # Save TV shows
+            for key, data in tv_data.items():
+                media = CachedMedia(
+                    media_type='show',
+                    title=data['title'],
+                    year=None,
+                    file_size=data['file_size'],
+                    play_count=data['play_count'],
+                    season_count=data.get('season_count', 0),
+                    episode_count=data.get('episode_count', 0),
+                    added_at=data['added_at'] if data['added_at'] else None,
+                    last_played=data['last_played'] if data['last_played'] else None,
+                    rating=str(data['rating']) if data.get('rating') else None,
+                    rating_image=data.get('rating_image'),
+                    audience_rating=str(data['audience_rating']) if data.get('audience_rating') else None,
+                    audience_rating_image=data.get('audience_rating_image'),
+                    imdb_id=data.get('imdb_id'),
+                    tmdb_id=data.get('tmdb_id'),
+                )
+                db.session.add(media)
+
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            raise
 
     @staticmethod
     def _ratings_by_media_id(media_ids: list) -> dict:

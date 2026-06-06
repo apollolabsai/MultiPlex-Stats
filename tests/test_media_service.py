@@ -371,6 +371,106 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.assertEqual(status.server_b_step, 'TV Shows: export failed at 1,413 / 1,419 items')
         mock_log_error.assert_called_once()
 
+    def test_export_retries_after_failed_attempt(self):
+        service = MediaService()
+        service._progress_tracker.reset(
+            service._build_progress_steps(SimpleNamespace(name='Apollo'), None)
+        )
+
+        class StubClient:
+            def __init__(self):
+                self.export_ids = []
+
+            def export_metadata(self, **kwargs):
+                export_id = len(self.export_ids) + 1
+                self.export_ids.append(export_id)
+                return {'response': {'data': {'export_id': export_id}}}
+
+        client = StubClient()
+
+        with patch.object(service, '_wait_for_export_parallel') as mock_wait, patch.object(
+            service,
+            '_process_export_data_parallel',
+            return_value=None,
+        ) as mock_process, patch.object(
+            media_service_module.time,
+            'sleep',
+            return_value=None,
+        ), patch.object(media_service_module.logger, 'warning'):
+            mock_wait.side_effect = [
+                ValueError("Export failed for Movies on Tautulli's side"),
+                [{'title': 'Recovered Movie'}],
+            ]
+
+            service._fetch_library_via_export_parallel(
+                client=client,
+                server_name='Apollo',
+                section_id=2,
+                section_name='Movies',
+                media_type='movie',
+                movies_data={},
+                tv_data={},
+                data_lock=threading.Lock(),
+                is_primary=True,
+                server_key='a',
+                progress_step_id=service._step_id('a', 'movie-export'),
+                completed_step_items=0,
+                total_step_items=10,
+                library_item_count=10,
+            )
+
+        self.assertEqual(client.export_ids, [1, 2])
+        self.assertEqual(mock_wait.call_count, 2)
+        self.assertFalse(mock_wait.call_args_list[0].kwargs['mark_failed'])
+        self.assertFalse(mock_wait.call_args_list[1].kwargs['mark_failed'])
+        mock_process.assert_called_once()
+
+    def test_secondary_server_failure_keeps_existing_cache(self):
+        self._add_movie('Existing Movie', 1999)
+        service = MediaService()
+
+        server_a = SimpleNamespace(name='Apollo')
+        server_b = SimpleNamespace(name='ApolloSS')
+
+        def fake_fetch(server_config, movies_data, tv_data, data_lock, is_primary, server_key):
+            if server_key == 'b':
+                raise ValueError('ApolloSS export failed')
+            movies_data[('New Movie', 2026)] = {
+                'title': 'New Movie',
+                'year': 2026,
+                'file_size': 0,
+                'play_count': 0,
+                'season_count': 0,
+                'episode_count': 0,
+                'added_at': 0,
+                'last_played': 0,
+                'video_codecs': set(),
+                'video_resolutions': set(),
+                'file_sizes': set(),
+                'rating': None,
+                'rating_image': None,
+                'audience_rating': None,
+                'audience_rating_image': None,
+                'imdb_id': None,
+                'tmdb_id': None,
+            }
+
+        with patch.object(
+            media_service_module.ConfigService,
+            'get_server_configs',
+            return_value=(server_a, server_b),
+        ), patch.object(
+            service,
+            '_fetch_server_media_parallel',
+            side_effect=fake_fetch,
+        ), patch.object(media_service_module.logger, 'exception'):
+            with self.assertRaises(ValueError) as ctx:
+                service._run_media_sync_parallel(self.app)
+
+        self.assertIn('Media refresh incomplete; keeping previous cached media', str(ctx.exception))
+        titles = [row.title for row in CachedMedia.query.order_by(CachedMedia.title).all()]
+        self.assertEqual(titles, ['Existing Movie'])
+
     def test_get_movies_always_includes_media_id(self):
         movie = self._add_movie('No History Movie', 2024)
         rows = MediaService().get_movies()
