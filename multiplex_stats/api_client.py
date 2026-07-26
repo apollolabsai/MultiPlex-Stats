@@ -22,6 +22,10 @@ _DEFAULT_REQUEST_TIMEOUT = (5, 30)  # (connect, read)
 _COMMAND_TIMEOUTS: dict[str, tuple[int, int]] = {
     'get_history': (5, 90),
     'download_export': (5, 120),
+    'get_metadata': (5, 10),
+}
+_COMMAND_MAX_RETRIES: dict[str, int] = {
+    'get_metadata': 1,
 }
 
 # Human-readable descriptions for each Tautulli API command
@@ -34,6 +38,7 @@ _CMD_LABELS: dict[str, str] = {
     'get_library_user_stats':               'Fetch per-user library stats',
     'get_library_media_info':               'Fetch library media info',
     'get_libraries':                        'Fetch library list',
+    'get_server_info':                      'Fetch Plex server identity',
     'get_concurrent_streams_by_stream_type':'Fetch concurrent stream data',
     'get_metadata':                         'Fetch item metadata',
     'get_children_metadata':                'Fetch child item metadata',
@@ -83,9 +88,10 @@ class TautulliClient:
         label = _CMD_LABELS.get(command, command)
         server_name = getattr(self.config, 'name', None) or 'Tautulli'
         timeout = _COMMAND_TIMEOUTS.get(command, _DEFAULT_REQUEST_TIMEOUT)
+        max_retries = _COMMAND_MAX_RETRIES.get(command, _MAX_RETRIES)
 
         last_exc: Exception | None = None
-        for attempt in range(_MAX_RETRIES):
+        for attempt in range(max_retries):
             try:
                 start = time.monotonic()
                 response = requests.get(url, verify=self.verify_ssl, timeout=timeout)
@@ -98,11 +104,11 @@ class TautulliClient:
                 return response.json()
             except (requests.ConnectionError, requests.Timeout) as exc:
                 last_exc = exc
-                if attempt < _MAX_RETRIES - 1:
+                if attempt < max_retries - 1:
                     delay = _RETRY_BACKOFF_BASE * (2 ** attempt)
                     logger.warning(
                         "Tautulli [%s] %s failed (attempt %d/%d), retrying in %ds: %s",
-                        server_name, label, attempt + 1, _MAX_RETRIES, delay, exc,
+                        server_name, label, attempt + 1, max_retries, delay, exc,
                     )
                     time.sleep(delay)
 
@@ -303,6 +309,10 @@ class TautulliClient:
         """
         return self._make_request('get_libraries')
 
+    def get_server_info(self) -> dict[str, Any]:
+        """Get the Plex server identity and version exposed by Tautulli."""
+        return self._make_request('get_server_info')
+
     def export_metadata(
         self,
         section_id: int,
@@ -373,7 +383,7 @@ class TautulliClient:
         """
         return self._make_request('download_export', export_id=export_id)
 
-    def get_metadata(self, rating_key: int) -> dict[str, Any]:
+    def get_metadata(self, rating_key: int | str) -> dict[str, Any]:
         """
         Get metadata for a specific media item.
 

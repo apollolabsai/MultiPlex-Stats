@@ -6,7 +6,7 @@ from unittest.mock import patch
 from flask import Flask
 
 import flask_app.services.media_service as media_service_module
-from flask_app.models import CachedMedia, MediaSyncStatus, db
+from flask_app.models import CachedMedia, MediaSyncStatus, MediaTechnicalCache, db
 from flask_app.services.media_service import MediaService
 
 
@@ -29,6 +29,7 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.ctx = self.app.app_context()
         self.ctx.push()
         CachedMedia.query.delete()
+        MediaTechnicalCache.query.delete()
         MediaSyncStatus.query.delete()
         db.session.commit()
 
@@ -193,6 +194,37 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.assertEqual(show['season_count'], 1)
         self.assertEqual(show['episode_count'], 1)
 
+    def test_process_export_data_sums_movie_versions_after_source_enrichment(self):
+        service = MediaService()
+        data_dict = {}
+        data_lock = threading.Lock()
+
+        for size, codec, resolution, server_key in (
+            (100, 'h264', '1080', 'a'),
+            (250, 'hevc', '4k', 'b'),
+        ):
+            service._process_export_data_parallel(
+                export_data=[{
+                    'title': 'Versioned Movie',
+                    'year': 2026,
+                    '_technical_file_size': size,
+                    '_technical_file_sizes': [size],
+                    '_technical_video_codecs': [codec],
+                    '_technical_video_resolutions': [resolution],
+                }],
+                media_type='movie',
+                data_dict=data_dict,
+                data_lock=data_lock,
+                is_primary=server_key == 'a',
+                server_key=server_key,
+            )
+
+        movie = data_dict[('Versioned Movie', 2026)]
+        self.assertEqual(movie['file_size'], 350)
+        self.assertEqual(movie['file_sizes'], {100, 250})
+        self.assertEqual(movie['video_codecs'], {'h264', 'hevc'})
+        self.assertEqual(movie['video_resolutions'], {'1080', '4k'})
+
     def test_tv_play_stats_do_not_overwrite_export_file_size(self):
         class StubClient:
             @staticmethod
@@ -246,6 +278,54 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.assertEqual(show['file_size'], 250)
         self.assertEqual(show['play_count'], 5)
         self.assertEqual(show['last_played'], 12345)
+
+    def test_movie_play_stats_do_not_double_count_enriched_technical_values(self):
+        movie_data = {
+            ('Sample Movie', 2026): {
+                'title': 'Sample Movie',
+                'year': 2026,
+                'file_size': 250,
+                'play_count': 1,
+                'season_count': 0,
+                'episode_count': 0,
+                'added_at': 0,
+                'last_played': 0,
+                'video_codecs': {'h264'},
+                'video_resolutions': {'1080'},
+                'file_sizes': {250},
+                'rating': None,
+                'rating_image': None,
+                'audience_rating': None,
+                'audience_rating_image': None,
+                'imdb_id': None,
+                'tmdb_id': None,
+            }
+        }
+
+        MediaService()._fetch_library_play_stats_parallel(
+            client=SimpleNamespace(),
+            section_id=1,
+            media_type='movie',
+            data_dict=movie_data,
+            data_lock=threading.Lock(),
+            items=[{
+                'title': 'Sample Movie',
+                'year': '2026',
+                'file_size': 999,
+                'video_codec': 'hevc',
+                'video_resolution': '4k',
+                'play_count': 4,
+                'last_played': 12345,
+            }],
+            include_movie_technical=False,
+        )
+
+        movie = movie_data[('Sample Movie', 2026)]
+        self.assertEqual(movie['file_size'], 250)
+        self.assertEqual(movie['file_sizes'], {250})
+        self.assertEqual(movie['video_codecs'], {'h264'})
+        self.assertEqual(movie['video_resolutions'], {'1080'})
+        self.assertEqual(movie['play_count'], 5)
 
     def test_build_progress_steps_always_include_mdblist_step(self):
         steps = MediaService._build_progress_steps(
@@ -312,6 +392,255 @@ class MediaServiceLinkTests(unittest.TestCase):
                 'seasons.episodes.media.parts.sizeHuman',
             ],
         )
+
+    def test_movie_export_includes_lightweight_change_marker(self):
+        service = MediaService()
+
+        class StubClient:
+            def __init__(self):
+                self.export_kwargs = None
+
+            def export_metadata(self, **kwargs):
+                self.export_kwargs = kwargs
+                return {'response': {'data': {'export_id': 123}}}
+
+        client = StubClient()
+        with patch.object(MediaService, '_wait_for_export_parallel', return_value=[]), patch.object(
+            MediaService,
+            '_process_export_data_parallel',
+            return_value=None,
+        ):
+            service._fetch_library_via_export_parallel(
+                client=client,
+                server_name='Apollo',
+                section_id=1,
+                section_name='Movies',
+                media_type='movie',
+                movies_data={},
+                tv_data={},
+                data_lock=threading.Lock(),
+                is_primary=True,
+                server_key='a',
+                progress_step_id=service._step_id('a', 'movie-export'),
+                completed_step_items=0,
+                total_step_items=10,
+                library_item_count=10,
+            )
+
+        self.assertIn('updatedAt', client.export_kwargs['custom_fields'])
+        self.assertEqual(client.export_kwargs['media_info_level'], 0)
+
+    def test_section_cache_seeds_scoped_technical_cache_without_targeted_request(self):
+        service = MediaService()
+        server = SimpleNamespace(
+            name='Apollo',
+            server_config_id=1,
+        )
+
+        class StubClient:
+            @staticmethod
+            def get_metadata(rating_key):
+                raise AssertionError('targeted lookup should not be used')
+
+        record = {
+            'ratingKey': '10',
+            'title': 'Cached Movie',
+            'year': 2026,
+            'guid': 'plex://movie/cached',
+            'guids': [{'id': 'imdb://tt0000010'}],
+            'updatedAt': '100',
+        }
+        state = {
+            'started_at': None,
+            'requests_used': 0,
+            'section_cache_hits': 0,
+            'local_cache_hits': 0,
+            'fingerprint_mismatches': 0,
+            'targeted_successes': 0,
+            'targeted_failures': 0,
+            'budget_skips': 0,
+        }
+        seen = set()
+
+        service._enrich_movie_export_records(
+            client=StubClient(),
+            server_config=server,
+            server_identifier='machine-a',
+            section_id=1,
+            export_data=[record],
+            section_cache_items=[{
+                'rating_key': '10',
+                'title': 'Cached Movie',
+                'year': '2026',
+                'file_size': 1234,
+                'video_codec': 'h264',
+                'video_resolution': '1080',
+            }],
+            enrichment_state=state,
+            seen_technical_locators=seen,
+            technical_locator_lock=threading.Lock(),
+        )
+
+        self.assertEqual(record['_technical_file_size'], 1234)
+        self.assertEqual(state['section_cache_hits'], 1)
+        self.assertEqual(state['requests_used'], 0)
+        self.assertEqual(seen, {(1, '1', 'movie', '10')})
+        cached = MediaTechnicalCache.query.one()
+        self.assertEqual(cached.plex_guid, 'plex://movie/cached')
+        self.assertEqual(cached.server_identifier, 'machine-a')
+
+        second_record = dict(record)
+        for key in list(second_record):
+            if key.startswith('_technical_'):
+                second_record.pop(key)
+        service._enrich_movie_export_records(
+            client=StubClient(),
+            server_config=server,
+            server_identifier='machine-a',
+            section_id=1,
+            export_data=[second_record],
+            section_cache_items=[],
+            enrichment_state=state,
+            seen_technical_locators=seen,
+            technical_locator_lock=threading.Lock(),
+        )
+        self.assertEqual(second_record['_technical_file_size'], 1234)
+        self.assertEqual(state['local_cache_hits'], 1)
+
+    def test_title_change_uses_targeted_metadata_and_persists_result(self):
+        service = MediaService()
+        server = SimpleNamespace(name='ApolloSS', server_config_id=2)
+
+        class StubClient:
+            calls = []
+
+            @classmethod
+            def get_metadata(cls, rating_key):
+                cls.calls.append(str(rating_key))
+                return {
+                    'response': {
+                        'data': {
+                            'media_info': [{
+                                'video_codec': 'h264',
+                                'video_resolution': '1080',
+                                'parts': [{'file_size': 4321}],
+                            }]
+                        }
+                    }
+                }
+
+        record = {
+            'ratingKey': '20',
+            'title': 'Current Title',
+            'year': 2026,
+            'guid': 'plex://movie/current',
+            'updatedAt': '200',
+        }
+        state = {
+            'started_at': None,
+            'requests_used': 0,
+            'section_cache_hits': 0,
+            'local_cache_hits': 0,
+            'fingerprint_mismatches': 0,
+            'targeted_successes': 0,
+            'targeted_failures': 0,
+            'budget_skips': 0,
+        }
+
+        service._enrich_movie_export_records(
+            client=StubClient(),
+            server_config=server,
+            server_identifier='machine-b',
+            section_id=2,
+            export_data=[record],
+            section_cache_items=[{
+                'rating_key': '20',
+                'title': 'Old Title',
+                'year': '2026',
+                'file_size': 111,
+                'video_codec': 'old',
+                'video_resolution': 'sd',
+            }],
+            enrichment_state=state,
+            seen_technical_locators=set(),
+            technical_locator_lock=threading.Lock(),
+        )
+
+        self.assertEqual(StubClient.calls, ['20'])
+        self.assertEqual(record['_technical_file_size'], 4321)
+        self.assertEqual(state['targeted_successes'], 1)
+        cached = MediaTechnicalCache.query.one()
+        self.assertEqual(cached.title, 'Current Title')
+        self.assertEqual(cached.file_size, 4321)
+
+    def test_fingerprint_mismatch_replaces_stale_locator(self):
+        db.session.add(MediaTechnicalCache(
+            server_config_id=1,
+            server_identifier='machine-a',
+            server_name='Apollo',
+            section_id='1',
+            media_type='movie',
+            rating_key='30',
+            plex_guid='plex://movie/old',
+            title='Old Movie',
+            year=1990,
+            plex_updated_at='100',
+            file_size=999,
+            file_size_versions='[999]',
+            video_codecs='["old"]',
+            video_resolutions='["sd"]',
+        ))
+        db.session.commit()
+
+        class StubClient:
+            @staticmethod
+            def get_metadata(rating_key):
+                return {
+                    'response': {
+                        'data': {
+                            'media_info': [{
+                                'video_codec': 'hevc',
+                                'video_resolution': '4k',
+                                'parts': [{'file_size': 5555}],
+                            }]
+                        }
+                    }
+                }
+
+        record = {
+            'ratingKey': '30',
+            'title': 'New Movie',
+            'year': 2026,
+            'guid': 'plex://movie/new',
+            'updatedAt': '300',
+        }
+        state = {
+            'started_at': None,
+            'requests_used': 0,
+            'section_cache_hits': 0,
+            'local_cache_hits': 0,
+            'fingerprint_mismatches': 0,
+            'targeted_successes': 0,
+            'targeted_failures': 0,
+            'budget_skips': 0,
+        }
+        MediaService()._enrich_movie_export_records(
+            client=StubClient(),
+            server_config=SimpleNamespace(name='Apollo', server_config_id=1),
+            server_identifier='machine-a',
+            section_id=1,
+            export_data=[record],
+            section_cache_items=[],
+            enrichment_state=state,
+            seen_technical_locators=set(),
+            technical_locator_lock=threading.Lock(),
+        )
+
+        self.assertEqual(state['fingerprint_mismatches'], 1)
+        self.assertEqual(record['_technical_file_size'], 5555)
+        cached = MediaTechnicalCache.query.one()
+        self.assertEqual(cached.plex_guid, 'plex://movie/new')
+        self.assertEqual(cached.file_size, 5555)
 
     def test_failed_tv_export_is_logged_and_marked_failed(self):
         service = MediaService()
@@ -432,7 +761,16 @@ class MediaServiceLinkTests(unittest.TestCase):
         server_a = SimpleNamespace(name='Apollo')
         server_b = SimpleNamespace(name='ApolloSS')
 
-        def fake_fetch(server_config, movies_data, tv_data, data_lock, is_primary, server_key):
+        def fake_fetch(
+            server_config,
+            movies_data,
+            tv_data,
+            data_lock,
+            is_primary,
+            server_key,
+            seen_technical_locators=None,
+            technical_locator_lock=None,
+        ):
             if server_key == 'b':
                 raise ValueError('ApolloSS export failed')
             movies_data[('New Movie', 2026)] = {

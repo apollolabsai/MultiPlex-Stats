@@ -14,6 +14,7 @@ class ServerConfig:
     api_key: str
     use_ssl: bool = False
     verify_ssl: bool = False
+    server_config_id: int | None = None
 
     @property
     def base_url(self) -> str:

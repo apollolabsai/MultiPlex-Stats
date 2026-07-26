@@ -30,7 +30,8 @@ class ServerConfig(db.Model):
             ip_address=self.ip_address,
             api_key=self.api_key,
             use_ssl=self.use_ssl,
-            verify_ssl=self.verify_ssl
+            verify_ssl=self.verify_ssl,
+            server_config_id=self.id,
         )
 
 
@@ -248,6 +249,49 @@ class CachedMedia(db.Model):
     # Unique constraint on title + year + media_type
     __table_args__ = (
         db.UniqueConstraint('title', 'year', 'media_type', name='uq_media_title_year_type'),
+    )
+
+
+class MediaTechnicalCache(db.Model):
+    """Per-server technical media details keyed by the current Plex locator."""
+    __tablename__ = 'media_technical_cache'
+
+    id = db.Column(db.Integer, primary_key=True)
+    server_config_id = db.Column(db.Integer, nullable=False, index=True)
+    server_identifier = db.Column(db.String(100), nullable=True)
+    server_name = db.Column(db.String(100), nullable=False)
+    section_id = db.Column(db.String(50), nullable=False)
+    media_type = db.Column(db.String(20), nullable=False)
+    rating_key = db.Column(db.String(100), nullable=False)
+
+    # Identity fingerprint used to reject stale/reused Plex locators.
+    plex_guid = db.Column(db.String(255), nullable=True)
+    imdb_id = db.Column(db.String(20), nullable=True)
+    tmdb_id = db.Column(db.String(20), nullable=True)
+    title = db.Column(db.String(500), nullable=False)
+    year = db.Column(db.Integer, nullable=True)
+    plex_updated_at = db.Column(db.String(64), nullable=True)
+
+    # File-specific technical values.
+    file_size = db.Column(db.BigInteger, default=0)
+    file_size_versions = db.Column(db.Text, nullable=True)
+    video_codecs = db.Column(db.Text, nullable=True)
+    video_resolutions = db.Column(db.Text, nullable=True)
+    refreshed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            'server_config_id',
+            'section_id',
+            'media_type',
+            'rating_key',
+            name='uq_media_technical_locator',
+        ),
+        db.Index(
+            'ix_media_technical_server_type',
+            'server_config_id',
+            'media_type',
+        ),
     )
 
 

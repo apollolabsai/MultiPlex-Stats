@@ -4,6 +4,7 @@ Uses export_metadata API for rich metadata including ratings.
 Supports parallel fetching from multiple servers.
 """
 import logging
+import json
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -16,7 +17,13 @@ import re
 
 logger = logging.getLogger('multiplex.media')
 
-from flask_app.models import db, MediaSyncStatus, CachedMedia, MediaRating
+from flask_app.models import (
+    db,
+    MediaSyncStatus,
+    CachedMedia,
+    MediaRating,
+    MediaTechnicalCache,
+)
 from flask_app.services.config_service import ConfigService
 from flask_app.services.sync_progress import SyncProgressTracker
 from flask_app.services.sync_recovery import is_recoverable_stale_run
@@ -31,6 +38,9 @@ class MediaService:
     EXPORT_TIMEOUT = 1500      # max seconds to wait for export (25 minutes)
     EXPORT_MAX_ATTEMPTS = 3    # initial attempt + 2 retries
     EXPORT_RETRY_DELAY = 5     # seconds between export retries
+    TECHNICAL_LOOKUP_WORKERS = 2
+    TECHNICAL_LOOKUP_LIMIT_PER_SERVER = 300
+    TECHNICAL_LOOKUP_BUDGET_SECONDS = 45
     RUN_MODE_MEDIA_ONLY = 'media_only'
     RUN_MODE_FULL_PIPELINE = 'full_pipeline'
     STAGE_NAME = 'media'
@@ -45,6 +55,7 @@ class MediaService:
         'audienceRatingImage',
         'guid',
         'guids',
+        'updatedAt',
     ]
     TV_EXPORT_CUSTOM_FIELDS = [
         'title',
@@ -424,6 +435,8 @@ class MediaService:
         movies_data = {}
         tv_data = {}
         data_lock = threading.Lock()
+        seen_technical_locators: set[tuple[int, str, str, str]] = set()
+        technical_locator_lock = threading.Lock()
 
         # Track errors from threads
         errors = []
@@ -435,7 +448,9 @@ class MediaService:
                 try:
                     self._fetch_server_media_parallel(
                         server_config, movies_data, tv_data, data_lock,
-                        is_primary, server_key
+                        is_primary, server_key,
+                        seen_technical_locators,
+                        technical_locator_lock,
                     )
                 except Exception as e:
                     with errors_lock:
@@ -509,6 +524,14 @@ class MediaService:
             detail='Saving merged media library data...',
         )
         self._save_aggregated_media(movies_data, tv_data)
+        self._prune_unseen_technical_cache(
+            seen_technical_locators,
+            [
+                config.server_config_id
+                for config in (server_a_config, server_b_config)
+                if config and config.server_config_id is not None
+            ],
+        )
         self._progress_tracker.complete(
             self._step_id(None, 'save'),
             detail=f'Saved {len(movies_data):,} movies and {len(tv_data):,} TV shows',
@@ -524,7 +547,9 @@ class MediaService:
         tv_data: dict,
         data_lock: threading.Lock,
         is_primary: bool,
-        server_key: str
+        server_key: str,
+        seen_technical_locators: set[tuple[int, str, str, str]] | None = None,
+        technical_locator_lock: Optional[object] = None,
     ):
         """
         Fetch media from a single server using export_metadata API.
@@ -555,6 +580,18 @@ class MediaService:
         self._progress_tracker.start(discover_step_id, detail='Connecting to Tautulli...')
 
         client = TautulliClient(server_config)
+        server_identifier = self._get_server_identifier(client, server_config)
+        enrichment_state = {
+            'started_at': None,
+            'requests_used': 0,
+            'section_cache_hits': 0,
+            'local_cache_hits': 0,
+            'fingerprint_mismatches': 0,
+            'targeted_successes': 0,
+            'targeted_failures': 0,
+            'budget_skips': 0,
+        }
+        movie_play_stats: dict[str, list] = {}
 
         # Get all libraries
         libraries_response = client.get_libraries()
@@ -608,14 +645,20 @@ class MediaService:
             self._progress_tracker.complete(movie_export_step_id, detail='No movie libraries found')
 
         for lib in movie_libraries:
-            self._fetch_library_via_export_parallel(
+            play_stats_items = self._fetch_library_via_export_parallel(
                 client, server_config.name, lib['id'], lib['name'],
                 'movie', movies_data, tv_data, data_lock, is_primary, server_key,
                 movie_export_step_id,
                 completed_movie_items,
                 movie_total_items,
                 lib['count'],
+                server_config=server_config,
+                server_identifier=server_identifier,
+                enrichment_state=enrichment_state,
+                seen_technical_locators=seen_technical_locators,
+                technical_locator_lock=technical_locator_lock,
             )
+            movie_play_stats[str(lib['id'])] = play_stats_items or []
             completed_movie_items += lib['count']
 
         if movie_libraries:
@@ -678,7 +721,13 @@ class MediaService:
         play_stats_completed = 0
         for lib in movie_libraries:
             self._fetch_library_play_stats_parallel(
-                client, lib['id'], 'movie', movies_data, data_lock
+                client,
+                lib['id'],
+                'movie',
+                movies_data,
+                data_lock,
+                items=movie_play_stats.get(str(lib['id'])),
+                include_movie_technical=False,
             )
             play_stats_completed += 1
             self._progress_tracker.update(
@@ -710,6 +759,20 @@ class MediaService:
                 total=total_play_stats_libraries,
             )
 
+        logger.info(
+            'Technical enrichment on %s: section_cache_hits=%s local_cache_hits=%s '
+            'fingerprint_mismatches=%s targeted_requests=%s targeted_successes=%s '
+            'targeted_failures=%s budget_skips=%s',
+            server_config.name,
+            enrichment_state['section_cache_hits'],
+            enrichment_state['local_cache_hits'],
+            enrichment_state['fingerprint_mismatches'],
+            enrichment_state['requests_used'],
+            enrichment_state['targeted_successes'],
+            enrichment_state['targeted_failures'],
+            enrichment_state['budget_skips'],
+        )
+
         # Mark server as complete
         status = self.get_or_create_status()
         if server_key == 'a':
@@ -736,6 +799,11 @@ class MediaService:
         completed_step_items: int,
         total_step_items: int,
         library_item_count: int,
+        server_config=None,
+        server_identifier: str | None = None,
+        enrichment_state: dict | None = None,
+        seen_technical_locators: set[tuple[int, str, str, str]] | None = None,
+        technical_locator_lock: Optional[object] = None,
     ):
         """
         Fetch library metadata using export_metadata API (parallel version).
@@ -761,6 +829,24 @@ class MediaService:
                     mark_failed=attempt >= self.EXPORT_MAX_ATTEMPTS,
                 )
 
+                play_stats_items = None
+                if media_type == 'movie' and server_config is not None:
+                    play_stats_items = self._get_library_media_info_items(
+                        client,
+                        section_id,
+                    )
+                    self._enrich_movie_export_records(
+                        client=client,
+                        server_config=server_config,
+                        server_identifier=server_identifier,
+                        section_id=section_id,
+                        export_data=export_data,
+                        section_cache_items=play_stats_items,
+                        enrichment_state=enrichment_state,
+                        seen_technical_locators=seen_technical_locators,
+                        technical_locator_lock=technical_locator_lock,
+                    )
+
                 data_dict = movies_data if media_type == 'movie' else tv_data
                 self._process_export_data_parallel(
                     export_data, media_type, data_dict, data_lock, is_primary, server_key
@@ -773,7 +859,7 @@ class MediaService:
                         attempt,
                         self.EXPORT_MAX_ATTEMPTS,
                     )
-                return
+                return play_stats_items
             except Exception as exc:
                 last_error = exc
                 if attempt >= self.EXPORT_MAX_ATTEMPTS:
@@ -1064,6 +1150,518 @@ class MediaService:
 
             time.sleep(self.EXPORT_POLL_INTERVAL)
 
+    @staticmethod
+    def _normalize_identity_text(value) -> str:
+        return ' '.join(str(value or '').casefold().split())
+
+    @staticmethod
+    def _normalize_year(value) -> int | None:
+        try:
+            return int(value) if value not in (None, '') else None
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _normalize_updated_at(value) -> str:
+        return str(value or '').strip()
+
+    def _get_server_identifier(self, client: TautulliClient, server_config) -> str:
+        """Return Plex's machine identifier when Tautulli exposes it."""
+        fallback = f"config:{getattr(server_config, 'server_config_id', None) or server_config.name}"
+        try:
+            response = client.get_server_info()
+            data = response.get('response', {}).get('data', {}) if isinstance(response, dict) else {}
+            if not isinstance(data, dict):
+                return fallback
+            for field in (
+                'pms_identifier',
+                'machine_identifier',
+                'machineIdentifier',
+                'pms_machine_identifier',
+            ):
+                value = str(data.get(field) or '').strip()
+                if value:
+                    return value
+        except Exception as exc:
+            logger.warning(
+                'Unable to read Plex machine identifier from %s; using configuration scope: %s',
+                server_config.name,
+                exc,
+            )
+        return fallback
+
+    @staticmethod
+    def _get_library_media_info_items(
+        client: TautulliClient,
+        section_id: int,
+    ) -> list:
+        """Fetch the existing Tautulli section cache once for stats and technical seeding."""
+        response = client.get_library_media_info(
+            section_id=section_id,
+            length=25000,
+            refresh=False,
+        )
+        if not response or 'response' not in response:
+            return []
+        outer_data = response['response'].get('data', {})
+        if isinstance(outer_data, dict):
+            items = outer_data.get('data', [])
+            return items if isinstance(items, list) else []
+        return []
+
+    def _cache_fingerprint_matches(
+        self,
+        cached: MediaTechnicalCache,
+        record: dict,
+        server_identifier: str | None,
+    ) -> bool:
+        """Validate a cached locator against current export identity fields."""
+        if cached.server_identifier and server_identifier:
+            if cached.server_identifier != server_identifier:
+                return False
+
+        current_guid = str(record.get('guid') or '').strip()
+        cached_guid = str(cached.plex_guid or '').strip()
+        if current_guid and cached_guid:
+            return current_guid == cached_guid
+
+        imdb_id, tmdb_id = self._parse_guids(record)
+        strong_comparisons = []
+        if imdb_id and cached.imdb_id:
+            strong_comparisons.append(imdb_id == cached.imdb_id)
+        if tmdb_id and cached.tmdb_id:
+            strong_comparisons.append(tmdb_id == cached.tmdb_id)
+        if strong_comparisons:
+            return all(strong_comparisons)
+
+        return (
+            self._normalize_identity_text(record.get('title'))
+            == self._normalize_identity_text(cached.title)
+            and self._normalize_year(record.get('year')) == cached.year
+        )
+
+    def _section_cache_identity_matches(self, item: dict, record: dict) -> bool:
+        """Use stale Tautulli rows only when their human identity still agrees."""
+        return (
+            self._normalize_identity_text(item.get('title'))
+            == self._normalize_identity_text(record.get('title'))
+            and self._normalize_year(item.get('year'))
+            == self._normalize_year(record.get('year'))
+        )
+
+    @staticmethod
+    def _technical_complete(technical: dict | None) -> bool:
+        if not technical:
+            return False
+        return bool(
+            int(technical.get('file_size', 0) or 0) > 0
+            and technical.get('video_codecs')
+            and technical.get('video_resolutions')
+        )
+
+    @staticmethod
+    def _technical_from_section_cache(item: dict) -> dict:
+        try:
+            file_size = int(item.get('file_size', 0) or 0)
+        except (TypeError, ValueError):
+            file_size = 0
+        codec = str(item.get('video_codec') or '').strip()
+        resolution = str(item.get('video_resolution') or '').strip()
+        return {
+            'file_size': file_size,
+            'file_sizes': {file_size} if file_size else set(),
+            'video_codecs': {codec} if codec else set(),
+            'video_resolutions': {resolution} if resolution else set(),
+        }
+
+    @staticmethod
+    def _decode_cache_set(value: str | None) -> set:
+        if not value:
+            return set()
+        try:
+            parsed = json.loads(value)
+            return {item for item in parsed if item not in (None, '')}
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return set()
+
+    def _technical_from_local_cache(self, cached: MediaTechnicalCache) -> dict:
+        return {
+            'file_size': int(cached.file_size or 0),
+            'file_sizes': {
+                int(value)
+                for value in self._decode_cache_set(cached.file_size_versions)
+                if str(value).isdigit() and int(value) > 0
+            },
+            'video_codecs': {
+                str(value)
+                for value in self._decode_cache_set(cached.video_codecs)
+            },
+            'video_resolutions': {
+                str(value)
+                for value in self._decode_cache_set(cached.video_resolutions)
+            },
+        }
+
+    @staticmethod
+    def _technical_from_metadata_response(response: dict) -> dict:
+        data = response.get('response', {}).get('data', {}) if isinstance(response, dict) else {}
+        if not isinstance(data, dict):
+            return {}
+
+        media_rows = data.get('media_info') or data.get('media') or []
+        if not isinstance(media_rows, list):
+            return {}
+
+        file_sizes = set()
+        video_codecs = set()
+        video_resolutions = set()
+
+        for media_row in media_rows:
+            if not isinstance(media_row, dict):
+                continue
+            codec = str(
+                media_row.get('video_codec')
+                or media_row.get('videoCodec')
+                or ''
+            ).strip()
+            resolution = str(
+                media_row.get('video_resolution')
+                or media_row.get('videoResolution')
+                or ''
+            ).strip()
+            if codec:
+                video_codecs.add(codec)
+            if resolution:
+                video_resolutions.add(resolution)
+
+            version_size = 0
+            parts = media_row.get('parts') or []
+            if isinstance(parts, list):
+                for part in parts:
+                    if not isinstance(part, dict):
+                        continue
+                    try:
+                        version_size += int(
+                            part.get('file_size')
+                            or part.get('size')
+                            or 0
+                        )
+                    except (TypeError, ValueError):
+                        continue
+
+            if not version_size:
+                try:
+                    version_size = int(
+                        media_row.get('file_size')
+                        or media_row.get('size')
+                        or 0
+                    )
+                except (TypeError, ValueError):
+                    version_size = 0
+            if version_size:
+                file_sizes.add(version_size)
+
+        return {
+            'file_size': sum(file_sizes),
+            'file_sizes': file_sizes,
+            'video_codecs': video_codecs,
+            'video_resolutions': video_resolutions,
+        }
+
+    @staticmethod
+    def _apply_technical_to_record(record: dict, technical: dict) -> None:
+        record['_technical_file_size'] = int(technical.get('file_size', 0) or 0)
+        record['_technical_file_sizes'] = sorted(technical.get('file_sizes') or [])
+        record['_technical_video_codecs'] = sorted(technical.get('video_codecs') or [])
+        record['_technical_video_resolutions'] = sorted(
+            technical.get('video_resolutions') or []
+        )
+
+    def _upsert_technical_cache(
+        self,
+        cached: MediaTechnicalCache | None,
+        *,
+        server_config,
+        server_identifier: str | None,
+        section_id: int,
+        rating_key: str,
+        record: dict,
+        technical: dict,
+    ) -> MediaTechnicalCache:
+        imdb_id, tmdb_id = self._parse_guids(record)
+        if cached is None:
+            cached = MediaTechnicalCache(
+                server_config_id=server_config.server_config_id,
+                server_name=server_config.name,
+                section_id=str(section_id),
+                media_type='movie',
+                rating_key=rating_key,
+                title=str(record.get('title') or ''),
+            )
+            db.session.add(cached)
+
+        cached.server_identifier = server_identifier
+        cached.server_name = server_config.name
+        cached.plex_guid = str(record.get('guid') or '').strip() or None
+        cached.imdb_id = imdb_id
+        cached.tmdb_id = tmdb_id
+        cached.title = str(record.get('title') or '')
+        cached.year = self._normalize_year(record.get('year'))
+        cached.plex_updated_at = self._normalize_updated_at(record.get('updatedAt')) or None
+        cached.file_size = int(technical.get('file_size', 0) or 0)
+        cached.file_size_versions = json.dumps(
+            sorted(int(value) for value in (technical.get('file_sizes') or []) if int(value) > 0)
+        )
+        cached.video_codecs = json.dumps(sorted(technical.get('video_codecs') or []))
+        cached.video_resolutions = json.dumps(
+            sorted(technical.get('video_resolutions') or [])
+        )
+        cached.refreshed_at = datetime.utcnow()
+        return cached
+
+    def _enrich_movie_export_records(
+        self,
+        *,
+        client: TautulliClient,
+        server_config,
+        server_identifier: str | None,
+        section_id: int,
+        export_data: list,
+        section_cache_items: list,
+        enrichment_state: dict | None,
+        seen_technical_locators: set[tuple[int, str, str, str]] | None,
+        technical_locator_lock: Optional[object],
+    ) -> None:
+        """Attach technical values before title/year aggregation."""
+        server_config_id = getattr(server_config, 'server_config_id', None)
+        if enrichment_state is None:
+            enrichment_state = {
+                'started_at': None,
+                'requests_used': 0,
+                'section_cache_hits': 0,
+                'local_cache_hits': 0,
+                'fingerprint_mismatches': 0,
+                'targeted_successes': 0,
+                'targeted_failures': 0,
+                'budget_skips': 0,
+            }
+
+        section_cache_by_key = {
+            str(item.get('rating_key') or item.get('ratingKey') or ''): item
+            for item in section_cache_items
+            if isinstance(item, dict)
+            and (item.get('rating_key') or item.get('ratingKey')) not in (None, '')
+        }
+
+        local_by_key = {}
+        if server_config_id is not None:
+            local_rows = MediaTechnicalCache.query.filter_by(
+                server_config_id=server_config_id,
+                section_id=str(section_id),
+                media_type='movie',
+            ).all()
+            local_by_key = {row.rating_key: row for row in local_rows}
+
+        targeted = []
+        cache_changed = False
+
+        for record in export_data:
+            if not isinstance(record, dict):
+                continue
+            rating_key = str(
+                record.get('ratingKey')
+                or record.get('rating_key')
+                or ''
+            ).strip()
+            if not rating_key:
+                continue
+
+            if server_config_id is not None and seen_technical_locators is not None:
+                locator = (
+                    server_config_id,
+                    str(section_id),
+                    'movie',
+                    rating_key,
+                )
+                if technical_locator_lock:
+                    with technical_locator_lock:
+                        seen_technical_locators.add(locator)
+                else:
+                    seen_technical_locators.add(locator)
+
+            cached = local_by_key.get(rating_key)
+            cached_fingerprint_valid = False
+            if cached is not None:
+                cached_fingerprint_valid = self._cache_fingerprint_matches(
+                    cached,
+                    record,
+                    server_identifier,
+                )
+                if cached_fingerprint_valid:
+                    cached_technical = self._technical_from_local_cache(cached)
+                    if self._technical_complete(cached_technical):
+                        self._apply_technical_to_record(record, cached_technical)
+                        export_updated_at = self._normalize_updated_at(
+                            record.get('updatedAt')
+                        )
+                        if (
+                            not export_updated_at
+                            or export_updated_at == (cached.plex_updated_at or '')
+                        ):
+                            enrichment_state['local_cache_hits'] += 1
+                            continue
+                else:
+                    enrichment_state['fingerprint_mismatches'] += 1
+
+            section_item = section_cache_by_key.get(rating_key)
+            if (
+                cached is None
+                and section_item is not None
+                and self._section_cache_identity_matches(section_item, record)
+            ):
+                section_technical = self._technical_from_section_cache(section_item)
+                if self._technical_complete(section_technical):
+                    self._apply_technical_to_record(record, section_technical)
+                    enrichment_state['section_cache_hits'] += 1
+                    if server_config_id is not None:
+                        local_by_key[rating_key] = self._upsert_technical_cache(
+                            None,
+                            server_config=server_config,
+                            server_identifier=server_identifier,
+                            section_id=section_id,
+                            rating_key=rating_key,
+                            record=record,
+                            technical=section_technical,
+                        )
+                        cache_changed = True
+                    continue
+
+            targeted.append((record, rating_key, cached))
+
+        remaining_limit = max(
+            self.TECHNICAL_LOOKUP_LIMIT_PER_SERVER
+            - int(enrichment_state['requests_used']),
+            0,
+        )
+        if targeted and enrichment_state['started_at'] is None:
+            enrichment_state['started_at'] = time.monotonic()
+        candidates = targeted[:remaining_limit]
+        enrichment_state['budget_skips'] += len(targeted) - len(candidates)
+
+        processed_candidates = 0
+        if candidates:
+            with ThreadPoolExecutor(max_workers=self.TECHNICAL_LOOKUP_WORKERS) as executor:
+                while processed_candidates < len(candidates):
+                    elapsed = time.monotonic() - enrichment_state['started_at']
+                    if elapsed >= self.TECHNICAL_LOOKUP_BUDGET_SECONDS:
+                        break
+
+                    batch = candidates[
+                        processed_candidates:
+                        processed_candidates + self.TECHNICAL_LOOKUP_WORKERS
+                    ]
+                    enrichment_state['requests_used'] += len(batch)
+                    future_map = {
+                        executor.submit(client.get_metadata, rating_key): (
+                            record,
+                            rating_key,
+                            cached,
+                        )
+                        for record, rating_key, cached in batch
+                    }
+                    processed_candidates += len(batch)
+
+                    for future in as_completed(future_map):
+                        record, rating_key, cached = future_map[future]
+                        try:
+                            technical = self._technical_from_metadata_response(
+                                future.result()
+                            )
+                        except Exception as exc:
+                            enrichment_state['targeted_failures'] += 1
+                            logger.warning(
+                                'Targeted technical lookup failed on %s for section %s '
+                                'ratingKey=%s: %s',
+                                server_config.name,
+                                section_id,
+                                rating_key,
+                                exc,
+                            )
+                            continue
+
+                        if not self._technical_complete(technical):
+                            enrichment_state['targeted_failures'] += 1
+                            logger.warning(
+                                'Targeted technical lookup returned incomplete data on %s '
+                                'for section %s ratingKey=%s.',
+                                server_config.name,
+                                section_id,
+                                rating_key,
+                            )
+                            continue
+
+                        self._apply_technical_to_record(record, technical)
+                        enrichment_state['targeted_successes'] += 1
+                        if server_config_id is not None:
+                            local_by_key[rating_key] = self._upsert_technical_cache(
+                                cached,
+                                server_config=server_config,
+                                server_identifier=server_identifier,
+                                section_id=section_id,
+                                rating_key=rating_key,
+                                record=record,
+                                technical=technical,
+                            )
+                            cache_changed = True
+
+        enrichment_state['budget_skips'] += len(candidates) - processed_candidates
+
+        if cache_changed:
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                logger.exception(
+                    'Unable to persist technical cache updates for %s section %s; '
+                    'continuing with in-memory enrichment.',
+                    server_config.name,
+                    section_id,
+                )
+
+    @staticmethod
+    def _prune_unseen_technical_cache(
+        seen_locators: set[tuple[int, str, str, str]],
+        active_server_config_ids: list[int],
+    ) -> None:
+        """Remove stale locators only after every server export succeeded."""
+        seen_by_server = {}
+        for locator in seen_locators:
+            seen_by_server.setdefault(locator[0], set()).add(locator)
+
+        removed = 0
+        for server_config_id in active_server_config_ids:
+            server_seen = seen_by_server.get(server_config_id)
+            if not server_seen:
+                continue
+            rows = MediaTechnicalCache.query.filter_by(
+                server_config_id=server_config_id,
+                media_type='movie',
+            ).all()
+            for row in rows:
+                locator = (
+                    row.server_config_id,
+                    row.section_id,
+                    row.media_type,
+                    row.rating_key,
+                )
+                if locator not in server_seen:
+                    db.session.delete(row)
+                    removed += 1
+
+        if removed:
+            db.session.commit()
+            logger.info('Pruned %s unseen technical-cache locator(s).', removed)
+
     def _process_export_data_parallel(
         self,
         export_data: list,
@@ -1091,11 +1689,29 @@ class MediaService:
                 key = (title, year)
                 season_count = 0
                 episode_count = 0
-                file_size = 0
+                file_size = int(record.get('_technical_file_size', 0) or 0)
+                record_file_sizes = {
+                    int(value)
+                    for value in (record.get('_technical_file_sizes') or [])
+                    if int(value) > 0
+                }
+                record_video_codecs = {
+                    str(value)
+                    for value in (record.get('_technical_video_codecs') or [])
+                    if value
+                }
+                record_video_resolutions = {
+                    str(value)
+                    for value in (record.get('_technical_video_resolutions') or [])
+                    if value
+                }
             else:
                 key = title
                 year = None
                 season_count, episode_count, file_size = self._extract_show_counts_and_size(record)
+                record_file_sizes = {file_size} if file_size else set()
+                record_video_codecs = set()
+                record_video_resolutions = set()
 
             media_info = record.get('media', [{}])[0] if record.get('media') else {}
 
@@ -1114,6 +1730,10 @@ class MediaService:
 
             video_codec = media_info.get('videoCodec', '') or ''
             video_resolution = media_info.get('videoResolution', '') or ''
+            if video_codec:
+                record_video_codecs.add(video_codec)
+            if video_resolution:
+                record_video_resolutions.add(video_resolution)
 
             rating = record.get('rating')
             rating_image = record.get('ratingImage')
@@ -1127,7 +1747,10 @@ class MediaService:
                 if key in data_dict:
                     existing = data_dict[key]
 
-                    existing['file_size'] = max(existing['file_size'], file_size)
+                    if media_type == 'movie':
+                        existing['file_size'] += file_size
+                    else:
+                        existing['file_size'] = max(existing['file_size'], file_size)
                     existing['play_count'] += play_count
                     existing['season_count'] = max(existing['season_count'], season_count)
                     existing['episode_count'] = max(existing['episode_count'], episode_count)
@@ -1141,12 +1764,9 @@ class MediaService:
                     if last_played:
                         existing['last_played'] = max(existing['last_played'] or 0, last_played)
 
-                    if video_codec:
-                        existing['video_codecs'].add(video_codec)
-                    if video_resolution:
-                        existing['video_resolutions'].add(video_resolution)
-                    if file_size:
-                        existing['file_sizes'].add(file_size)
+                    existing['video_codecs'].update(record_video_codecs)
+                    existing['video_resolutions'].update(record_video_resolutions)
+                    existing['file_sizes'].update(record_file_sizes)
 
                     # Ratings: primary server takes priority
                     if is_primary:
@@ -1185,9 +1805,9 @@ class MediaService:
                         'episode_count': episode_count,
                         'added_at': added_at,
                         'last_played': last_played,
-                        'video_codecs': {video_codec} if video_codec else set(),
-                        'video_resolutions': {video_resolution} if video_resolution else set(),
-                        'file_sizes': {file_size} if file_size else set(),
+                        'video_codecs': record_video_codecs,
+                        'video_resolutions': record_video_resolutions,
+                        'file_sizes': record_file_sizes,
                         'rating': rating,
                         'rating_image': rating_image,
                         'audience_rating': audience_rating,
@@ -1291,22 +1911,15 @@ class MediaService:
         section_id: int,
         media_type: str,
         data_dict: dict,
-        data_lock: threading.Lock
+        data_lock: threading.Lock,
+        items: list | None = None,
+        include_movie_technical: bool = True,
     ):
         """
         Fetch play stats from get_library_media_info and merge into data dict (thread-safe).
         """
-        response = client.get_library_media_info(
-            section_id=section_id,
-            length=25000,
-            refresh=False
-        )
-
-        if not response or 'response' not in response:
-            return
-
-        outer_data = response['response'].get('data', {})
-        items = outer_data.get('data', []) if isinstance(outer_data, dict) else []
+        if items is None:
+            items = self._get_library_media_info_items(client, section_id)
 
         for item in items:
             if not isinstance(item, dict):
@@ -1337,7 +1950,7 @@ class MediaService:
 
                 existing['play_count'] += play_count
 
-                if media_type == 'movie':
+                if media_type == 'movie' and include_movie_technical:
                     file_size = int(item.get('file_size', 0) or 0)
                     existing['file_size'] += file_size
                     if file_size:
@@ -1346,9 +1959,9 @@ class MediaService:
                 if last_played:
                     existing['last_played'] = max(existing['last_played'] or 0, last_played)
 
-                if video_codec:
+                if video_codec and (media_type != 'movie' or include_movie_technical):
                     existing['video_codecs'].add(video_codec)
-                if video_resolution:
+                if video_resolution and (media_type != 'movie' or include_movie_technical):
                     existing['video_resolutions'].add(video_resolution)
 
     @staticmethod
