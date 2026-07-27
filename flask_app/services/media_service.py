@@ -9,6 +9,7 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Optional
 
 from flask import current_app
@@ -56,6 +57,7 @@ class MediaService:
         'guid',
         'guids',
         'updatedAt',
+        'media.parts.file',
     ]
     TV_EXPORT_CUSTOM_FIELDS = [
         'title',
@@ -67,6 +69,7 @@ class MediaService:
         'guids',
         'seasons.episodes.media.parts.size',
         'seasons.episodes.media.parts.sizeHuman',
+        'seasons.episodes.media.parts.file',
     ]
 
     def __init__(self):
@@ -849,7 +852,8 @@ class MediaService:
 
                 data_dict = movies_data if media_type == 'movie' else tv_data
                 self._process_export_data_parallel(
-                    export_data, media_type, data_dict, data_lock, is_primary, server_key
+                    export_data, media_type, data_dict, data_lock, is_primary, server_key,
+                    server_name=server_name,
                 )
                 if attempt > 1:
                     logger.info(
@@ -1669,7 +1673,8 @@ class MediaService:
         data_dict: dict,
         data_lock: threading.Lock,
         is_primary: bool,
-        server_key: str
+        server_key: str,
+        server_name: str | None = None,
     ):
         """
         Process export metadata and merge into data dict (thread-safe).
@@ -1713,6 +1718,12 @@ class MediaService:
                 record_video_codecs = set()
                 record_video_resolutions = set()
 
+            record_file_paths = self._extract_file_path_labels(
+                record,
+                media_type=media_type,
+                server_name=server_name,
+                title=title,
+            )
             media_info = record.get('media', [{}])[0] if record.get('media') else {}
 
             # Parse addedAt from ISO format to unix timestamp
@@ -1767,6 +1778,7 @@ class MediaService:
                     existing['video_codecs'].update(record_video_codecs)
                     existing['video_resolutions'].update(record_video_resolutions)
                     existing['file_sizes'].update(record_file_sizes)
+                    existing['file_paths'].update(record_file_paths)
 
                     # Ratings: primary server takes priority
                     if is_primary:
@@ -1808,6 +1820,7 @@ class MediaService:
                         'video_codecs': record_video_codecs,
                         'video_resolutions': record_video_resolutions,
                         'file_sizes': record_file_sizes,
+                        'file_paths': record_file_paths,
                         'rating': rating,
                         'rating_image': rating_image,
                         'audience_rating': audience_rating,
@@ -1826,6 +1839,100 @@ class MediaService:
             status.server_b_fetched += records_processed
         status.records_fetched += records_processed
         db.session.commit()
+
+    @staticmethod
+    def _media_part_paths(media_rows: object) -> set[str]:
+        """Return file paths from a Tautulli media/parts collection."""
+        if not isinstance(media_rows, list):
+            return set()
+
+        paths = set()
+        for media_row in media_rows:
+            if not isinstance(media_row, dict):
+                continue
+            parts = media_row.get('parts') or []
+            if not isinstance(parts, list):
+                continue
+            for part in parts:
+                if not isinstance(part, dict):
+                    continue
+                file_path = str(
+                    part.get('file')
+                    or part.get('file_path')
+                    or part.get('path')
+                    or ''
+                ).strip()
+                if file_path:
+                    paths.add(file_path)
+        return paths
+
+    @classmethod
+    def _record_part_paths(cls, record: dict, media_type: str) -> set[str]:
+        """Extract movie paths or nested TV episode paths from an export row."""
+        if media_type == 'movie':
+            return cls._media_part_paths(
+                record.get('media') or record.get('media_info') or []
+            )
+
+        paths = set()
+        seasons = record.get('seasons') or []
+        if not isinstance(seasons, list):
+            return paths
+        for season in seasons:
+            if not isinstance(season, dict):
+                continue
+            episodes = season.get('episodes') or []
+            if not isinstance(episodes, list):
+                continue
+            for episode in episodes:
+                if not isinstance(episode, dict):
+                    continue
+                paths.update(cls._media_part_paths(episode.get('media') or []))
+        return paths
+
+    @classmethod
+    def _show_folder_name(cls, file_path: str, title: str) -> str:
+        """Reduce an episode file path to its show-level parent folder name."""
+        path_type = PureWindowsPath if '\\' in file_path else PurePosixPath
+        parsed = path_type(file_path)
+        title_key = cls._normalize_identity_text(title)
+
+        for candidate in (parsed.parent, *parsed.parents):
+            name = candidate.name
+            if not name:
+                continue
+            candidate_key = cls._normalize_identity_text(name)
+            if title_key and candidate_key.startswith(title_key):
+                return name
+
+        parent = parsed.parent
+        if re.match(r'^(season\s*\d+|s\d{1,3}|specials?)$', parent.name, re.IGNORECASE):
+            parent = parent.parent
+        return parent.name or title
+
+    @classmethod
+    def _extract_file_path_labels(
+        cls,
+        record: dict,
+        *,
+        media_type: str,
+        server_name: str | None,
+        title: str,
+    ) -> set[str]:
+        """Format export paths for CSV-friendly multi-server aggregation."""
+        raw_paths = cls._record_part_paths(record, media_type)
+        if media_type == 'show':
+            values = {
+                cls._show_folder_name(file_path, title)
+                for file_path in raw_paths
+            }
+        else:
+            values = raw_paths
+
+        prefix = str(server_name or '').strip()
+        if prefix:
+            return {f'{prefix} / {value}' for value in values if value}
+        return {value for value in values if value}
 
     @staticmethod
     def _extract_show_counts_and_size(record: dict) -> tuple[int, int, int]:
@@ -2037,6 +2144,7 @@ class MediaService:
                     year=data['year'],
                     file_size=data['file_size'],
                     file_size_versions=file_size_versions,
+                    file_paths=json.dumps(sorted(data.get('file_paths', set()))),
                     play_count=data['play_count'],
                     added_at=data['added_at'] if data['added_at'] else None,
                     last_played=data['last_played'] if data['last_played'] else None,
@@ -2058,6 +2166,7 @@ class MediaService:
                     title=data['title'],
                     year=None,
                     file_size=data['file_size'],
+                    file_paths=json.dumps(sorted(data.get('file_paths', set()))),
                     play_count=data['play_count'],
                     season_count=data.get('season_count', 0),
                     episode_count=data.get('episode_count', 0),
@@ -2159,6 +2268,7 @@ class MediaService:
                 'video_resolution': movie.video_resolution or '',
                 'file_size': round(file_size_gb, 2),
                 'file_size_versions': movie.file_size_versions or '',
+                'file_paths': sorted(self._decode_cache_set(movie.file_paths)),
                 'last_played': last_played_str,
                 'play_count': movie.play_count,
                 'rating': movie.rating or '',
@@ -2202,6 +2312,7 @@ class MediaService:
                 'content_year': None,
                 'added_at': added_at_str,
                 'file_size': round(file_size_gb, 2),
+                'file_paths': sorted(self._decode_cache_set(show.file_paths)),
                 'last_played': last_played_str,
                 'play_count': show.play_count,
                 'season_count': show.season_count or 0,

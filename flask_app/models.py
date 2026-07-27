@@ -229,6 +229,7 @@ class CachedMedia(db.Model):
     play_count = db.Column(db.Integer, default=0)  # SUM across servers
     file_size = db.Column(db.BigInteger, default=0)  # SUM across servers (bytes)
     file_size_versions = db.Column(db.String(200), nullable=True)  # e.g., "12.34 | 8.90"
+    file_paths = db.Column(db.Text, nullable=True)  # JSON list of server-labelled paths
     season_count = db.Column(db.Integer, default=0)
     episode_count = db.Column(db.Integer, default=0)
 

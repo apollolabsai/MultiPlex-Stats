@@ -805,6 +805,13 @@ $(document).ready(function() {
         return '';
     }
 
+    function formatFilePathsForCsv(row) {
+        if (Array.isArray(row.file_paths)) {
+            return row.file_paths.join(' | ');
+        }
+        return row.file_paths || '';
+    }
+
     function formatRatingForCsv(row) {
         var critic = formatRatingValue(row.rating, row.rating_image);
         var audience = formatRatingValue(row.audience_rating, row.audience_rating_image);
@@ -829,10 +836,11 @@ $(document).ready(function() {
 
         if (currentMediaView === 'tv') {
             var tvRows = tvShowsTable.rows().data().toArray();
-            var tvCsvRows = [['Title', 'Plays', 'Seasons', 'Episodes', 'Size (GB)', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Added', 'Last Played']];
+            var tvCsvRows = [['Title', 'Server / Show Folder(s)', 'Plays', 'Seasons', 'Episodes', 'Size (GB)', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Added', 'Last Played']];
             tvRows.forEach(function(row) {
                 tvCsvRows.push([
                     row.title || '',
+                    formatFilePathsForCsv(row),
                     row.play_count == null ? '' : row.play_count,
                     row.season_count == null ? '' : row.season_count,
                     row.episode_count == null ? '' : row.episode_count,
@@ -853,10 +861,11 @@ $(document).ready(function() {
         }
 
         var movieRows = moviesTable.rows().data().toArray();
-        var movieCsvRows = [['Title', 'Plays', 'Size (GB)', 'Codec', 'Resolution', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Added', 'Last Played']];
+        var movieCsvRows = [['Title', 'Server / File Path(s)', 'Plays', 'Size (GB)', 'Codec', 'Resolution', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Added', 'Last Played']];
         movieRows.forEach(function(row) {
             movieCsvRows.push([
                 row.title || '',
+                formatFilePathsForCsv(row),
                 row.play_count == null ? '' : row.play_count,
                 formatMovieSizeForCsv(row),
                 row.video_codec || '',

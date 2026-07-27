@@ -1,4 +1,5 @@
 import unittest
+import json
 import threading
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -37,24 +38,37 @@ class MediaServiceLinkTests(unittest.TestCase):
         db.session.remove()
         self.ctx.pop()
 
-    def _add_movie(self, title: str, year: int | None = None):
+    def _add_movie(
+        self,
+        title: str,
+        year: int | None = None,
+        file_paths: list[str] | None = None,
+    ):
         media = CachedMedia(
             media_type='movie',
             title=title,
             year=year,
             play_count=0,
+            file_paths=json.dumps(file_paths or []),
         )
         db.session.add(media)
         db.session.commit()
         return media
 
-    def _add_show(self, title: str, season_count: int = 0, episode_count: int = 0):
+    def _add_show(
+        self,
+        title: str,
+        season_count: int = 0,
+        episode_count: int = 0,
+        file_paths: list[str] | None = None,
+    ):
         media = CachedMedia(
             media_type='show',
             title=title,
             play_count=0,
             season_count=season_count,
             episode_count=episode_count,
+            file_paths=json.dumps(file_paths or []),
         )
         db.session.add(media)
         db.session.commit()
@@ -75,6 +89,24 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.assertEqual(rows[0]['title'], 'Alien')
         self.assertNotIn('history_id', rows[0])
 
+    def test_get_movies_includes_sorted_server_file_paths(self):
+        self._add_movie(
+            'Alien',
+            1979,
+            file_paths=[
+                r'ApolloSS / Z:\Movies\Alien (1979)\Alien.mkv',
+                r'Apollo / Y:\Movies\Alien (1979)\Alien.mkv',
+            ],
+        )
+        rows = MediaService().get_movies()
+        self.assertEqual(
+            rows[0]['file_paths'],
+            [
+                r'Apollo / Y:\Movies\Alien (1979)\Alien.mkv',
+                r'ApolloSS / Z:\Movies\Alien (1979)\Alien.mkv',
+            ],
+        )
+
     def test_get_tv_shows_includes_media_id(self):
         show = self._add_show('Family Guy')
         rows = MediaService().get_tv_shows()
@@ -88,6 +120,17 @@ class MediaServiceLinkTests(unittest.TestCase):
         rows = MediaService().get_tv_shows()
         self.assertEqual(rows[0]['season_count'], 23)
         self.assertEqual(rows[0]['episode_count'], 432)
+
+    def test_get_tv_shows_includes_server_show_folders(self):
+        self._add_show(
+            'LOST',
+            file_paths=['Apollo / LOST (2004)', 'ApolloSS / LOST (2004)'],
+        )
+        rows = MediaService().get_tv_shows()
+        self.assertEqual(
+            rows[0]['file_paths'],
+            ['Apollo / LOST (2004)', 'ApolloSS / LOST (2004)'],
+        )
 
     def test_process_export_data_derives_show_counts_and_size(self):
         export_data = [{
@@ -123,6 +166,119 @@ class MediaServiceLinkTests(unittest.TestCase):
         self.assertEqual(show['season_count'], 2)
         self.assertEqual(show['episode_count'], 3)
         self.assertEqual(show['file_size'], 250)
+
+    def test_process_export_data_collects_full_movie_paths_by_server(self):
+        data_dict = {}
+        MediaService()._process_export_data_parallel(
+            export_data=[{
+                'title': 'Alien',
+                'year': 1979,
+                '_technical_file_size': 100,
+                '_technical_file_sizes': [100],
+                'media': [{
+                    'parts': [
+                        {'file': r'Y:\Movies\Alien (1979)\Alien.mkv'},
+                        {'file': r'Y:\Movies\Alien (1979)\Alien-featurette.mkv'},
+                    ],
+                }],
+            }],
+            media_type='movie',
+            data_dict=data_dict,
+            data_lock=threading.Lock(),
+            is_primary=True,
+            server_key='a',
+            server_name='Apollo',
+        )
+
+        self.assertEqual(
+            data_dict[('Alien', 1979)]['file_paths'],
+            {
+                r'Apollo / Y:\Movies\Alien (1979)\Alien.mkv',
+                r'Apollo / Y:\Movies\Alien (1979)\Alien-featurette.mkv',
+            },
+        )
+
+    def test_process_export_data_reduces_tv_paths_to_show_folder_per_server(self):
+        data_dict = {}
+        service = MediaService()
+        for server_name, root in (
+            ('Apollo', r'Y:\TV Shows'),
+            ('ApolloSS', r'Z:\TV'),
+        ):
+            service._process_export_data_parallel(
+                export_data=[{
+                    'title': 'LOST',
+                    'seasons': [{
+                        'episodes': [{
+                            'media': [{
+                                'parts': [{
+                                    'file': root + r'\LOST (2004)\Season 01\LOST - S01E01.mkv',
+                                    'size': 100,
+                                }],
+                            }],
+                        }],
+                    }],
+                }],
+                media_type='show',
+                data_dict=data_dict,
+                data_lock=threading.Lock(),
+                is_primary=server_name == 'Apollo',
+                server_key='a' if server_name == 'Apollo' else 'b',
+                server_name=server_name,
+            )
+
+        self.assertEqual(
+            data_dict['LOST']['file_paths'],
+            {'Apollo / LOST (2004)', 'ApolloSS / LOST (2004)'},
+        )
+
+    def test_save_aggregated_media_persists_paths_for_csv_api(self):
+        common = {
+            'play_count': 0,
+            'season_count': 0,
+            'episode_count': 0,
+            'added_at': 0,
+            'last_played': 0,
+            'video_codecs': set(),
+            'video_resolutions': set(),
+            'file_sizes': set(),
+            'rating': None,
+            'rating_image': None,
+            'audience_rating': None,
+            'audience_rating_image': None,
+            'imdb_id': None,
+            'tmdb_id': None,
+        }
+        movies_data = {
+            ('Alien', 1979): {
+                **common,
+                'title': 'Alien',
+                'year': 1979,
+                'file_size': 100,
+                'file_paths': {r'Apollo / Y:\Movies\Alien (1979)\Alien.mkv'},
+            },
+        }
+        tv_data = {
+            'LOST': {
+                **common,
+                'title': 'LOST',
+                'year': None,
+                'file_size': 200,
+                'file_paths': {'Apollo / LOST (2004)'},
+            },
+        }
+
+        service = MediaService()
+        service._save_aggregated_media(movies_data, tv_data)
+
+        self.assertEqual(
+            service.get_movies()[0]['file_paths'],
+            [r'Apollo / Y:\Movies\Alien (1979)\Alien.mkv'],
+        )
+        self.assertEqual(
+            service.get_tv_shows()[0]['file_paths'],
+            ['Apollo / LOST (2004)'],
+        )
 
     def test_process_export_data_reads_top_level_show_counters(self):
         export_data = [{
@@ -390,6 +546,7 @@ class MediaServiceLinkTests(unittest.TestCase):
                 'guids',
                 'seasons.episodes.media.parts.size',
                 'seasons.episodes.media.parts.sizeHuman',
+                'seasons.episodes.media.parts.file',
             ],
         )
 
@@ -428,6 +585,7 @@ class MediaServiceLinkTests(unittest.TestCase):
             )
 
         self.assertIn('updatedAt', client.export_kwargs['custom_fields'])
+        self.assertIn('media.parts.file', client.export_kwargs['custom_fields'])
         self.assertEqual(client.export_kwargs['media_info_level'], 0)
 
     def test_section_cache_seeds_scoped_technical_cache_without_targeted_request(self):
