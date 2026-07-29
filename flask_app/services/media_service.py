@@ -1891,8 +1891,8 @@ class MediaService:
         return paths
 
     @classmethod
-    def _show_folder_name(cls, file_path: str, title: str) -> str:
-        """Reduce an episode file path to its show-level parent folder name."""
+    def _show_folder_path(cls, file_path: str, title: str) -> str:
+        """Reduce an episode file path to its complete show-level directory."""
         path_type = PureWindowsPath if '\\' in file_path else PurePosixPath
         parsed = path_type(file_path)
         title_key = cls._normalize_identity_text(title)
@@ -1903,12 +1903,12 @@ class MediaService:
                 continue
             candidate_key = cls._normalize_identity_text(name)
             if title_key and candidate_key.startswith(title_key):
-                return name
+                return str(candidate)
 
         parent = parsed.parent
         if re.match(r'^(season\s*\d+|s\d{1,3}|specials?)$', parent.name, re.IGNORECASE):
             parent = parent.parent
-        return parent.name or title
+        return str(parent) if parent.name else title
 
     @classmethod
     def _extract_file_path_labels(
@@ -1923,7 +1923,7 @@ class MediaService:
         raw_paths = cls._record_part_paths(record, media_type)
         if media_type == 'show':
             values = {
-                cls._show_folder_name(file_path, title)
+                cls._show_folder_path(file_path, title)
                 for file_path in raw_paths
             }
         else:

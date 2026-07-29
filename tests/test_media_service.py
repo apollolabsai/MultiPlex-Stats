@@ -124,12 +124,18 @@ class MediaServiceLinkTests(unittest.TestCase):
     def test_get_tv_shows_includes_server_show_folders(self):
         self._add_show(
             'LOST',
-            file_paths=['Apollo / LOST (2004)', 'ApolloSS / LOST (2004)'],
+            file_paths=[
+                r'Apollo / Y:\TV Shows\LOST (2004)',
+                r'ApolloSS / Z:\TV\LOST (2004)',
+            ],
         )
         rows = MediaService().get_tv_shows()
         self.assertEqual(
             rows[0]['file_paths'],
-            ['Apollo / LOST (2004)', 'ApolloSS / LOST (2004)'],
+            [
+                r'Apollo / Y:\TV Shows\LOST (2004)',
+                r'ApolloSS / Z:\TV\LOST (2004)',
+            ],
         )
 
     def test_process_export_data_derives_show_counts_and_size(self):
@@ -229,7 +235,10 @@ class MediaServiceLinkTests(unittest.TestCase):
 
         self.assertEqual(
             data_dict['LOST']['file_paths'],
-            {'Apollo / LOST (2004)', 'ApolloSS / LOST (2004)'},
+            {
+                r'Apollo / Y:\TV Shows\LOST (2004)',
+                r'ApolloSS / Z:\TV\LOST (2004)',
+            },
         )
 
     def test_save_aggregated_media_persists_paths_for_csv_api(self):
@@ -264,7 +273,7 @@ class MediaServiceLinkTests(unittest.TestCase):
                 'title': 'LOST',
                 'year': None,
                 'file_size': 200,
-                'file_paths': {'Apollo / LOST (2004)'},
+                'file_paths': {r'Apollo / Y:\TV Shows\LOST (2004)'},
             },
         }
 
@@ -277,7 +286,7 @@ class MediaServiceLinkTests(unittest.TestCase):
         )
         self.assertEqual(
             service.get_tv_shows()[0]['file_paths'],
-            ['Apollo / LOST (2004)'],
+            [r'Apollo / Y:\TV Shows\LOST (2004)'],
         )
 
     def test_process_export_data_reads_top_level_show_counters(self):

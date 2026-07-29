@@ -836,7 +836,7 @@ $(document).ready(function() {
 
         if (currentMediaView === 'tv') {
             var tvRows = tvShowsTable.rows().data().toArray();
-            var tvCsvRows = [['Title', 'Server / Show Folder(s)', 'Plays', 'Seasons', 'Episodes', 'Size (GB)', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Added', 'Last Played']];
+            var tvCsvRows = [['Title', 'Server / Show Path(s)', 'Plays', 'Seasons', 'Episodes', 'Size (GB)', 'Tautulli', 'IMDb', 'RT Critic', 'RT Audience', 'Metacritic', 'Letterboxd', 'TMDb', 'Added', 'Last Played']];
             tvRows.forEach(function(row) {
                 tvCsvRows.push([
                     row.title || '',
